@@ -15,6 +15,7 @@ import { SeedingScreen } from '@/routes/SeedingScreen';
 import { RoundScreen } from '@/routes/RoundScreen';
 import { BetweenRoundsScreen } from '@/routes/BetweenRoundsScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
+import { PodiumScreen } from '@/routes/PodiumScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
@@ -33,14 +34,14 @@ function routeForStatus(status: EventStatus): string {
     case 'between-rounds':
       return '/between';
     case 'complete':
-      return '/leaderboard';
+      return '/complete';
     case 'setup':
     default:
       return '/setup';
   }
 }
 
-const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup']);
+const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete']);
 
 function RouteGate() {
   const event = useEventStore((s) => s.event);
@@ -107,6 +108,7 @@ export function App() {
           <Route path="/seeding" element={<SeedingScreen />} />
           <Route path="/round" element={<RoundScreen />} />
           <Route path="/between" element={<BetweenRoundsScreen />} />
+          <Route path="/complete" element={<PodiumScreen />} />
           <Route path="/leaderboard" element={<LeaderboardScreen />} />
           <Route path="*" element={<NotFound />} />
         </Route>

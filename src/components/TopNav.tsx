@@ -1,21 +1,21 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useEventStore } from '@/store/eventStore';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import type { EventState, EventStatus } from '@/types/domain';
 
 interface TabDef {
   path: string;
   label: string;
-  statuses: EventStatus[];
+  showFor?: EventStatus[]; // if set, tab only renders when current status is in this list. Otherwise always.
 }
 
 const TABS: TabDef[] = [
-  { path: '/setup', label: 'Setup', statuses: ['setup'] },
-  { path: '/qualifier', label: 'Qualifier', statuses: ['qualifier'] },
-  { path: '/seeding', label: 'Seeding', statuses: ['seeding'] },
-  { path: '/round', label: 'Round', statuses: ['round-in-progress'] },
-  { path: '/between', label: 'Rotation', statuses: ['between-rounds'] },
-  { path: '/leaderboard', label: 'Standings', statuses: ['complete'] },
+  { path: '/setup', label: 'Setup', showFor: ['setup'] },
+  { path: '/qualifier', label: 'Qualifier', showFor: ['qualifier'] },
+  { path: '/seeding', label: 'Seeding', showFor: ['seeding'] },
+  { path: '/round', label: 'Round', showFor: ['round-in-progress'] },
+  { path: '/between', label: 'Rotation', showFor: ['between-rounds'] },
+  { path: '/complete', label: 'Podium', showFor: ['complete'] },
+  { path: '/leaderboard', label: 'Standings' },
 ];
 
 interface Props {
@@ -25,20 +25,15 @@ interface Props {
 export function TopNav({ event }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
-  const setQualifierStatus = useEventStore((s) => s);
 
   const currentRound = event.rounds[event.rounds.length - 1];
-  const roundIndex = event.status === 'round-in-progress'
-    ? currentRound?.index ?? 0
-    : event.status === 'between-rounds'
-      ? currentRound?.index ?? 0
+  const roundIndex =
+    event.status === 'round-in-progress' || event.status === 'between-rounds'
+      ? (currentRound?.index ?? 0)
       : 0;
 
-  const goTo = (path: string) => {
-    navigate(path);
-  };
+  const visibleTabs = TABS.filter((t) => !t.showFor || t.showFor.includes(event.status));
 
-  // Highlight current tab by either route or by event status
   const isTabActive = (tab: TabDef) => {
     if (location.pathname === tab.path) return true;
     if (location.pathname === '/' && tab.path === '/setup' && event.status === 'setup') return true;
@@ -58,11 +53,11 @@ export function TopNav({ event }: Props) {
         </span>
       </div>
       <div className="op-top-center">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.path}
             className={'op-tab ' + (isTabActive(tab) ? 'active' : '')}
-            onClick={() => goTo(tab.path)}
+            onClick={() => navigate(tab.path)}
           >
             {tab.label}
           </button>
@@ -80,16 +75,10 @@ export function TopNav({ event }: Props) {
         >
           Export
         </button>
-        <button
-          className="btn ghost sm"
-          onClick={() => goTo('/display')}
-        >
+        <button className="btn ghost sm" onClick={() => navigate('/display')}>
           TV
         </button>
       </div>
     </div>
   );
-
-  // satisfy unused warning if router actions are not consumed
-  void setQualifierStatus;
 }

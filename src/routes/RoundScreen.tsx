@@ -121,24 +121,37 @@ export function RoundScreen() {
             onClick={() => setConfirmEnd(true)}
             disabled={scored === 0}
           >
-            End round → preview rotation
+            {round.index >= event.settings.roundsTotal
+              ? 'End event → reveal podium'
+              : 'End round → preview rotation'}
           </button>
         </div>
       </div>
 
       <ConfirmDialog
         open={confirmEnd}
-        title={`End Round ${round.index}?`}
-        message={
-          timerView.remainingMs > 0
-            ? `${formatMs(timerView.remainingMs)} remaining on the clock. Scores will be locked and the next round's assignments will be computed.`
-            : 'Scores will be locked and the next round’s assignments will be computed.'
+        title={
+          round.index >= event.settings.roundsTotal
+            ? `End event after Round ${round.index}?`
+            : `End Round ${round.index}?`
         }
-        confirmLabel="End round"
+        message={
+          round.index >= event.settings.roundsTotal
+            ? `This is the final scheduled round. Scores will be locked and the podium will be revealed.${timerView.remainingMs > 0 ? ` ${formatMs(timerView.remainingMs)} remaining on the clock.` : ''}`
+            : timerView.remainingMs > 0
+              ? `${formatMs(timerView.remainingMs)} remaining on the clock. Scores will be locked and the next round's assignments will be computed.`
+              : 'Scores will be locked and the next round’s assignments will be computed.'
+        }
+        confirmLabel={
+          round.index >= event.settings.roundsTotal ? 'End event' : 'End round'
+        }
         onConfirm={() => {
           setConfirmEnd(false);
           endRound();
-          setTimeout(() => navigate('/between'), 0);
+          setTimeout(() => {
+            const status = useEventStore.getState().event?.status;
+            navigate(status === 'complete' ? '/complete' : '/between');
+          }, 0);
         }}
         onCancel={() => setConfirmEnd(false)}
       />

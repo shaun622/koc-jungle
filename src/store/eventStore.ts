@@ -499,9 +499,22 @@ export const useEventStore = create<EventStore>()(
           set({ lastError: `Resolve ${ties.length} tied match(es) before ending the round.` });
           return;
         }
-        const assignments = computeNextRoundAssignments(round, event.courts, event.settings.tieRule);
         const completed: MainRound = { ...round, completedAt: Date.now() };
         const rounds = event.rounds.slice(0, -1).concat(completed);
+        const isFinalRound = round.index >= event.settings.roundsTotal;
+        if (isFinalRound) {
+          set({
+            event: {
+              ...event,
+              rounds,
+              pendingAssignments: undefined,
+              status: 'complete',
+            },
+            lastError: null,
+          });
+          return;
+        }
+        const assignments = computeNextRoundAssignments(round, event.courts, event.settings.tieRule);
         set({
           event: {
             ...event,
