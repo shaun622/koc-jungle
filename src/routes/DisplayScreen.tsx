@@ -1,17 +1,41 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
-import type { Court, Match, Team } from '@/types/domain';
+import type { Court, EventStatus, Match, Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { formatMs } from '@/utils/time';
 import { Icons } from '@/components/Icons';
+
+function operatorRouteFor(status: EventStatus | undefined): string {
+  switch (status) {
+    case 'qualifier':
+      return '/qualifier';
+    case 'seeding':
+      return '/seeding';
+    case 'round-in-progress':
+      return '/round';
+    case 'between-rounds':
+      return '/between';
+    case 'complete':
+      return '/leaderboard';
+    case 'setup':
+    default:
+      return '/setup';
+  }
+}
 
 export function DisplayScreen() {
   useStorageBroadcast();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);
   const [scale, setScale] = useState(1);
+  const navigate = useNavigate();
+
+  const exitToOperator = useCallback(() => {
+    navigate(operatorRouteFor(event?.status));
+  }, [event?.status, navigate]);
 
   // Fit-to-window scaling — design canvas is 1920x1080
   useEffect(() => {
@@ -25,10 +49,22 @@ export function DisplayScreen() {
     return () => window.removeEventListener('resize', recalc);
   }, []);
 
+  // Escape key → operator view
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitToOperator();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [exitToOperator]);
+
   if (!event) {
     return (
-      <div className="splash">
-        Open an event on the operator device to drive this display.
+      <div className="splash" style={{ flexDirection: 'column', gap: 16 }}>
+        <span>Open an event on the operator device to drive this display.</span>
+        <button className="btn" onClick={() => navigate('/setup')}>
+          ← Operator view
+        </button>
       </div>
     );
   }
@@ -62,9 +98,24 @@ export function DisplayScreen() {
             left: 0,
           }}
         >
-          <DisplayCanvas event={event} round={round} />
+          <DisplayCanvas event={event} round={round} onExit={exitToOperator} />
         </div>
       </div>
+
+      <button
+        className="btn ghost sm"
+        onClick={exitToOperator}
+        style={{
+          position: 'fixed',
+          top: 12,
+          right: 12,
+          zIndex: 30,
+          background: 'oklch(20% 0.03 245 / 0.85)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        ← Operator view
+      </button>
     </div>
   );
 }
@@ -72,9 +123,11 @@ export function DisplayScreen() {
 function DisplayCanvas({
   event,
   round,
+  onExit,
 }: {
   event: ReturnType<typeof useEventStore.getState>['event'];
   round: ReturnType<typeof currentRound>;
+  onExit: () => void;
 }) {
   const timerView = useTimer(round);
   const lb = useMemo(() => (event ? leaderboard(event) : []), [event]);
@@ -114,7 +167,20 @@ function DisplayCanvas({
   return (
     <div className="tv-display">
       <div className="tv-header">
-        <div className="tv-header-brand">
+        <button
+          className="tv-header-brand"
+          onClick={onExit}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'inherit',
+            font: 'inherit',
+            padding: 0,
+            textAlign: 'left',
+          }}
+          title="Back to operator view (Esc)"
+        >
           <div className="brand-mark lg">K</div>
           <div className="tv-header-event">
             <div className="tv-header-event-name">{event.name}</div>
@@ -125,7 +191,7 @@ function DisplayCanvas({
                 : `${event.teams.filter((t) => t.active).length} teams • ${event.courts.length} courts`}
             </div>
           </div>
-        </div>
+        </button>
         <div className="tv-header-right">
           <span>{event.teams.filter((t) => t.active).length} teams</span>
           <span style={{ opacity: 0.3 }}>•</span>
@@ -189,17 +255,10 @@ function DisplayCanvas({
               <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
             </div>
             <div className="tv-centre-team">
-              <div className="tv-centre-team-label">Team A</div>
+              {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
                 {centreA ? teamLabelShort(centreA) : '—'}
               </div>
-              {centreA && (
-                <div className="tv-centre-team-players">
-                  <span>
-                    {centreA.players[0].name} · {centreA.players[1].name}
-                  </span>
-                </div>
-              )}
             </div>
             <div className="tv-centre-scores">
               <div
@@ -227,17 +286,10 @@ function DisplayCanvas({
               </div>
             </div>
             <div className="tv-centre-team right">
-              <div className="tv-centre-team-label">Team B</div>
+              {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
                 {centreB ? teamLabelShort(centreB) : '—'}
               </div>
-              {centreB && (
-                <div className="tv-centre-team-players">
-                  <span>
-                    {centreB.players[0].name} · {centreB.players[1].name}
-                  </span>
-                </div>
-              )}
             </div>
             <div />
           </div>
@@ -343,25 +395,15 @@ function TvCourtCard({
         </div>
       </div>
       <div className="tv-court-team">
-        <div className="tv-court-team-label">A</div>
+        {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
         <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
-        {teamA && (
-          <div className="tv-court-team-players">
-            {teamA.players[0].name} · {teamA.players[1].name}
-          </div>
-        )}
       </div>
       <div className={'tv-court-score ' + (aWin ? 'winner' : tied ? 'tied' : '')}>
         {match.scoreA}
       </div>
       <div className="tv-court-team">
-        <div className="tv-court-team-label">B</div>
+        {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
         <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
-        {teamB && (
-          <div className="tv-court-team-players">
-            {teamB.players[0].name} · {teamB.players[1].name}
-          </div>
-        )}
       </div>
       <div className={'tv-court-score ' + (bWin ? 'winner' : tied ? 'tied' : '')}>
         {match.scoreB}
