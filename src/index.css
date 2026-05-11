@@ -1487,19 +1487,18 @@ button {
   background: var(--bg-1);
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  padding: 16px 20px;
+  padding: 14px 18px;
   display: grid;
-  grid-template-columns: minmax(80px, auto) minmax(0, 1fr) 64px minmax(0, 1fr) 64px;
-  column-gap: 16px;
-  align-items: center;
+  grid-template-rows: auto 1fr 1fr;
+  row-gap: 6px;
   min-height: 0;
   overflow: hidden;
 }
 .tv-court-head {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 .tv-court-name {
   font-family: var(--font-display);
@@ -1513,9 +1512,23 @@ button {
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .tv-court-pts span {
   color: var(--lime);
+}
+.tv-court-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 6px;
+}
+.tv-court-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
 }
 .tv-court-team {
   display: flex;
@@ -1527,18 +1540,16 @@ button {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-2);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .tv-court-team-name {
   font-family: var(--font-display);
-  font-size: 20px;
-  line-height: 1.1;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  font-size: 24px;
+  line-height: 1.05;
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-word;
-  hyphens: auto;
+  text-overflow: ellipsis;
 }
 .tv-court-team-players {
   font-size: 11px;
@@ -1550,11 +1561,12 @@ button {
 }
 .tv-court-score {
   font-family: var(--font-display);
-  font-size: 42px;
+  font-size: 44px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text-0);
-  text-align: center;
+  text-align: right;
+  min-width: 60px;
 }
 .tv-court-score.winner {
   color: var(--lime);

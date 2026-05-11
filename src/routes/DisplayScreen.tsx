@@ -374,9 +374,7 @@ function TvCourtCard({
             <span>{court.pointValue}</span> PTS
           </div>
         </div>
-        <div style={{ gridColumn: '2 / -1', textAlign: 'center', color: 'var(--text-2)' }}>
-          No match
-        </div>
+        <div style={{ textAlign: 'center', color: 'var(--text-2)' }}>No match</div>
       </div>
     );
   }
@@ -394,19 +392,23 @@ function TvCourtCard({
           <span>{court.pointValue}</span> PTS
         </div>
       </div>
-      <div className="tv-court-team">
-        {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-        <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+      <div className="tv-court-row">
+        <div className="tv-court-team">
+          {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
+          <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+        </div>
+        <div className={'tv-court-score ' + (aWin ? 'winner' : tied ? 'tied' : '')}>
+          {match.scoreA}
+        </div>
       </div>
-      <div className={'tv-court-score ' + (aWin ? 'winner' : tied ? 'tied' : '')}>
-        {match.scoreA}
-      </div>
-      <div className="tv-court-team">
-        {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-        <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
-      </div>
-      <div className={'tv-court-score ' + (bWin ? 'winner' : tied ? 'tied' : '')}>
-        {match.scoreB}
+      <div className="tv-court-row">
+        <div className="tv-court-team">
+          {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
+          <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+        </div>
+        <div className={'tv-court-score ' + (bWin ? 'winner' : tied ? 'tied' : '')}>
+          {match.scoreB}
+        </div>
       </div>
     </div>
   );
