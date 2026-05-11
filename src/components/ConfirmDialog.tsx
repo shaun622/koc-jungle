@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { cn } from '@/utils/classNames';
 
 interface Props {
   open: boolean;
@@ -34,26 +33,15 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
-        <h2 className="text-lg font-bold text-slate-100">{title}</h2>
-        <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded-md bg-slate-800 hover:bg-slate-700 px-4 py-2 text-slate-200 text-sm font-medium"
-          >
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>{title}</h2>
+        <p>{message}</p>
+        <div className="modal-actions">
+          <button className="btn" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button
-            onClick={onConfirm}
-            className={cn(
-              'rounded-md px-4 py-2 text-sm font-semibold',
-              destructive
-                ? 'bg-red-500 hover:bg-red-400 text-red-50'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-emerald-950',
-            )}
-          >
+          <button className={destructive ? 'btn danger' : 'btn primary'} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>

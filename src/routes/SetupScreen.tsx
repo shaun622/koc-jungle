@@ -1,13 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Sparkles, Download, Upload } from 'lucide-react';
 import { useEventStore } from '@/store/eventStore';
+import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
-import { activeTeams, teamLabelShort } from '@/store/selectors';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { ThemeTierBadge } from '@/components/ThemeTierBadge';
-import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
+import { isCentreCourt, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
+import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Icons } from '@/components/Icons';
+
+const TIE_RULE_LABELS: Record<TieRule, string> = {
+  'operator-decides': 'Operator nominates winner',
+  'team-a-wins': 'Team A wins',
+  'split-points': 'Split points',
+  replay: 'Replay match',
+};
 
 export function SetupScreen() {
   const event = useEventStore((s) => s.event);
@@ -22,259 +29,253 @@ export function SetupScreen() {
   const addCourt = useEventStore((s) => s.addCourt);
   const removeCourt = useEventStore((s) => s.removeCourt);
   const setEventName = useEventStore((s) => s.setEventName);
-  const setRoundDuration = useEventStore((s) => s.setRoundDuration);
+  const setEventVenue = useEventStore((s) => s.setEventVenue);
+  const updateSettings = useEventStore((s) => s.updateSettings);
   const startQualifier = useEventStore((s) => s.startQualifier);
   const navigate = useNavigate();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const [newP1, setNewP1] = useState('');
-  const [newP2, setNewP2] = useState('');
-  const [newName, setNewName] = useState('');
-
   if (!event) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-12">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center">
-          <Sparkles className="h-10 w-10 text-amber-300 mx-auto" />
-          <h1 className="mt-3 text-2xl font-bold">King of the Court</h1>
-          <p className="mt-2 text-slate-400">
+      <div className="landing">
+        <div className="landing-card">
+          <div className="brand-mark lg">K</div>
+          <h1>King of the Court</h1>
+          <p>
             Run your padel KOC night: timer, courts, score entry, auto-rotation, leaderboard.
+            Set up an event and start the qualifier in under two minutes.
           </p>
-          <div className="mt-6 flex flex-col sm:flex-row gap-2 justify-center">
-            <button
-              onClick={() => createEvent('KOC Night')}
-              className="rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-semibold px-5 py-2.5"
-            >
+          <div className="actions">
+            <button className="btn primary lg" onClick={() => createEvent('KOC Night')}>
               Create new event
             </button>
-            <button
-              onClick={() => loadEvent(buildDemoEvent())}
-              className="rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold px-5 py-2.5"
-            >
+            <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
               Load demo (14 teams)
             </button>
-            <ImportButton
-              onLoad={loadEvent}
-              onError={setImportError}
-            />
+            <ImportButton onLoad={loadEvent} onError={setImportError} />
           </div>
-          {importError && (
-            <div className="mt-4 text-sm text-red-300">{importError}</div>
-          )}
+          {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
         </div>
-      </main>
+      </div>
     );
   }
 
   const teams = activeTeams(event);
   const expectedTeams = event.courts.length * 2;
   const canStartQualifier = event.status === 'setup' && teams.length === expectedTeams;
+  const teamDelta = expectedTeams - teams.length;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 justify-between">
-          <div className="flex-1">
-            <label className="text-xs uppercase tracking-wider text-slate-400">Event name</label>
+    <div className="setup">
+      <div className="setup-col">
+        <h2 className="setup-h">
+          Event
+          <button className="btn sm" onClick={() => setConfirmReset(true)}>
+            Reset
+          </button>
+        </h2>
+        <div className="setup-sub">
+          Event name, venue, round duration, and tie rules.
+        </div>
+        <div className="setup-form">
+          <div className="setup-field">
+            <label>Event name</label>
             <input
-              type="text"
+              className="setup-input"
               value={event.name}
               onChange={(e) => setEventName(e.target.value)}
-              className="mt-1 w-full rounded-md bg-slate-900/80 border border-slate-700 px-3 py-2 text-lg font-semibold"
             />
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-slate-400">Default round</label>
-            <DurationInput
-              valueMs={event.settings.defaultRoundDurationMs}
-              onChange={setRoundDuration}
+          <div className="setup-field">
+            <label>Venue</label>
+            <input
+              className="setup-input"
+              value={event.venue ?? ''}
+              onChange={(e) => setEventVenue(e.target.value)}
+              placeholder="High Court Padel"
             />
           </div>
-          <button
-            onClick={() => setConfirmReset(true)}
-            className="rounded-md border border-red-500/50 bg-red-500/10 hover:bg-red-500/20 text-red-200 px-4 py-2 text-sm font-medium"
-          >
-            Reset event
-          </button>
+          <DurationField
+            label="Round duration"
+            valueMs={event.settings.defaultRoundDurationMs}
+            onChange={(ms) => updateSettings({ defaultRoundDurationMs: ms })}
+          />
+          <div className="setup-field">
+            <label>Total rounds</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              className="setup-input"
+              value={event.settings.roundsTotal}
+              onChange={(e) => {
+                const n = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+                updateSettings({ roundsTotal: n });
+              }}
+            />
+          </div>
+          <div className="setup-field">
+            <label>Tie rule</label>
+            <select
+              className="setup-input"
+              value={event.settings.tieRule}
+              onChange={(e) => updateSettings({ tieRule: e.target.value as TieRule })}
+            >
+              {(Object.keys(TIE_RULE_LABELS) as TieRule[]).map((rule) => (
+                <option key={rule} value={rule}>
+                  {TIE_RULE_LABELS[rule]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DurationField
+            label="Warning flash at"
+            valueMs={event.settings.warningAtMs}
+            onChange={(ms) => updateSettings({ warningAtMs: ms })}
+          />
         </div>
-        <div className="mt-3 text-xs text-slate-400 flex flex-wrap gap-3">
-          <span>Status: <span className="font-semibold text-slate-200">{event.status}</span></span>
-          <span>Teams: <span className="font-semibold text-slate-200">{teams.length} / {expectedTeams}</span></span>
-          <span>Courts: <span className="font-semibold text-slate-200">{event.courts.length}</span></span>
-        </div>
-      </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h2 className="text-lg font-bold mb-3">Courts &amp; points</h2>
-        <div className="space-y-2">
+        <h2 className="setup-h" style={{ marginTop: 12 }}>
+          Courts ({event.courts.length})
+          {event.status === 'setup' && (
+            <button className="btn sm" onClick={addCourt}>
+              + Add court
+            </button>
+          )}
+        </h2>
+        <div className="setup-sub">
+          Higher position = more prestige. Top court is the Centre / King's Court.
+        </div>
+        <div className="setup-list">
           {event.courts
             .slice()
             .sort((a, b) => b.position - a.position)
-            .map((court) => (
-              <div
-                key={court.id}
-                className="flex flex-wrap items-center gap-2 rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2"
-              >
-                <span className="text-xs text-slate-400 w-12">#{court.position}</span>
-                <input
-                  type="text"
-                  value={court.name}
-                  onChange={(e) => renameCourt(court.id, e.target.value)}
-                  className="flex-1 min-w-[10rem] rounded-md bg-slate-900/80 border border-slate-700 px-2 py-1"
-                />
-                <label className="text-xs text-slate-400 ml-auto">Points</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={court.pointValue}
-                  onChange={(e) => setCourtPoints(court.id, Number(e.target.value))}
-                  className="w-20 rounded-md bg-slate-900/80 border border-slate-700 px-2 py-1 text-right tabular-nums"
-                />
-                <ThemeTierBadge
-                  position={court.position}
-                  totalCourts={event.courts.length}
-                  pointValue={court.pointValue}
-                  compact
-                />
-                {event.status === 'setup' && event.courts.length > 1 && (
-                  <button
-                    onClick={() => removeCourt(court.id)}
-                    className="text-slate-400 hover:text-red-300 px-2"
-                    title="Remove court"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+            .map((c) => {
+              const centre = isCentreCourt(c, event.courts);
+              return (
+                <div key={c.id} className={'setup-court-row ' + (centre ? 'centre' : '')}>
+                  <div className="setup-court-pos">{c.position}</div>
+                  <input
+                    className="setup-input"
+                    value={c.name}
+                    onChange={(e) => renameCourt(c.id, e.target.value)}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      className="setup-court-pts-input setup-input"
+                      type="number"
+                      min={0}
+                      value={c.pointValue}
+                      onChange={(e) => setCourtPoints(c.id, Number(e.target.value) || 0)}
+                    />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--text-2)',
+                        fontFamily: 'var(--font-mono)',
+                        letterSpacing: '0.12em',
+                      }}
+                    >
+                      PTS
+                    </span>
+                  </div>
+                  {event.status === 'setup' && event.courts.length > 1 ? (
+                    <button
+                      className="op-score-btn"
+                      onClick={() => removeCourt(c.id)}
+                      aria-label="Remove court"
+                    >
+                      <Icons.Minus className="icon" />
+                    </button>
+                  ) : (
+                    <span style={{ width: 32 }} />
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </div>
+
+      <div className="setup-col">
+        <h2 className="setup-h">
+          Teams ({teams.length} / {expectedTeams})
+        </h2>
+        <div className="setup-sub">
+          Each team is a fixed pair of two named players. Leave team name blank to auto-label.
         </div>
         {event.status === 'setup' && (
-          <button
-            onClick={addCourt}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-sm"
-          >
-            <Plus className="h-4 w-4" /> Add court
-          </button>
+          <NewTeamForm onAdd={(p1, p2, name) => addTeam({ player1: p1, player2: p2, name })} />
         )}
-      </section>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h2 className="text-lg font-bold mb-3">Teams</h2>
-        {event.status === 'setup' && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <input
-              type="text"
-              placeholder="Team name (optional)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="flex-1 min-w-[12rem] rounded-md bg-slate-900/80 border border-slate-700 px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="Player 1"
-              value={newP1}
-              onChange={(e) => setNewP1(e.target.value)}
-              className="flex-1 min-w-[10rem] rounded-md bg-slate-900/80 border border-slate-700 px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="Player 2"
-              value={newP2}
-              onChange={(e) => setNewP2(e.target.value)}
-              className="flex-1 min-w-[10rem] rounded-md bg-slate-900/80 border border-slate-700 px-3 py-2"
-            />
-            <button
-              onClick={() => {
-                if (newP1.trim() && newP2.trim()) {
-                  addTeam({ name: newName, player1: newP1, player2: newP2 });
-                  setNewName('');
-                  setNewP1('');
-                  setNewP2('');
-                }
-              }}
-              className="rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-semibold px-4 py-2 inline-flex items-center gap-1.5"
-            >
-              <Plus className="h-4 w-4" /> Add team
-            </button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {teams.map((team, idx) => (
-            <div
-              key={team.id}
-              className="rounded-md border border-slate-800 bg-slate-900/40 p-3"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs uppercase tracking-wider text-slate-400">Team {idx + 1}</span>
-                <button
-                  onClick={() => removeTeam(team.id)}
-                  className="text-slate-400 hover:text-red-300"
-                  title="Remove team"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-              <input
-                type="text"
-                placeholder="Team name (optional)"
-                value={team.name ?? ''}
-                onChange={(e) => updateTeam(team.id, { name: e.target.value })}
-                className="w-full rounded-md bg-slate-900/80 border border-slate-700 px-2 py-1 mb-1 text-sm"
-              />
-              <div className="grid grid-cols-2 gap-2">
+        <div className="setup-list">
+          {teams.map((team, i) => (
+            <div key={team.id} className="setup-team-row">
+              <div className="setup-team-num">{i + 1}</div>
+              <div className="setup-team-inputs">
                 <input
-                  type="text"
+                  className="setup-input"
                   value={team.players[0].name}
                   onChange={(e) => updateTeam(team.id, { player1: e.target.value })}
-                  className="rounded-md bg-slate-900/80 border border-slate-700 px-2 py-1 text-sm"
+                  placeholder="Player A"
                 />
                 <input
-                  type="text"
+                  className="setup-input"
                   value={team.players[1].name}
                   onChange={(e) => updateTeam(team.id, { player2: e.target.value })}
-                  className="rounded-md bg-slate-900/80 border border-slate-700 px-2 py-1 text-sm"
+                  placeholder="Player B"
                 />
               </div>
+              {event.status === 'setup' && (
+                <button
+                  className="op-score-btn"
+                  onClick={() => removeTeam(team.id)}
+                  aria-label="Remove team"
+                >
+                  <Icons.Minus className="icon" />
+                </button>
+              )}
             </div>
           ))}
           {teams.length === 0 && (
-            <div className="col-span-full text-slate-500 italic text-sm">No teams yet.</div>
+            <div style={{ color: 'var(--text-2)', fontSize: 12, fontStyle: 'italic' }}>
+              No teams yet.
+            </div>
           )}
         </div>
-      </section>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-wrap gap-3 items-center justify-between">
-        <div className="text-sm text-slate-400">
-          {teams.length === expectedTeams
-            ? 'Ready to start qualifier.'
-            : `Need ${expectedTeams - teams.length > 0 ? 'more' : 'fewer'} ${Math.abs(expectedTeams - teams.length)} team(s) for ${event.courts.length} courts.`}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ExportButton event={event} />
+        <div className="setup-actions">
           <button
+            className="btn"
+            onClick={() => {
+              const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
+                .toISOString()
+                .slice(0, 10)}.json`;
+              downloadJsonFile(filename, toExportJson(event));
+            }}
+          >
+            Export JSON
+          </button>
+          <button
+            className="btn full primary lg"
             disabled={!canStartQualifier}
             onClick={() => {
               startQualifier();
-              navigate('/qualifier');
+              setTimeout(() => navigate('/qualifier'), 0);
             }}
-            className="rounded-md bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-amber-950 font-semibold px-4 py-2"
           >
-            Start qualifier
+            {canStartQualifier
+              ? 'Start qualifier round →'
+              : teamDelta > 0
+                ? `Need ${teamDelta} more team(s)`
+                : `Remove ${-teamDelta} team(s)`}
           </button>
         </div>
-      </section>
-
-      <div className="text-xs text-slate-500 text-center">
-        Total round duration: {formatMs(event.settings.defaultRoundDurationMs)}
       </div>
 
       <ConfirmDialog
         open={confirmReset}
         title="Reset entire event?"
-        message="This permanently clears teams, scores, and all rounds. You may want to export the event first."
+        message="This permanently clears teams, scores, and all rounds. Export first if you need a backup."
         confirmLabel="Reset"
         destructive
         onConfirm={() => {
@@ -283,45 +284,95 @@ export function SetupScreen() {
         }}
         onCancel={() => setConfirmReset(false)}
       />
-    </main>
+    </div>
   );
 }
 
-function DurationInput({ valueMs, onChange }: { valueMs: number; onChange: (ms: number) => void }) {
+function DurationField({
+  label,
+  valueMs,
+  onChange,
+}: {
+  label: string;
+  valueMs: number;
+  onChange: (ms: number) => void;
+}) {
   const [text, setText] = useState(formatMs(valueMs));
   return (
-    <input
-      type="text"
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        const parsed = parseDurationInput(text);
-        if (parsed !== null) onChange(parsed);
-        else setText(formatMs(valueMs));
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-      }}
-      className="mt-1 w-28 rounded-md bg-slate-900/80 border border-slate-700 px-3 py-2 text-center tabular-nums font-semibold"
-      placeholder="20:00"
-    />
+    <div className="setup-field">
+      <label>{label}</label>
+      <input
+        className="setup-input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={() => setText(formatMs(valueMs))}
+        onBlur={() => {
+          const parsed = parseDurationInput(text);
+          if (parsed !== null) {
+            onChange(parsed);
+            setText(formatMs(parsed));
+          } else {
+            setText(formatMs(valueMs));
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+      />
+    </div>
   );
 }
 
-function ExportButton({ event }: { event: ReturnType<typeof useEventStore.getState>['event'] }) {
-  if (!event) return null;
+function NewTeamForm({
+  onAdd,
+}: {
+  onAdd: (player1: string, player2: string, name?: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [p1, setP1] = useState('');
+  const [p2, setP2] = useState('');
+  const valid = p1.trim() && p2.trim();
   return (
-    <button
-      onClick={() => {
-        const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
-          .toISOString()
-          .slice(0, 10)}.json`;
-        downloadJsonFile(filename, toExportJson(event));
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr auto',
+        gap: 6,
+        marginBottom: 12,
       }}
-      className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 hover:bg-slate-700 px-3 py-2 text-sm"
     >
-      <Download className="h-4 w-4" /> Export JSON
-    </button>
+      <input
+        className="setup-input"
+        placeholder="Team name (optional)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className="setup-input"
+        placeholder="Player A"
+        value={p1}
+        onChange={(e) => setP1(e.target.value)}
+      />
+      <input
+        className="setup-input"
+        placeholder="Player B"
+        value={p2}
+        onChange={(e) => setP2(e.target.value)}
+      />
+      <button
+        className="btn primary"
+        disabled={!valid}
+        onClick={() => {
+          if (!valid) return;
+          onAdd(p1, p2, name);
+          setName('');
+          setP1('');
+          setP2('');
+        }}
+      >
+        + Add
+      </button>
+    </div>
   );
 }
 
@@ -333,13 +384,12 @@ function ImportButton({
   onError: (message: string) => void;
 }) {
   return (
-    <label className="cursor-pointer rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold px-5 py-2.5 inline-flex items-center gap-2">
-      <Upload className="h-4 w-4" />
+    <label className="btn lg" style={{ cursor: 'pointer' }}>
       Import JSON
       <input
         type="file"
         accept="application/json,.json"
-        className="sr-only"
+        style={{ display: 'none' }}
         onChange={async (e) => {
           const file = e.target.files?.[0];
           if (!file) return;
@@ -357,6 +407,3 @@ function ImportButton({
     </label>
   );
 }
-
-// Suppress unused-export warning while keeping the helper available.
-void teamLabelShort;

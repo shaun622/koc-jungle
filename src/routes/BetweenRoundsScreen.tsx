@@ -1,51 +1,57 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Crown, Play } from 'lucide-react';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
-import { ThemeTierBadge } from '@/components/ThemeTierBadge';
-import { Leaderboard } from '@/components/Leaderboard';
-import { cn } from '@/utils/classNames';
+import { isCentreCourt, type Court, type Team } from '@/types/domain';
+import { Icons } from '@/components/Icons';
+
+type MovementArrow = 'up' | 'down' | 'stay' | 'king';
+
+interface Movement {
+  teamId: string;
+  fromCourt: Court | undefined;
+  toCourt: Court;
+  arrow: MovementArrow;
+}
 
 export function BetweenRoundsScreen() {
   const event = useEventStore((s) => s.event);
   const startNextRound = useEventStore((s) => s.startNextRound);
   const navigate = useNavigate();
 
-  const movements = useMemo(() => {
-    if (!event?.pendingAssignments) return [];
+  const movements: Map<string, Movement> = useMemo(() => {
+    const map = new Map<string, Movement>();
+    if (!event?.pendingAssignments) return map;
     const lastRound = event.rounds[event.rounds.length - 1];
-    if (!lastRound) return [];
+    if (!lastRound) return map;
     const prevByTeam = new Map<string, string>();
     for (const m of lastRound.matches) {
       prevByTeam.set(m.teamAId, m.courtId);
       prevByTeam.set(m.teamBId, m.courtId);
     }
-    type Row = {
-      teamId: string;
-      from: { id: string; position: number; name: string } | undefined;
-      to: { id: string; position: number; name: string };
-    };
-    const rows: Row[] = [];
     for (const a of event.pendingAssignments) {
-      const court = event.courts.find((c) => c.id === a.courtId)!;
+      const toCourt = event.courts.find((c) => c.id === a.courtId)!;
+      const isCentre = isCentreCourt(toCourt, event.courts);
       for (const teamId of [a.teamAId, a.teamBId]) {
         const fromCourtId = prevByTeam.get(teamId);
         const fromCourt = fromCourtId ? event.courts.find((c) => c.id === fromCourtId) : undefined;
-        rows.push({
-          teamId,
-          from: fromCourt,
-          to: court,
-        });
+        let arrow: MovementArrow;
+        if (!fromCourt) arrow = 'stay';
+        else if (toCourt.position > fromCourt.position) arrow = 'up';
+        else if (toCourt.position < fromCourt.position) arrow = 'down';
+        else if (isCentre) arrow = 'king';
+        else arrow = 'stay';
+        map.set(teamId, { teamId, fromCourt, toCourt, arrow });
       }
     }
-    return rows;
+    return map;
   }, [event]);
 
   if (!event || !event.pendingAssignments) {
-    return <p className="p-6 text-slate-400">Nothing pending.</p>;
+    return <p style={{ padding: 24, color: 'var(--text-2)' }}>Nothing pending.</p>;
   }
 
+  const lastRound = event.rounds[event.rounds.length - 1];
   const sortedAssignments = event.pendingAssignments.slice().sort((a, b) => {
     const pa = event.courts.find((c) => c.id === a.courtId)?.position ?? 0;
     const pb = event.courts.find((c) => c.id === b.courtId)?.position ?? 0;
@@ -53,113 +59,86 @@ export function BetweenRoundsScreen() {
   });
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">Next round — court assignments</h1>
-        <button
-          onClick={() => {
-            startNextRound();
-            setTimeout(() => navigate('/round'), 0);
-          }}
-          className="rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-semibold px-4 py-2 inline-flex items-center gap-2"
-        >
-          <Play className="h-4 w-4" />
-          Start next round
-        </button>
+    <div className="between">
+      <div className="qual-head">
+        <div>
+          <div className="qual-title">
+            Round {lastRound?.index ?? '?'} complete — rotation preview
+          </div>
+          <div className="qual-sub">
+            Winners move up, losers move down. Centre winner stays King, bottom-court loser stays.
+          </div>
+        </div>
+        <div className="qual-meta">
+          {event.teams.filter((t) => t.active).length} teams • {event.courts.length} courts
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {sortedAssignments.map((a) => {
-            const court = event.courts.find((c) => c.id === a.courtId)!;
-            const teamA = event.teams.find((t) => t.id === a.teamAId);
-            const teamB = event.teams.find((t) => t.id === a.teamBId);
-            return (
-              <div
-                key={a.courtId}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="font-bold">
-                    #{court.position} · {court.name}
-                  </div>
-                  <ThemeTierBadge
-                    position={court.position}
-                    totalCourts={event.courts.length}
-                    pointValue={court.pointValue}
-                    compact
-                  />
+      <div className="between-grid">
+        {sortedAssignments.map((a) => {
+          const court = event.courts.find((c) => c.id === a.courtId)!;
+          const teamA = event.teams.find((t) => t.id === a.teamAId);
+          const teamB = event.teams.find((t) => t.id === a.teamBId);
+          const isCentre = isCentreCourt(court, event.courts);
+          return (
+            <div key={a.courtId} className={'between-card ' + (isCentre ? 'centre' : '')}>
+              <div className="between-card-head">
+                <div className="between-card-name">
+                  {isCentre && <Icons.Crown className="icon" />}
+                  {court.name}
                 </div>
-                {[teamA, teamB].map((t, i) =>
-                  t ? (
-                    <div
-                      key={t.id}
-                      className="flex items-center gap-2 py-1 border-t border-slate-800 first:border-t-0"
-                    >
-                      <DirectionBadge
-                        teamId={t.id}
-                        movements={movements}
-                        isCentre={court.position === event.courts.length}
-                      />
-                      <div className="flex-1 truncate">{teamLabelShort(t)}</div>
-                    </div>
-                  ) : (
-                    <div key={i} className="text-slate-500 italic py-1">
-                      No team
-                    </div>
-                  ),
-                )}
+                <div className="op-court-pts-chip">{court.pointValue} PTS</div>
               </div>
-            );
-          })}
-        </div>
-        <aside>
-          <Leaderboard event={event} limit={20} />
-        </aside>
+              {teamA && <BetweenTeamRow team={teamA} mv={movements.get(teamA.id)} />}
+              {teamB && <BetweenTeamRow team={teamB} mv={movements.get(teamB.id)} />}
+            </div>
+          );
+        })}
       </div>
-    </main>
+
+      <div className="qual-bottom">
+        <div className="qual-bottom-info">
+          <strong>King stays</strong> as long as they keep winning Centre Court. Bottom-court loser
+          stays.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => navigate('/round')}>
+            ← Back to round
+          </button>
+          <button
+            className="btn lg primary"
+            onClick={() => {
+              startNextRound();
+              setTimeout(() => navigate('/round'), 0);
+            }}
+          >
+            Lock &amp; start Round {(lastRound?.index ?? 0) + 1} →
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function DirectionBadge({
-  teamId,
-  movements,
-  isCentre,
-}: {
-  teamId: string;
-  movements: { teamId: string; from?: { position: number } | undefined; to: { position: number } }[];
-  isCentre: boolean;
-}) {
-  const m = movements.find((mm) => mm.teamId === teamId && mm.to);
-  if (!m) return null;
-  const fromPos = m.from?.position;
-  const toPos = m.to.position;
-  if (fromPos === undefined) {
-    return <span className="text-slate-500 text-xs">·</span>;
-  }
-  if (toPos > fromPos) {
-    return (
-      <span className="inline-flex items-center gap-1 text-emerald-300 text-xs font-semibold">
-        <ArrowUp className="h-3.5 w-3.5" />UP
-      </span>
-    );
-  }
-  if (toPos < fromPos) {
-    return (
-      <span className="inline-flex items-center gap-1 text-red-300 text-xs font-semibold">
-        <ArrowDown className="h-3.5 w-3.5" />DOWN
-      </span>
-    );
-  }
-  if (isCentre) {
-    return (
-      <span className="inline-flex items-center gap-1 text-amber-300 text-xs font-bold">
-        <Crown className="h-3.5 w-3.5" />KING
-      </span>
-    );
-  }
-  return <span className="text-slate-400 text-xs font-medium">STAYS</span>;
+function BetweenTeamRow({ team, mv }: { team: Team; mv: Movement | undefined }) {
+  const arrow = mv?.arrow ?? 'stay';
+  const ArrowIcon =
+    arrow === 'up' ? Icons.ArrowUp : arrow === 'down' ? Icons.ArrowDown : arrow === 'king' ? Icons.Crown : Icons.Dash;
+  const label = arrow === 'up' ? 'UP' : arrow === 'down' ? 'DOWN' : arrow === 'king' ? 'KING' : 'STAY';
+  return (
+    <div className="between-team-row">
+      <Icons.Drag className="icon" style={{ color: 'var(--text-2)' }} />
+      <div>
+        <div className="between-team-name">{teamLabelShort(team)}</div>
+        <div className="between-team-from">
+          {mv?.fromCourt ? `from ${mv.fromCourt.name}` : 'seeded'}
+          {team.name && ` · ${team.players[0].name} & ${team.players[1].name}`}
+        </div>
+      </div>
+      <div className={'between-arrow ' + arrow}>
+        <ArrowIcon className="icon" />
+        {label}
+      </div>
+    </div>
+  );
 }
-
-// silence unused court reference
-void cn;

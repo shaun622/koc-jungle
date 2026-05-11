@@ -45,6 +45,7 @@ export function buildDemoEvent(): EventState {
   return {
     id: newId(),
     name: 'Monday Night KOC',
+    venue: 'High Court Padel',
     createdAt: Date.now(),
     status: 'setup',
     settings: { ...DEFAULT_SETTINGS },

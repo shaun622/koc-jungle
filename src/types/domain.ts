@@ -66,6 +66,7 @@ export interface EventSettings {
   tieRule: TieRule;
   soundOnTimerEnd: boolean;
   warningAtMs: number;
+  roundsTotal: number;
 }
 
 export interface PendingAssignment {
@@ -77,6 +78,7 @@ export interface PendingAssignment {
 export interface EventState {
   id: ID;
   name: string;
+  venue?: string;
   createdAt: number;
   status: EventStatus;
   settings: EventSettings;
@@ -92,4 +94,10 @@ export const DEFAULT_SETTINGS: EventSettings = {
   tieRule: 'operator-decides',
   soundOnTimerEnd: true,
   warningAtMs: 60 * 1000,
+  roundsTotal: 6,
 };
+
+export function isCentreCourt(court: Court, courts: Court[]): boolean {
+  const maxPosition = courts.reduce((m, c) => Math.max(m, c.position), 0);
+  return court.position === maxPosition;
+}

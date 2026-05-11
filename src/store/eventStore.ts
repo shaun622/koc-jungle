@@ -45,6 +45,7 @@ interface Actions {
 
   updateSettings: (patch: Partial<EventSettings>) => void;
   setEventName: (name: string) => void;
+  setEventVenue: (venue: string) => void;
 
   startQualifier: () => void;
   setQualifierScore: (matchId: string, scoreA: number, scoreB: number) => void;
@@ -125,6 +126,7 @@ export const useEventStore = create<EventStore>()(
         const event: EventState = {
           id: newId(),
           name: name || 'KOC Night',
+          venue: '',
           createdAt: Date.now(),
           status: 'setup',
           settings: { ...DEFAULT_SETTINGS },
@@ -253,6 +255,12 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event) return;
         set({ event: { ...event, name } });
+      },
+
+      setEventVenue: (venue) => {
+        const event = get().event;
+        if (!event) return;
+        set({ event: { ...event, venue } });
       },
 
       startQualifier: () => {

@@ -1,108 +1,129 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Undo2 } from 'lucide-react';
 import { useEventStore } from '@/store/eventStore';
+import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
+import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { Timer } from '@/components/Timer';
-import { CourtCard } from '@/components/CourtCard';
-import { Leaderboard } from '@/components/Leaderboard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { currentRound } from '@/store/selectors';
-import { unresolvedTies } from '@/logic/rotation';
+import { Icons } from '@/components/Icons';
 import { useTimer } from '@/hooks/useTimer';
+import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { formatMs } from '@/utils/time';
 
 export function RoundScreen() {
   const event = useEventStore((s) => s.event);
-  const setMatchScore = useEventStore((s) => s.setMatchScore);
   const incrementScore = useEventStore((s) => s.incrementScore);
   const nominateTieWinner = useEventStore((s) => s.nominateTieWinner);
   const endRound = useEventStore((s) => s.endRound);
-  const undoLastRound = useEventStore((s) => s.undoLastRound);
+  const resetTimer = useEventStore((s) => s.resetRoundTimer);
   const navigate = useNavigate();
-  const [confirmEnd, setConfirmEnd] = useState(false);
-  const [confirmUndo, setConfirmUndo] = useState(false);
 
   const round = currentRound(event);
   const timerView = useTimer(round);
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   if (!event || !round) {
-    return <p className="p-6 text-slate-400">No round in progress.</p>;
+    return <p style={{ padding: 24, color: 'var(--text-2)' }}>No round in progress.</p>;
   }
 
-  const ties = unresolvedTies(round, event.settings.tieRule).filter(
-    (m) => m.scoreA > 0 || m.scoreB > 0,
-  );
-  const sortedMatches = round.matches
-    .slice()
-    .sort((a, b) => {
-      const pa = event.courts.find((c) => c.id === a.courtId)?.position ?? 0;
-      const pb = event.courts.find((c) => c.id === b.courtId)?.position ?? 0;
-      return pb - pa;
-    });
+  const matchesSorted = round.matches.slice().sort((a, b) => {
+    const pa = event.courts.find((c) => c.id === a.courtId)?.position ?? 0;
+    const pb = event.courts.find((c) => c.id === b.courtId)?.position ?? 0;
+    return pb - pa;
+  });
+
+  const ties = unresolvedTies(round, event.settings.tieRule);
+  const realTies = ties.filter((m) => m.scoreA > 0 || m.scoreB > 0);
+  const unscored = round.matches.filter((m) => m.scoreA === 0 && m.scoreB === 0).length;
+  const scored = round.matches.length - unscored;
+  const cols = event.courts.length > 4 ? 'cols-3' : '';
+
+  const lb = leaderboard(event);
+  const topId = lb[0]?.teamId;
 
   return (
-    <main className="mx-auto max-w-[100rem] px-4 py-4">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-4">
-        <div className="space-y-4">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-5 flex flex-col items-center">
-            <div className="text-sm uppercase tracking-wider text-slate-400 mb-1">
-              Round {round.index}
-            </div>
-            <Timer
-              round={round}
-              warningAtMs={event.settings.warningAtMs}
-              soundEnabled={event.settings.soundOnTimerEnd}
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-2 justify-center">
-              <button
-                onClick={() => setConfirmEnd(true)}
-                className="rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold px-4 py-2 inline-flex items-center gap-2"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                End round
-              </button>
-              <button
-                onClick={() => setConfirmUndo(true)}
-                className="rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 inline-flex items-center gap-2 text-sm"
-              >
-                <Undo2 className="h-4 w-4" />
-                Undo last round
-              </button>
-            </div>
-            {ties.length > 0 && (
-              <div className="mt-3 text-sm text-amber-300">
-                Resolve {ties.length} tied match(es) before ending the round.
-              </div>
-            )}
-          </section>
+    <div className="op-body">
+      <div className="op-side">
+        <Timer
+          round={round}
+          warningAtMs={event.settings.warningAtMs}
+          soundEnabled={event.settings.soundOnTimerEnd}
+        />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {sortedMatches.map((m) => {
-              const court = event.courts.find((c) => c.id === m.courtId);
-              const teamA = event.teams.find((t) => t.id === m.teamAId);
-              const teamB = event.teams.find((t) => t.id === m.teamBId);
-              if (!court) return null;
-              return (
-                <CourtCard
-                  key={m.id}
-                  court={court}
-                  totalCourts={event.courts.length}
-                  match={m}
-                  teamA={teamA}
-                  teamB={teamB}
-                  mode="round"
-                  onScoreChange={(matchId, a, b) => setMatchScore(matchId, a, b)}
-                  onIncrement={incrementScore}
-                  onNominateWinner={(id, winnerId) => nominateTieWinner(id, winnerId)}
-                />
-              );
-            })}
+        <div className="op-mini-lb">
+          <div className="op-mini-lb-head">
+            <div className="op-mini-lb-title">Standings</div>
+            <span className="op-mini-lb-meta">
+              {event.rounds.filter((r) => r.completedAt).length > 0
+                ? `After R${event.rounds.filter((r) => r.completedAt).length}`
+                : `Round ${round.index} in play`}
+            </span>
+          </div>
+          <div className="op-mini-lb-list">
+            {lb.map((row, idx) => (
+              <div
+                key={row.teamId}
+                className={'op-mini-lb-row ' + (row.teamId === topId && row.total > 0 ? 'king' : '')}
+              >
+                <span className="r">{idx + 1}</span>
+                <span className="n">{teamNameFor(event, row.teamId)}</span>
+                <span className="p">{row.total}</span>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
 
-        <aside className="space-y-4">
-          <Leaderboard event={event} limit={10} />
-        </aside>
+      <div className="op-main">
+        <div className={'op-court-grid ' + cols}>
+          {matchesSorted.map((m) => {
+            const court = event.courts.find((c) => c.id === m.courtId);
+            const teamA = event.teams.find((t) => t.id === m.teamAId);
+            const teamB = event.teams.find((t) => t.id === m.teamBId);
+            if (!court || !teamA || !teamB) return null;
+            return (
+              <OpCourtCard
+                key={m.id}
+                court={court}
+                isCentre={isCentreCourt(court, event.courts)}
+                match={m}
+                teamA={teamA}
+                teamB={teamB}
+                onIncrement={(side, delta) => incrementScore(m.id, side, delta)}
+                onPickTieWinner={(winnerId) => nominateTieWinner(m.id, winnerId)}
+              />
+            );
+          })}
+        </div>
+
+        <div className="op-end-bar">
+          <div className="op-end-summary">
+            <strong>{round.matches.length}</strong> matches •{' '}
+            {unscored > 0 ? (
+              <span style={{ color: 'var(--amber)' }}>{unscored} unscored</span>
+            ) : (
+              <span style={{ color: 'var(--lime)' }}>all scored</span>
+            )}{' '}
+            •{' '}
+            {realTies.length > 0 ? (
+              <span style={{ color: 'var(--amber)' }}>
+                {realTies.length} tie(s) need nomination
+              </span>
+            ) : (
+              <span style={{ color: 'var(--text-2)' }}>no ties</span>
+            )}
+          </div>
+          <button className="btn" onClick={resetTimer}>
+            <Icons.Reset className="icon" /> Restart timer
+          </button>
+          <button
+            className="btn lg primary"
+            onClick={() => setConfirmEnd(true)}
+            disabled={scored === 0}
+          >
+            End round → preview rotation
+          </button>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -117,23 +138,124 @@ export function RoundScreen() {
         onConfirm={() => {
           setConfirmEnd(false);
           endRound();
-          // Defer navigation until store update propagates.
           setTimeout(() => navigate('/between'), 0);
         }}
         onCancel={() => setConfirmEnd(false)}
       />
-      <ConfirmDialog
-        open={confirmUndo}
-        title="Undo last round?"
-        message="Clears the most recent completed round (if any) and lets you re-play it. Scores in the current round will be preserved."
-        confirmLabel="Undo"
-        destructive
-        onConfirm={() => {
-          setConfirmUndo(false);
-          undoLastRound();
-        }}
-        onCancel={() => setConfirmUndo(false)}
-      />
-    </main>
+    </div>
+  );
+}
+
+function OpCourtCard({
+  court,
+  isCentre,
+  match,
+  teamA,
+  teamB,
+  onIncrement,
+  onPickTieWinner,
+}: {
+  court: Court;
+  isCentre: boolean;
+  match: Match;
+  teamA: Team;
+  teamB: Team;
+  onIncrement: (side: 'A' | 'B', delta: number) => void;
+  onPickTieWinner: (winnerId: string) => void;
+}) {
+  const result = decideWinnerLoser(match, 'operator-decides');
+  const aWin = result.winnerId === teamA.id;
+  const bWin = result.winnerId === teamB.id;
+  const tied = result.isTied && (match.scoreA > 0 || match.scoreB > 0);
+
+  return (
+    <div className={'op-court ' + (isCentre ? 'centre' : '')}>
+      <div className="op-court-head">
+        <div className="op-court-title">
+          {isCentre && <Icons.Crown className="icon" />}
+          {court.name}
+        </div>
+        <div className="op-court-pts-chip">{court.pointValue} PTS</div>
+      </div>
+      <div className="op-court-body">
+        <TeamCell
+          team={teamA}
+          score={match.scoreA}
+          win={aWin}
+          tied={tied}
+          tieWinner={match.tieBreakWinnerId === teamA.id}
+          showTiePick={tied}
+          onIncrement={(d) => onIncrement('A', d)}
+          onPickTie={() => onPickTieWinner(teamA.id)}
+        />
+        <TeamCell
+          team={teamB}
+          score={match.scoreB}
+          win={bWin}
+          tied={tied}
+          tieWinner={match.tieBreakWinnerId === teamB.id}
+          showTiePick={tied}
+          onIncrement={(d) => onIncrement('B', d)}
+          onPickTie={() => onPickTieWinner(teamB.id)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TeamCell({
+  team,
+  score,
+  win,
+  tied,
+  tieWinner,
+  showTiePick,
+  onIncrement,
+  onPickTie,
+}: {
+  team: Team;
+  score: number;
+  win: boolean;
+  tied: boolean;
+  tieWinner: boolean;
+  showTiePick: boolean;
+  onIncrement: (delta: number) => void;
+  onPickTie: () => void;
+}) {
+  return (
+    <div className={'op-team ' + (tieWinner ? 'tie-winner' : '')}>
+      <div className="op-team-head">
+        <div className="op-team-name">{teamLabelShort(team)}</div>
+        {team.name && (
+          <div className="op-team-players">
+            {team.players[0].name} · {team.players[1].name}
+          </div>
+        )}
+      </div>
+      <div className="op-team-score-row">
+        <button
+          className="op-score-btn"
+          onClick={() => onIncrement(-1)}
+          aria-label="Decrease score"
+        >
+          <Icons.Minus className="icon" />
+        </button>
+        <div className={'op-score ' + (win ? 'winner' : tied ? 'tied' : '')}>{score}</div>
+        <button
+          className="op-score-btn"
+          onClick={() => onIncrement(1)}
+          aria-label="Increase score"
+        >
+          <Icons.Plus className="icon" />
+        </button>
+      </div>
+      {showTiePick && (
+        <div className="op-team-tie-pick">
+          <button className={tieWinner ? 'active' : ''} onClick={onPickTie}>
+            Wins tie-break
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

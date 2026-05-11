@@ -1,116 +1,371 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useEventStore } from '@/store/eventStore';
-import { currentRound, teamLabelShort } from '@/store/selectors';
-import { Timer } from '@/components/Timer';
-import { Leaderboard } from '@/components/Leaderboard';
-import { ThemeTierBadge, tierClasses } from '@/components/ThemeTierBadge';
-import { cn } from '@/utils/classNames';
-import { Crown } from 'lucide-react';
+import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
+import type { Court, Match, Team } from '@/types/domain';
+import { useTimer } from '@/hooks/useTimer';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
+import { formatMs } from '@/utils/time';
+import { Icons } from '@/components/Icons';
 
 export function DisplayScreen() {
   useStorageBroadcast();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);
+  const [scale, setScale] = useState(1);
+
+  // Fit-to-window scaling — design canvas is 1920x1080
+  useEffect(() => {
+    function recalc() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setScale(Math.min(w / 1920, h / 1080));
+    }
+    recalc();
+    window.addEventListener('resize', recalc);
+    return () => window.removeEventListener('resize', recalc);
+  }, []);
 
   if (!event) {
     return (
-      <div className="min-h-screen grid place-items-center text-slate-400">
-        No event yet. Set one up on the operator device.
+      <div className="splash">
+        Open an event on the operator device to drive this display.
       </div>
     );
   }
 
-  const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 px-6 py-6">
-      <header className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <div className="text-xs uppercase tracking-[0.3em] text-slate-400">King of the Court</div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold mt-1">{event.name}</h1>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--bg-0)',
+        overflow: 'hidden',
+        display: 'grid',
+        placeItems: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: 1920 * scale,
+          height: 1080 * scale,
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            width: 1920,
+            height: 1080,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+          }}
+        >
+          <DisplayCanvas event={event} round={round} />
         </div>
-        {round && (
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wider text-slate-400">Round {round.index}</div>
-            <Timer
-              round={round}
-              warningAtMs={event.settings.warningAtMs}
-              soundEnabled={false}
-              showControls={false}
-              large={false}
-            />
-          </div>
-        )}
-      </header>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_24rem] gap-6">
-        <section className="space-y-3">
-          {sortedCourtsDesc.map((court) => {
-            const match = round?.matches.find((m) => m.courtId === court.id);
-            const teamA = match && event.teams.find((t) => t.id === match.teamAId);
-            const teamB = match && event.teams.find((t) => t.id === match.teamBId);
-            const tier = tierClasses(court.position, event.courts.length);
-            return (
-              <div
-                key={court.id}
-                className={cn(
-                  'rounded-2xl border px-5 py-4 flex items-center gap-4',
-                  tier.bg,
-                  tier.border,
-                  tier.isCentre && 'ring-4 ring-amber-400/40',
-                )}
-              >
-                <div className="min-w-[8rem]">
-                  <div className={cn('text-xs font-bold uppercase tracking-widest', tier.text)}>
-                    #{court.position}
-                  </div>
-                  <div className={cn('text-2xl sm:text-3xl font-extrabold flex items-center gap-2', tier.text)}>
-                    {tier.isCentre && <Crown className="h-6 w-6" />}
-                    {court.name}
-                  </div>
-                </div>
-                <div className="flex-1 grid grid-cols-2 gap-4">
-                  <DisplayTeam team={teamA} score={match?.scoreA ?? 0} />
-                  <DisplayTeam team={teamB} score={match?.scoreB ?? 0} />
-                </div>
-                <ThemeTierBadge
-                  position={court.position}
-                  totalCourts={event.courts.length}
-                  pointValue={court.pointValue}
-                />
-              </div>
-            );
-          })}
-        </section>
-
-        <aside>
-          <Leaderboard event={event} />
-        </aside>
       </div>
     </div>
   );
 }
 
-function DisplayTeam({ team, score }: { team: ReturnType<typeof useEventStore.getState>['event'] extends infer _ ? any : never; score: number }) {
+function DisplayCanvas({
+  event,
+  round,
+}: {
+  event: ReturnType<typeof useEventStore.getState>['event'];
+  round: ReturnType<typeof currentRound>;
+}) {
+  const timerView = useTimer(round);
+  const lb = useMemo(() => (event ? leaderboard(event) : []), [event]);
+
+  if (!event) return null;
+  const top5 = lb.slice(0, 5);
+  const rest = lb.slice(5, 14);
+
+  const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
+  const centre = sortedCourtsDesc[0];
+  const rest_courts = sortedCourtsDesc.slice(1);
+  const leftCol: Court[] = [];
+  const rightCol: Court[] = [];
+  rest_courts.forEach((c, i) => (i % 2 === 0 ? rightCol.push(c) : leftCol.push(c)));
+
+  const centreMatch = round?.matches.find((m) => m.courtId === centre?.id);
+  const centreA = centreMatch && event.teams.find((t) => t.id === centreMatch.teamAId);
+  const centreB = centreMatch && event.teams.find((t) => t.id === centreMatch.teamBId);
+
+  let timerCls = '';
+  if (!timerView.hasStarted) timerCls = '';
+  else if (timerView.remainingMs <= 60_000) timerCls = 'danger';
+  else if (timerView.remainingMs <= event.settings.warningAtMs) timerCls = 'warn';
+
+  const totalRounds = event.settings.roundsTotal;
+  const roundIndex = round?.index ?? 0;
+  const completed = event.rounds.filter((r) => r.completedAt).length;
+  const progress = round
+    ? Math.min(100, ((round.durationMs - Math.max(0, timerView.remainingMs)) / round.durationMs) * 100)
+    : 0;
+
+  const king = lb[0];
+  const kingLabel = king
+    ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
+    : '—';
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/40 border border-slate-800 px-3 py-2">
-      <div className="flex-1 min-w-0">
-        {team ? (
-          <>
-            {team.name && (
-              <div className="text-xs uppercase tracking-wide text-slate-400 truncate">
-                {team.name}
-              </div>
-            )}
-            <div className="font-semibold truncate text-base sm:text-lg">
-              {teamLabelShort(team)}
+    <div className="tv-display">
+      <div className="tv-header">
+        <div className="tv-header-brand">
+          <div className="brand-mark lg">K</div>
+          <div className="tv-header-event">
+            <div className="tv-header-event-name">{event.name}</div>
+            <div className="tv-header-event-meta">
+              {event.venue ? `${event.venue} • ` : ''}
+              {roundIndex > 0
+                ? `Round ${roundIndex} of ${totalRounds}`
+                : `${event.teams.filter((t) => t.active).length} teams • ${event.courts.length} courts`}
             </div>
-          </>
-        ) : (
-          <div className="text-slate-500 italic">No team</div>
+          </div>
+        </div>
+        <div className="tv-header-right">
+          <span>{event.teams.filter((t) => t.active).length} teams</span>
+          <span style={{ opacity: 0.3 }}>•</span>
+          <span>{event.courts.length} courts</span>
+          <span style={{ opacity: 0.3 }}>•</span>
+          <div className="tv-header-live">
+            <div className="tv-live-dot" />
+            <span>Live</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="tv-body">
+        <div className="tv-lb">
+          <div className="tv-lb-header">
+            <div className="tv-lb-title">Standings</div>
+            <div className="tv-lb-subtitle">
+              {completed > 0 ? `After Round ${completed}` : 'Pre-round'}
+            </div>
+          </div>
+          <div className="tv-lb-list">
+            {top5.map((row, idx) => {
+              const isKing = idx === 0 && row.total > 0;
+              return (
+                <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
+                  <span className="rank">{idx + 1}</span>
+                  <div className="team-name">
+                    {isKing && <Icons.Crown className="tv-lb-crown" />}
+                    <span>{teamNameFor(event, row.teamId)}</span>
+                  </div>
+                  <span className="wl">
+                    {row.wins}W-{row.losses}L
+                  </span>
+                  <span className="pts">{row.total}</span>
+                </div>
+              );
+            })}
+            {rest.length > 0 && <div style={{ height: 8 }} />}
+            {rest.map((row, idx) => (
+              <div key={row.teamId} className="tv-lb-row">
+                <span className="rank">{idx + 6}</span>
+                <div className="team-name">
+                  <span>{teamNameFor(event, row.teamId)}</span>
+                </div>
+                <span className="wl">
+                  {row.wins}W-{row.losses}L
+                </span>
+                <span className="pts">{row.total}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tv-main">
+          <div className="tv-centre">
+            <div className="tv-centre-label">
+              <div className="tv-centre-crown">
+                <Icons.Crown className="icon lg" /> King's Court
+              </div>
+              <div className="tv-centre-name">{centre?.name ?? '—'}</div>
+              <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+            </div>
+            <div className="tv-centre-team">
+              <div className="tv-centre-team-label">Team A</div>
+              <div className="tv-centre-team-name">
+                {centreA ? teamLabelShort(centreA) : '—'}
+              </div>
+              {centreA && (
+                <div className="tv-centre-team-players">
+                  <span>
+                    {centreA.players[0].name} · {centreA.players[1].name}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="tv-centre-scores">
+              <div
+                className={
+                  'tv-centre-score ' +
+                  (centreMatch &&
+                  centreMatch.scoreA > centreMatch.scoreB
+                    ? 'winner'
+                    : '')
+                }
+              >
+                {centreMatch?.scoreA ?? 0}
+              </div>
+              <div className="tv-centre-vs">VS</div>
+              <div
+                className={
+                  'tv-centre-score ' +
+                  (centreMatch &&
+                  centreMatch.scoreB > centreMatch.scoreA
+                    ? 'winner'
+                    : '')
+                }
+              >
+                {centreMatch?.scoreB ?? 0}
+              </div>
+            </div>
+            <div className="tv-centre-team right">
+              <div className="tv-centre-team-label">Team B</div>
+              <div className="tv-centre-team-name">
+                {centreB ? teamLabelShort(centreB) : '—'}
+              </div>
+              {centreB && (
+                <div className="tv-centre-team-players">
+                  <span>
+                    {centreB.players[0].name} · {centreB.players[1].name}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div />
+          </div>
+
+          <div className="tv-lower">
+            <div className="tv-courts-col">
+              {leftCol.map((c) => (
+                <TvCourtCard
+                  key={c.id}
+                  court={c}
+                  match={round?.matches.find((m) => m.courtId === c.id)}
+                  teams={event.teams}
+                />
+              ))}
+            </div>
+
+            <div className="tv-timer-block">
+              <div className="tv-timer-label">Time Remaining</div>
+              <div className={'tv-timer-value size-xl ' + timerCls}>
+                {round ? formatMs(timerView.remainingMs) : '—'}
+              </div>
+              <div className="tv-timer-progress">
+                <div className="tv-timer-progress-bar" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="tv-timer-round">
+                Round <strong>{roundIndex}</strong> of <strong>{totalRounds}</strong>
+              </div>
+              <div className="tv-timer-bottom">
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">Next up</span>
+                  <span className="tv-timer-stat-value">
+                    R{Math.min(totalRounds, roundIndex + 1)}
+                  </span>
+                </div>
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">Round</span>
+                  <span className="tv-timer-stat-value">
+                    {Math.round((round?.durationMs ?? event.settings.defaultRoundDurationMs) / 60000)}m
+                  </span>
+                </div>
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">King</span>
+                  <span className="tv-timer-stat-value" style={{ color: 'var(--gold)' }}>
+                    {kingLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="tv-courts-col">
+              {rightCol.map((c) => (
+                <TvCourtCard
+                  key={c.id}
+                  court={c}
+                  match={round?.matches.find((m) => m.courtId === c.id)}
+                  teams={event.teams}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TvCourtCard({
+  court,
+  match,
+  teams,
+}: {
+  court: Court;
+  match: Match | undefined;
+  teams: Team[];
+}) {
+  if (!match) {
+    return (
+      <div className="tv-court" style={{ opacity: 0.5 }}>
+        <div className="tv-court-head">
+          <div className="tv-court-name">{court.name}</div>
+          <div className="tv-court-pts">
+            <span>{court.pointValue}</span> PTS
+          </div>
+        </div>
+        <div style={{ gridColumn: '2 / -1', textAlign: 'center', color: 'var(--text-2)' }}>
+          No match
+        </div>
+      </div>
+    );
+  }
+  const teamA = teams.find((t) => t.id === match.teamAId);
+  const teamB = teams.find((t) => t.id === match.teamBId);
+  const aWin = match.scoreA > match.scoreB;
+  const bWin = match.scoreB > match.scoreA;
+  const tied = match.scoreA === match.scoreB && match.scoreA > 0;
+
+  return (
+    <div className="tv-court">
+      <div className="tv-court-head">
+        <div className="tv-court-name">{court.name}</div>
+        <div className="tv-court-pts">
+          <span>{court.pointValue}</span> PTS
+        </div>
+      </div>
+      <div className="tv-court-team">
+        <div className="tv-court-team-label">A</div>
+        <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+        {teamA && (
+          <div className="tv-court-team-players">
+            {teamA.players[0].name} · {teamA.players[1].name}
+          </div>
         )}
       </div>
-      <div className="text-3xl sm:text-4xl font-extrabold tabular-nums">{score}</div>
+      <div className={'tv-court-score ' + (aWin ? 'winner' : tied ? 'tied' : '')}>
+        {match.scoreA}
+      </div>
+      <div className="tv-court-team">
+        <div className="tv-court-team-label">B</div>
+        <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+        {teamB && (
+          <div className="tv-court-team-players">
+            {teamB.players[0].name} · {teamB.players[1].name}
+          </div>
+        )}
+      </div>
+      <div className={'tv-court-score ' + (bWin ? 'winner' : tied ? 'tied' : '')}>
+        {match.scoreB}
+      </div>
     </div>
   );
 }

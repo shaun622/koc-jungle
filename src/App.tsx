@@ -11,6 +11,7 @@ import {
 import { useEventStore } from '@/store/eventStore';
 import { SetupScreen } from '@/routes/SetupScreen';
 import { QualifierScreen } from '@/routes/QualifierScreen';
+import { SeedingScreen } from '@/routes/SeedingScreen';
 import { RoundScreen } from '@/routes/RoundScreen';
 import { BetweenRoundsScreen } from '@/routes/BetweenRoundsScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
@@ -19,12 +20,14 @@ import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
+import type { EventStatus } from '@/types/domain';
 
-function routeForStatus(status: string): string {
+function routeForStatus(status: EventStatus): string {
   switch (status) {
     case 'qualifier':
-    case 'seeding':
       return '/qualifier';
+    case 'seeding':
+      return '/seeding';
     case 'round-in-progress':
       return '/round';
     case 'between-rounds':
@@ -36,6 +39,8 @@ function routeForStatus(status: string): string {
       return '/setup';
   }
 }
+
+const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup']);
 
 function RouteGate() {
   const event = useEventStore((s) => s.event);
@@ -49,9 +54,7 @@ function RouteGate() {
       }
       return;
     }
-    // Allow leaderboard, display, and setup at any time.
-    const free = ['/leaderboard', '/display', '/setup'];
-    if (free.includes(location.pathname)) return;
+    if (FREE_PATHS.has(location.pathname)) return;
     const expected = routeForStatus(event.status);
     if (location.pathname !== expected) {
       navigate(expected, { replace: true });
@@ -61,13 +64,13 @@ function RouteGate() {
   return null;
 }
 
-function Shell() {
+function OperatorShell() {
   const event = useEventStore((s) => s.event);
   return (
-    <>
+    <div className="op">
       {event && <TopNav event={event} />}
       <Outlet />
-    </>
+    </div>
   );
 }
 
@@ -77,7 +80,6 @@ export function App() {
 
   useEffect(() => {
     if (useEventStore.persist) {
-      // If the store rehydrates before subscribe-time we still want hydrated=true.
       if (useEventStore.persist.hasHydrated()) {
         useEventStore.setState({ hydrated: true });
       }
@@ -89,11 +91,7 @@ export function App() {
   }, []);
 
   if (!hydrated) {
-    return (
-      <div className="min-h-screen grid place-items-center text-slate-500">
-        Loading…
-      </div>
-    );
+    return <div className="splash">Loading…</div>;
   }
 
   return (
@@ -102,10 +100,11 @@ export function App() {
       <RouteGate />
       <Routes>
         <Route path="/display" element={<DisplayScreen />} />
-        <Route element={<Shell />}>
+        <Route element={<OperatorShell />}>
           <Route index element={<Navigate to="/setup" replace />} />
           <Route path="/setup" element={<SetupScreen />} />
           <Route path="/qualifier" element={<QualifierScreen />} />
+          <Route path="/seeding" element={<SeedingScreen />} />
           <Route path="/round" element={<RoundScreen />} />
           <Route path="/between" element={<BetweenRoundsScreen />} />
           <Route path="/leaderboard" element={<LeaderboardScreen />} />

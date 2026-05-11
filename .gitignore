@@ -26,3 +26,7 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Design handoff reference (vendor materials, not part of the app)
+Padel KoC/
+Padel KoC.zip
