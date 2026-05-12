@@ -712,13 +712,31 @@ button {
 }
 .setup-court-row {
   display: grid;
-  grid-template-columns: 32px 1fr 110px auto;
+  grid-template-columns: 22px 32px 1fr 110px auto;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
   background: var(--bg-2);
   border: 1px solid var(--line-soft);
   border-radius: 10px;
+  user-select: none;
+}
+.setup-court-drag {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.setup-court-drag:hover {
+  color: var(--text-0);
+}
+.setup-court-drag:active {
+  cursor: grabbing;
 }
 .setup-court-row.centre {
   background: linear-gradient(90deg, oklch(26% 0.06 80) 0%, var(--bg-2) 80%);

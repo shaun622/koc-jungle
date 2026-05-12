@@ -42,6 +42,7 @@ interface Actions {
   setCourtPoints: (id: string, pointValue: number) => void;
   addCourt: () => void;
   removeCourt: (id: string) => void;
+  reorderCourts: (orderedIdsTopFirst: string[]) => void;
 
   updateSettings: (patch: Partial<EventSettings>) => void;
   setEventName: (name: string) => void;
@@ -196,6 +197,34 @@ export const useEventStore = create<EventStore>()(
         if (!event) return;
         const sorted = courts.slice().sort((a, b) => a.position - b.position);
         set({ event: { ...event, courts: sorted } });
+      },
+
+      reorderCourts: (orderedIdsTopFirst) => {
+        const event = get().event;
+        if (!event) return;
+        if (orderedIdsTopFirst.length !== event.courts.length) {
+          set({ lastError: 'Court reorder skipped: missing or extra courts.' });
+          return;
+        }
+        const seen = new Set<string>();
+        const courts: Court[] = [];
+        const N = orderedIdsTopFirst.length;
+        for (let i = 0; i < N; i++) {
+          const id = orderedIdsTopFirst[i];
+          if (seen.has(id)) {
+            set({ lastError: 'Court reorder skipped: duplicate court id.' });
+            return;
+          }
+          seen.add(id);
+          const court = event.courts.find((c) => c.id === id);
+          if (!court) {
+            set({ lastError: 'Court reorder skipped: unknown court id.' });
+            return;
+          }
+          // Top of list (i=0) gets the highest position (N), bottom (i=N-1) gets 1.
+          courts.push({ ...court, position: N - i });
+        }
+        set({ event: { ...event, courts }, lastError: null });
       },
 
       renameCourt: (id, name) => {

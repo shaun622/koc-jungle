@@ -1,9 +1,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
-import { isCentreCourt, type TieRule } from '@/types/domain';
+import { isCentreCourt, type Court, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -28,6 +43,7 @@ export function SetupScreen() {
   const setCourtPoints = useEventStore((s) => s.setCourtPoints);
   const addCourt = useEventStore((s) => s.addCourt);
   const removeCourt = useEventStore((s) => s.removeCourt);
+  const reorderCourts = useEventStore((s) => s.reorderCourts);
   const setEventName = useEventStore((s) => s.setEventName);
   const setEventVenue = useEventStore((s) => s.setEventVenue);
   const updateSettings = useEventStore((s) => s.updateSettings);
@@ -148,54 +164,15 @@ export function SetupScreen() {
         <div className="setup-sub">
           Higher position = more prestige. Top court is the Centre / King's Court.
         </div>
-        <div className="setup-list">
-          {event.courts
-            .slice()
-            .sort((a, b) => b.position - a.position)
-            .map((c) => {
-              const centre = isCentreCourt(c, event.courts);
-              return (
-                <div key={c.id} className={'setup-court-row ' + (centre ? 'centre' : '')}>
-                  <div className="setup-court-pos">{c.position}</div>
-                  <input
-                    className="setup-input"
-                    value={c.name}
-                    onChange={(e) => renameCourt(c.id, e.target.value)}
-                  />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      className="setup-court-pts-input setup-input"
-                      type="number"
-                      min={0}
-                      value={c.pointValue}
-                      onChange={(e) => setCourtPoints(c.id, Number(e.target.value) || 0)}
-                    />
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: 'var(--text-2)',
-                        fontFamily: 'var(--font-mono)',
-                        letterSpacing: '0.12em',
-                      }}
-                    >
-                      PTS
-                    </span>
-                  </div>
-                  {event.status === 'setup' && event.courts.length > 1 ? (
-                    <button
-                      className="op-score-btn"
-                      onClick={() => removeCourt(c.id)}
-                      aria-label="Remove court"
-                    >
-                      <Icons.Minus className="icon" />
-                    </button>
-                  ) : (
-                    <span style={{ width: 32 }} />
-                  )}
-                </div>
-              );
-            })}
-        </div>
+        <SortableCourtList
+          courts={event.courts}
+          canRemove={event.status === 'setup' && event.courts.length > 1}
+          canReorder={event.status === 'setup'}
+          onRename={renameCourt}
+          onPoints={setCourtPoints}
+          onRemove={removeCourt}
+          onReorder={reorderCourts}
+        />
       </div>
 
       <div className="setup-col">
@@ -372,6 +349,147 @@ function NewTeamForm({
       >
         + Add
       </button>
+    </div>
+  );
+}
+
+function SortableCourtList({
+  courts,
+  canRemove,
+  canReorder,
+  onRename,
+  onPoints,
+  onRemove,
+  onReorder,
+}: {
+  courts: Court[];
+  canRemove: boolean;
+  canReorder: boolean;
+  onRename: (id: string, name: string) => void;
+  onPoints: (id: string, value: number) => void;
+  onRemove: (id: string) => void;
+  onReorder: (orderedIdsTopFirst: string[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+  const ordered = courts.slice().sort((a, b) => b.position - a.position);
+  const ids = ordered.map((c) => c.id);
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    const next = arrayMove(ids, from, to);
+    onReorder(next);
+  };
+
+  return (
+    <div className="setup-list">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          {ordered.map((c) => (
+            <SortableCourtRow
+              key={c.id}
+              court={c}
+              isCentre={isCentreCourt(c, courts)}
+              canRemove={canRemove}
+              canReorder={canReorder}
+              onRename={onRename}
+              onPoints={onPoints}
+              onRemove={onRemove}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+function SortableCourtRow({
+  court,
+  isCentre,
+  canRemove,
+  canReorder,
+  onRename,
+  onPoints,
+  onRemove,
+}: {
+  court: Court;
+  isCentre: boolean;
+  canRemove: boolean;
+  canReorder: boolean;
+  onRename: (id: string, name: string) => void;
+  onPoints: (id: string, value: number) => void;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: court.id,
+    disabled: !canReorder,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={'setup-court-row ' + (isCentre ? 'centre' : '')}
+    >
+      {canReorder ? (
+        <button
+          className="setup-court-drag"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder court"
+          type="button"
+        >
+          <Icons.Drag className="icon" />
+        </button>
+      ) : (
+        <span className="setup-court-drag" aria-hidden="true" />
+      )}
+      <div className="setup-court-pos">{court.position}</div>
+      <input
+        className="setup-input"
+        value={court.name}
+        onChange={(e) => onRename(court.id, e.target.value)}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          className="setup-court-pts-input setup-input"
+          type="number"
+          min={0}
+          value={court.pointValue}
+          onChange={(e) => onPoints(court.id, Number(e.target.value) || 0)}
+        />
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--text-2)',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.12em',
+          }}
+        >
+          PTS
+        </span>
+      </div>
+      {canRemove ? (
+        <button
+          className="op-score-btn"
+          onClick={() => onRemove(court.id)}
+          aria-label="Remove court"
+          type="button"
+        >
+          <Icons.Minus className="icon" />
+        </button>
+      ) : (
+        <span style={{ width: 32 }} />
+      )}
     </div>
   );
 }
