@@ -2316,6 +2316,8 @@ button {
     overflow: auto;
     height: auto;
     min-height: 100%;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
   }
   #root {
     height: auto;
