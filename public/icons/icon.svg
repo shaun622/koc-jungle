@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1c2330"/>
+      <stop offset="100%" stop-color="#0e1219"/>
+    </linearGradient>
+    <linearGradient id="court" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a8e836"/>
+      <stop offset="100%" stop-color="#7dba1f"/>
+    </linearGradient>
+    <linearGradient id="crownGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbcf5f"/>
+      <stop offset="60%" stop-color="#f1b843"/>
+      <stop offset="100%" stop-color="#b9842a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle radial glow behind crown -->
+  <circle cx="256" cy="200" r="120" fill="#f1b843" opacity="0.10"/>
+
+  <!-- Padel court -->
+  <g transform="translate(96 260)">
+    <!-- Outer court boundary -->
+    <rect x="0" y="0" width="320" height="200" rx="14" fill="url(#court)" opacity="0.18"/>
+    <rect x="0" y="0" width="320" height="200" rx="14" fill="none" stroke="#c6f84e" stroke-width="6"/>
+    <!-- Net (horizontal centre line) -->
+    <line x1="0" y1="100" x2="320" y2="100" stroke="#c6f84e" stroke-width="6"/>
+    <!-- Service line top half -->
+    <line x1="60" y1="0" x2="60" y2="100" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+    <line x1="260" y1="0" x2="260" y2="100" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+    <line x1="60" y1="50" x2="260" y2="50" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+    <!-- Service line bottom half -->
+    <line x1="60" y1="100" x2="60" y2="200" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+    <line x1="260" y1="100" x2="260" y2="200" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+    <line x1="60" y1="150" x2="260" y2="150" stroke="#c6f84e" stroke-width="3" opacity="0.55"/>
+  </g>
+
+  <!-- Crown sitting above the court -->
+  <g transform="translate(116 70)">
+    <!-- Crown body: 5 points -->
+    <path d="
+      M 0 110
+      L 24 28
+      L 70 84
+      L 140 0
+      L 210 84
+      L 256 28
+      L 280 110
+      Z"
+      fill="url(#crownGold)"
+      stroke="#7d5715"
+      stroke-width="6"
+      stroke-linejoin="round"/>
+    <!-- Crown band -->
+    <rect x="0" y="106" width="280" height="40" rx="8"
+      fill="url(#crownGold)"
+      stroke="#7d5715"
+      stroke-width="6"/>
+    <!-- Band shadow line -->
+    <line x1="14" y1="126" x2="266" y2="126" stroke="#7d5715" stroke-width="3" opacity="0.45"/>
+    <!-- Jewels at point tips -->
+    <circle cx="24" cy="28" r="9" fill="#c6f84e" stroke="#7d5715" stroke-width="3"/>
+    <circle cx="140" cy="0" r="11" fill="#c6f84e" stroke="#7d5715" stroke-width="3"/>
+    <circle cx="256" cy="28" r="9" fill="#c6f84e" stroke="#7d5715" stroke-width="3"/>
+    <!-- Centre gem on band -->
+    <circle cx="140" cy="126" r="10" fill="#e84b3c" stroke="#7d5715" stroke-width="3"/>
+  </g>
+</svg>
