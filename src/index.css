@@ -2306,3 +2306,360 @@ button {
 .tv-display *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ==========================================================================
+   Mobile / narrow viewport (< 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow: auto;
+    height: auto;
+    min-height: 100%;
+  }
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+
+  /* Operator shell: allow page to grow + scroll on mobile */
+  .op {
+    position: static;
+    inset: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  /* Top nav: row 1 = brand + actions, row 2 = scrollable tabs */
+  .op-top {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 8px 8px;
+    padding: 8px 12px;
+  }
+  .op-top-left {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .op-top-right {
+    grid-column: 2;
+    grid-row: 1;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .op-top-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .op-top-center::-webkit-scrollbar {
+    display: none;
+  }
+  .chrome-brand span {
+    display: none;
+  }
+  .op-top-meta {
+    font-size: 11px;
+    max-width: 220px;
+  }
+  .op-top-right .btn.sm {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  /* Setup: stack columns, allow scroll */
+  .setup {
+    position: relative;
+    inset: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: visible;
+    padding: 12px;
+    gap: 12px;
+  }
+  .setup-col {
+    overflow: visible;
+    padding: 14px;
+    min-width: 0;
+  }
+  .setup-list {
+    overflow: visible;
+    max-height: none;
+    padding-right: 0;
+    min-width: 0;
+  }
+  .setup-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .setup-field {
+    min-width: 0;
+  }
+  .setup-input {
+    width: 100%;
+    min-width: 0;
+  }
+  .setup-h {
+    font-size: 16px;
+  }
+
+  /* Court row: drop position-number column, tighten point group */
+  .setup-court-row {
+    grid-template-columns: 22px minmax(0, 1fr) 64px 30px;
+    column-gap: 8px;
+    padding: 10px 12px;
+  }
+  .setup-court-pos {
+    display: none;
+  }
+  .setup-court-row > div span {
+    display: none;
+  }
+  .setup-court-row > div {
+    min-width: 0;
+  }
+  .setup-court-pts-input {
+    padding: 10px 4px;
+    font-size: 14px;
+    min-width: 0;
+  }
+  .setup-input {
+    padding: 10px 10px;
+    font-size: 14px;
+  }
+
+  /* Team row */
+  .setup-team-row {
+    grid-template-columns: 28px minmax(0, 1fr) 30px;
+    padding: 10px;
+    gap: 8px;
+  }
+  .setup-team-inputs {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+  }
+
+  /* New team form: stack vertically */
+  .setup-col > div[style*='grid-template-columns: 1fr 1fr 1fr auto'] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+  .setup-col > div[style*='grid-template-columns: 1fr 1fr 1fr auto'] > button {
+    grid-column: 1 / -1;
+  }
+
+  /* Landing (empty-state) card */
+  .landing-card {
+    padding: 24px 20px;
+  }
+  .landing-card h1 {
+    font-size: 22px;
+  }
+
+  /* Round screen */
+  .op-body {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto 1fr;
+    overflow: visible;
+  }
+  .op-side {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    padding: 14px;
+  }
+  .op-main {
+    padding: 14px;
+    overflow: visible;
+  }
+  .op-court-grid,
+  .op-court-grid.cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+  .op-court-body {
+    grid-template-columns: 1fr 1fr;
+  }
+  .op-end-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .op-end-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .op-timer-value {
+    font-size: 60px;
+  }
+
+  /* Qualifier */
+  .qual {
+    position: relative;
+    inset: auto;
+    padding: 12px;
+    overflow: visible;
+  }
+  .qual-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+  .qual-bottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .qual-bottom > div {
+    width: 100%;
+  }
+  .qual-bottom .btn {
+    flex: 1;
+  }
+
+  /* Seeding */
+  .seed {
+    position: relative;
+    inset: auto;
+    padding: 12px;
+    overflow: visible;
+  }
+  .seed-list {
+    overflow: visible;
+  }
+  .seed-row {
+    grid-template-columns: 24px 80px 1fr auto;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .seed-row .seed-qscore {
+    grid-column: 3;
+    grid-row: 2;
+    text-align: right;
+  }
+
+  /* Between rounds */
+  .between {
+    position: relative;
+    inset: auto;
+    padding: 12px;
+    overflow: visible;
+  }
+  .between-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  /* Leaderboard */
+  .lbfull {
+    position: relative;
+    inset: auto;
+    padding: 14px;
+    overflow: visible;
+  }
+  .lbfull-header,
+  .lbfull-row {
+    grid-template-columns: 38px 1fr 56px;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .lbfull-header > span:nth-child(3),
+  .lbfull-header > span:nth-child(4),
+  .lbfull-header > span:nth-child(5),
+  .lbfull-row .lbfull-stat:nth-of-type(1),
+  .lbfull-row .lbfull-stat:nth-of-type(2),
+  .lbfull-row .lbfull-stat:nth-of-type(3) {
+    display: none;
+  }
+
+  /* Podium */
+  .podium-screen {
+    position: relative;
+    inset: auto;
+    padding: 20px 14px 40px 14px;
+    overflow: visible;
+  }
+  .podium-head-title {
+    font-size: 28px;
+  }
+  .podium-stage {
+    gap: 6px;
+  }
+  .podium-column {
+    min-width: 0;
+    gap: 10px;
+  }
+  .podium-team {
+    width: 100%;
+    min-width: 0;
+    align-items: center !important;
+    text-align: center;
+    gap: 2px;
+  }
+  .podium-team .place-tag {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+  .podium-team .team-name {
+    font-size: 13px;
+    width: 100%;
+  }
+  .podium-team--first .team-name {
+    font-size: 16px;
+  }
+  .podium-team .team-players {
+    display: none;
+  }
+  .podium-team .team-points {
+    font-size: 10px;
+  }
+  .podium-team .team-points span {
+    font-size: 14px;
+  }
+  .podium-block {
+    border-radius: 12px 12px 0 0;
+  }
+  .podium-block--first {
+    height: 160px;
+    font-size: 84px;
+  }
+  .podium-block--second {
+    height: 120px;
+    font-size: 64px;
+  }
+  .podium-block--third {
+    height: 92px;
+    font-size: 52px;
+  }
+
+  .podium-rest-row {
+    grid-template-columns: 34px 1fr auto;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .podium-rest-row .wl {
+    display: none;
+  }
+
+  /* Modal: hug viewport */
+  .modal {
+    width: 100%;
+    margin: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .setup-form {
+    grid-template-columns: 1fr;
+  }
+  .op-top-meta {
+    display: none;
+  }
+}
