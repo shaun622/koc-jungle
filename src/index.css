@@ -2151,6 +2151,129 @@ button {
   animation-delay: 2.8s;
 }
 
+/* ==========================================================================
+   Presentation mode (operator screen styled for mirrored TV)
+   ========================================================================== */
+.presentation-pill {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 40;
+  background: oklch(22% 0.04 245 / 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-radius: 99px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.presentation-pill:hover {
+  background: oklch(28% 0.04 245 / 0.9);
+  color: var(--text-0);
+}
+.presentation-pill--exit {
+  top: 14px;
+  right: 14px;
+  bottom: auto;
+  background: oklch(22% 0.06 80 / 0.9);
+  border-color: color-mix(in oklch, var(--gold) 40%, transparent);
+  color: var(--gold);
+}
+.presentation-pill--exit:hover {
+  background: oklch(28% 0.07 80 / 0.95);
+  color: var(--text-0);
+}
+
+.op.presentation .op-top {
+  display: none;
+}
+.op.presentation {
+  grid-template-rows: 1fr;
+}
+.op.presentation .op-body {
+  grid-template-columns: 360px 1fr;
+}
+.op.presentation .op-timer-value {
+  font-size: 116px;
+}
+.op.presentation .op-timer-controls .btn {
+  padding: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+  min-width: 0;
+}
+.op.presentation .op-timer-play {
+  padding: 12px !important;
+  font-size: 13px !important;
+  opacity: 1;
+}
+.op.presentation .op-mini-lb-row {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.op.presentation .op-mini-lb-row .n {
+  font-size: 13px;
+}
+.op.presentation .op-mini-lb-row .p {
+  font-size: 14px;
+}
+.op.presentation .op-court {
+  padding: 18px;
+}
+.op.presentation .op-team-name {
+  font-size: 24px;
+}
+.op.presentation .op-team-players {
+  font-size: 12px;
+}
+.op.presentation .op-score {
+  font-size: 60px;
+}
+.op.presentation .op-score-btn {
+  width: 26px;
+  height: 26px;
+  opacity: 0.5;
+  font-size: 14px;
+}
+.op.presentation .op-score-btn:hover,
+.op.presentation .op-score-btn:focus-visible {
+  opacity: 1;
+}
+.op.presentation .op-court-pts-chip {
+  font-size: 11px;
+}
+.op.presentation .op-end-bar {
+  padding: 10px 16px;
+}
+.op.presentation .op-end-summary {
+  display: none;
+}
+.op.presentation .op-end-bar .btn {
+  font-size: 13px;
+  padding: 10px 14px;
+}
+.op.presentation .op-end-bar .btn.lg.primary {
+  padding: 12px 20px;
+  font-size: 14px;
+}
+.op.presentation .between-card {
+  padding: 16px 18px;
+}
+.op.presentation .between-card-name {
+  font-size: 18px;
+}
+.op.presentation .between-team-name {
+  font-size: 16px;
+}
+
 /* Scrollbar */
 .op *::-webkit-scrollbar,
 .tv-display *::-webkit-scrollbar {

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useEventStore } from '@/store/eventStore';
 import { useTimer } from '@/hooks/useTimer';
 import { useBuzzer } from '@/hooks/useBuzzer';
+import { usePresentationMode } from '@/hooks/usePresentationMode';
 import { formatMs } from '@/utils/time';
 import type { MainRound } from '@/types/domain';
 import { Icons } from './Icons';
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function Timer({ round, warningAtMs, soundEnabled }: Props) {
+  const [presentation] = usePresentationMode();
   const start = useEventStore((s) => s.startRoundTimer);
   const pause = useEventStore((s) => s.pauseRoundTimer);
   const reset = useEventStore((s) => s.resetRoundTimer);
@@ -56,13 +58,13 @@ export function Timer({ round, warningAtMs, soundEnabled }: Props) {
       <div className={'op-timer-value ' + timerCls}>{formatMs(remainingMs)}</div>
       <div className="op-timer-controls">
         <button className="btn" onClick={() => adjust(-60_000)} aria-label="Subtract 1 minute">
-          −1 MIN
+          {presentation ? <Icons.Minus className="icon" /> : '−1 MIN'}
         </button>
         <button className="btn" onClick={() => reset()} aria-label="Reset timer">
           <Icons.Reset className="icon" />
         </button>
         <button className="btn" onClick={() => adjust(60_000)} aria-label="Add 1 minute">
-          +1 MIN
+          {presentation ? <Icons.Plus className="icon" /> : '+1 MIN'}
         </button>
         <button
           className={'btn op-timer-play ' + (isPaused ? 'paused' : !hasStarted ? 'idle' : '')}
@@ -70,11 +72,11 @@ export function Timer({ round, warningAtMs, soundEnabled }: Props) {
         >
           {isIdleOrPaused ? (
             <>
-              <Icons.Play className="icon" /> {hasStarted ? 'RESUME' : 'START'}
+              <Icons.Play className="icon" /> {presentation ? '' : hasStarted ? 'RESUME' : 'START'}
             </>
           ) : (
             <>
-              <Icons.Pause className="icon" /> PAUSE
+              <Icons.Pause className="icon" /> {presentation ? '' : 'PAUSE'}
             </>
           )}
         </button>

@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { leaderboard, teamLabelShort } from '@/store/selectors';
 import { Icons } from '@/components/Icons';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import type { Team } from '@/types/domain';
 
@@ -20,7 +21,9 @@ const CONFETTI_COLORS = [
 
 export function PodiumScreen() {
   const event = useEventStore((s) => s.event);
+  const resetEvent = useEventStore((s) => s.resetEvent);
   const navigate = useNavigate();
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const rows = useMemo(() => {
     if (!event) return [];
@@ -131,7 +134,24 @@ export function PodiumScreen() {
         <button className="btn" onClick={() => navigate('/display')}>
           TV mode
         </button>
+        <button className="btn primary" onClick={() => setConfirmReset(true)}>
+          Start new event →
+        </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Start a new event?"
+        message="This clears the current tournament — teams, scores, rounds, podium. Export results first if you want to keep them."
+        confirmLabel="Yes, start fresh"
+        destructive
+        onConfirm={() => {
+          resetEvent();
+          setConfirmReset(false);
+          setTimeout(() => navigate('/setup'), 0);
+        }}
+        onCancel={() => setConfirmReset(false)}
+      />
     </div>
   );
 }
