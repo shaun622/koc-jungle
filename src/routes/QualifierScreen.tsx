@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
@@ -37,8 +38,8 @@ export function QualifierScreen() {
           <div className="qual-title">Qualifier round</div>
           <div className="qual-sub">
             {event.teams.filter((t) => t.active).length} teams paired randomly across {total} courts.
-            Each match is best of {QUALIFIER_TOTAL} — every serve played. Scores must sum to{' '}
-            {QUALIFIER_TOTAL}.
+            Each match is best of {QUALIFIER_TOTAL} — every serve played. Enter one team's score and the
+            other auto-fills to keep the sum at {QUALIFIER_TOTAL}.
           </div>
         </div>
         <div className="qual-meta">
@@ -62,30 +63,16 @@ export function QualifierScreen() {
               </div>
               <div className="qual-row">
                 <div className="name">{teamA ? teamLabelShort(teamA) : '—'}</div>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={QUALIFIER_TOTAL}
+                <QualifierScoreInput
                   value={m.scoreA}
-                  onChange={(e) => {
-                    const a = Math.max(0, Math.min(QUALIFIER_TOTAL, Number(e.target.value) || 0));
-                    setQualifierScore(m.id, a, m.scoreB);
-                  }}
+                  onCommit={(n) => setQualifierScore(m.id, n, QUALIFIER_TOTAL - n)}
                 />
               </div>
               <div className="qual-row">
                 <div className="name">{teamB ? teamLabelShort(teamB) : '—'}</div>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={QUALIFIER_TOTAL}
+                <QualifierScoreInput
                   value={m.scoreB}
-                  onChange={(e) => {
-                    const b = Math.max(0, Math.min(QUALIFIER_TOTAL, Number(e.target.value) || 0));
-                    setQualifierScore(m.id, m.scoreA, b);
-                  }}
+                  onCommit={(n) => setQualifierScore(m.id, QUALIFIER_TOTAL - n, n)}
                 />
               </div>
               <div className={'qual-sum ' + (valid ? 'ok' : sum > 0 || !valid ? 'bad' : '')}>
@@ -118,5 +105,47 @@ export function QualifierScreen() {
         </div>
       </div>
     </div>
+  );
+}
+
+function QualifierScoreInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (n: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(String(value));
+  }, [value, focused]);
+  const commit = () => {
+    setFocused(false);
+    const n = parseInt(text, 10);
+    if (!Number.isNaN(n) && n >= 0 && n <= QUALIFIER_TOTAL) {
+      onCommit(n);
+      setText(String(n));
+    } else {
+      setText(String(value));
+    }
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={QUALIFIER_TOTAL}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={(e) => {
+        setFocused(true);
+        e.currentTarget.select();
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+    />
   );
 }

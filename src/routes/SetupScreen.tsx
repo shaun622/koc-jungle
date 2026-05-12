@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -120,16 +120,11 @@ export function SetupScreen() {
           />
           <div className="setup-field">
             <label>Total rounds</label>
-            <input
-              type="number"
+            <NumberField
+              value={event.settings.roundsTotal}
               min={1}
               max={20}
-              className="setup-input"
-              value={event.settings.roundsTotal}
-              onChange={(e) => {
-                const n = Math.max(1, Math.min(20, Number(e.target.value) || 1));
-                updateSettings({ roundsTotal: n });
-              }}
+              onCommit={(n) => updateSettings({ roundsTotal: n })}
             />
           </div>
           <div className="setup-field">
@@ -183,7 +178,7 @@ export function SetupScreen() {
           Each team is a fixed pair of two named players. Leave team name blank to auto-label.
         </div>
         {event.status === 'setup' && (
-          <NewTeamForm onAdd={(p1, p2, name) => addTeam({ player1: p1, player2: p2, name })} />
+          <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
         )}
         <div className="setup-list">
           {teams.map((team, i) => (
@@ -303,53 +298,93 @@ function DurationField({
 function NewTeamForm({
   onAdd,
 }: {
-  onAdd: (player1: string, player2: string, name?: string) => void;
+  onAdd: (player1: string, player2: string) => void;
 }) {
-  const [name, setName] = useState('');
   const [p1, setP1] = useState('');
   const [p2, setP2] = useState('');
   const valid = p1.trim() && p2.trim();
+  const submit = () => {
+    if (!valid) return;
+    onAdd(p1, p2);
+    setP1('');
+    setP2('');
+  };
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1fr auto',
+        gridTemplateColumns: '1fr 1fr auto',
         gap: 6,
         marginBottom: 12,
       }}
     >
       <input
         className="setup-input"
-        placeholder="Team name (optional)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <input
-        className="setup-input"
         placeholder="Player A"
         value={p1}
         onChange={(e) => setP1(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit();
+        }}
       />
       <input
         className="setup-input"
         placeholder="Player B"
         value={p2}
         onChange={(e) => setP2(e.target.value)}
-      />
-      <button
-        className="btn primary"
-        disabled={!valid}
-        onClick={() => {
-          if (!valid) return;
-          onAdd(p1, p2, name);
-          setName('');
-          setP1('');
-          setP2('');
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit();
         }}
-      >
+      />
+      <button className="btn primary" disabled={!valid} onClick={submit}>
         + Add
       </button>
     </div>
+  );
+}
+
+function NumberField({
+  value,
+  min,
+  max,
+  onCommit,
+  className = 'setup-input',
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (n: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  // Re-sync if external value changes while the field isn't focused
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+  const commit = () => {
+    const n = parseInt(text, 10);
+    if (!Number.isNaN(n) && n >= min && n <= max) {
+      onCommit(n);
+      setText(String(n));
+    } else {
+      setText(String(value));
+    }
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      className={className}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+    />
   );
 }
 
@@ -460,12 +495,12 @@ function SortableCourtRow({
         onChange={(e) => onRename(court.id, e.target.value)}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <input
+        <NumberField
           className="setup-court-pts-input setup-input"
-          type="number"
-          min={0}
           value={court.pointValue}
-          onChange={(e) => onPoints(court.id, Number(e.target.value) || 0)}
+          min={0}
+          max={99}
+          onCommit={(n) => onPoints(court.id, n)}
         />
         <span
           style={{
