@@ -465,9 +465,12 @@ function TvLiveCanvas({
   const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
   const centre = sortedCourtsDesc[0];
   const restCourts = sortedCourtsDesc.slice(1);
-  const leftCol: Court[] = [];
-  const rightCol: Court[] = [];
-  restCourts.forEach((c, i) => (i % 2 === 0 ? rightCol.push(c) : leftCol.push(c)));
+  // Left column gets the higher courts top-to-bottom, right column gets the
+  // remainder. With 6 side courts → left [6,5,4], right [3,2,1]. With an odd
+  // number of side courts the extra one falls on the left.
+  const half = Math.ceil(restCourts.length / 2);
+  const leftCol = restCourts.slice(0, half);
+  const rightCol = restCourts.slice(half);
 
   const centreMatch = round?.matches.find((m) => m.courtId === centre?.id);
   const centreA = centreMatch && event.teams.find((t) => t.id === centreMatch.teamAId);
@@ -1172,9 +1175,12 @@ function TvBetweenCanvas({
   const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
   const centre = sortedCourtsDesc[0];
   const restCourts = sortedCourtsDesc.slice(1);
-  const leftCol: Court[] = [];
-  const rightCol: Court[] = [];
-  restCourts.forEach((c, i) => (i % 2 === 0 ? rightCol.push(c) : leftCol.push(c)));
+  // Left column gets the higher courts top-to-bottom, right column gets the
+  // remainder. With 6 side courts → left [6,5,4], right [3,2,1]. With an odd
+  // number of side courts the extra one falls on the left.
+  const half = Math.ceil(restCourts.length / 2);
+  const leftCol = restCourts.slice(0, half);
+  const rightCol = restCourts.slice(half);
 
   const centreAssign = pending.find((a) => a.courtId === centre?.id);
   const centreA = centreAssign && event.teams.find((t) => t.id === centreAssign.teamAId);
