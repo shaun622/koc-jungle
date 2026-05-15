@@ -15,7 +15,6 @@ const TABS: TabDef[] = [
   { path: '/setup', label: 'Setup', showFor: ['setup'] },
   { path: '/qualifier', label: 'Qualifier', showFor: ['qualifier'] },
   { path: '/seeding', label: 'Seeding', showFor: ['seeding'] },
-  { path: '/round', label: 'Round', showFor: ['round-in-progress'] },
   { path: '/between', label: 'Rotation', showFor: ['between-rounds'] },
   { path: '/complete', label: 'Podium', showFor: ['complete'] },
   { path: '/leaderboard', label: 'Standings' },

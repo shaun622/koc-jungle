@@ -1198,6 +1198,232 @@ button {
 }
 
 /* ==========================================================================
+   Display shell — the canvas + the fixed bottom operator toolbar
+   ========================================================================== */
+.display-shell {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-0);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+.display-canvas-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+}
+.display-canvas {
+  position: relative;
+}
+
+.display-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)) 16px;
+  background: oklch(14% 0.025 245 / 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  z-index: 40;
+}
+.display-toolbar--complete {
+  grid-template-columns: 1fr auto auto auto;
+}
+.display-toolbar-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.display-toolbar-timer .btn {
+  padding: 10px 12px;
+  font-size: 12px;
+  min-width: 0;
+}
+.display-toolbar-timer .display-play {
+  background: var(--lime);
+  color: var(--bg-0);
+  border-color: var(--lime);
+  padding: 10px 16px;
+  font-size: 13px;
+}
+.display-toolbar-timer .display-play.paused {
+  background: var(--amber);
+  border-color: var(--amber);
+}
+.display-toolbar-timer .display-play.idle {
+  background: var(--lime);
+}
+.display-toolbar-summary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.display-end-round {
+  white-space: nowrap;
+}
+.display-toolbar-menu {
+  position: relative;
+}
+.display-toolbar-menu > .btn {
+  padding: 10px 14px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.display-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+}
+.display-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 200px;
+  z-index: 42;
+  box-shadow: var(--shadow-glow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.display-menu-item {
+  background: transparent;
+  border: 0;
+  color: var(--text-0);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.display-menu-item:hover {
+  background: var(--bg-2);
+}
+.display-menu-item.display-menu-danger {
+  color: var(--red);
+}
+.display-menu-divider {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 4px 0;
+}
+
+/* Score +/- buttons embedded in the TV canvas (scale with everything else) */
+.tv-court-score-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tv-centre-score-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.tv-score-btn {
+  background: oklch(28% 0.03 245 / 0.6);
+  border: 1px solid var(--line-soft);
+  color: var(--text-0);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0.7;
+  transition: opacity 100ms ease, background 100ms ease;
+}
+.tv-score-btn:hover,
+.tv-score-btn:focus-visible {
+  opacity: 1;
+  background: oklch(34% 0.03 245);
+}
+.tv-score-btn:active {
+  background: var(--lime);
+  color: var(--bg-0);
+}
+.tv-centre-score-group .tv-score-btn {
+  width: 56px;
+  height: 56px;
+  font-size: 24px;
+}
+
+/* Inline tie nomination row */
+.tv-court-tie,
+.tv-centre-tie {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: oklch(22% 0.06 75 / 0.4);
+  border: 1px solid color-mix(in oklch, var(--amber) 50%, transparent);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+  flex-wrap: wrap;
+}
+.tv-centre-tie {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  justify-content: center;
+}
+.tv-court-tie .label,
+.tv-centre-tie .label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+}
+.tv-tie-btn {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text-0);
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.tv-tie-btn:hover {
+  background: var(--bg-3);
+}
+.tv-tie-btn.active {
+  background: var(--amber);
+  color: var(--bg-0);
+  border-color: var(--amber);
+  font-weight: 700;
+}
+
+/* ==========================================================================
    TV display (1920×1080)
    ========================================================================== */
 .tv-display {
