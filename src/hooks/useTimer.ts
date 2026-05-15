@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MainRound } from '@/types/domain';
+import type { TimerState } from '@/types/domain';
 
 export interface TimerView {
   remainingMs: number;
@@ -9,14 +9,17 @@ export interface TimerView {
   hasFinished: boolean;
 }
 
-export function computeRemaining(round: MainRound, now = Date.now()): number {
-  if (!round.startedAt) return round.durationMs;
-  const pausedFor = round.pausedAt !== undefined ? now - round.pausedAt : 0;
-  const elapsed = now - round.startedAt - round.totalPausedMs - pausedFor;
-  return round.durationMs - elapsed;
+export function computeRemaining(state: TimerState, now = Date.now()): number {
+  if (!state.startedAt) return state.durationMs;
+  const pausedFor = state.pausedAt !== undefined ? now - state.pausedAt : 0;
+  const elapsed = now - state.startedAt - state.totalPausedMs - pausedFor;
+  return state.durationMs - elapsed;
 }
 
-export function useTimer(round: MainRound | null, onZero?: () => void): TimerView {
+export function useTimer(
+  state: (TimerState & { id?: string; completedAt?: number }) | null,
+  onZero?: () => void,
+): TimerView {
   const [tick, setTick] = useState(0);
   const onZeroRef = useRef(onZero);
   const firedZeroRef = useRef(false);
@@ -25,8 +28,10 @@ export function useTimer(round: MainRound | null, onZero?: () => void): TimerVie
     onZeroRef.current = onZero;
   }, [onZero]);
 
+  const stateKey = state?.id ?? (state ? 'qualifier' : null);
+
   useEffect(() => {
-    if (!round) return;
+    if (!state) return;
     let raf = 0;
     const loop = () => {
       setTick((t) => (t + 1) % 1_000_000);
@@ -34,13 +39,15 @@ export function useTimer(round: MainRound | null, onZero?: () => void): TimerVie
     };
     raf = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(raf);
-  }, [round?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateKey]);
 
   useEffect(() => {
     firedZeroRef.current = false;
-  }, [round?.id, round?.startedAt, round?.pausedAt, round?.durationMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateKey, state?.startedAt, state?.pausedAt, state?.durationMs]);
 
-  if (!round) {
+  if (!state) {
     return {
       remainingMs: 0,
       isRunning: false,
@@ -51,19 +58,17 @@ export function useTimer(round: MainRound | null, onZero?: () => void): TimerVie
   }
 
   const now = Date.now();
-  const remainingMs = computeRemaining(round, now);
-  const isRunning = !!round.startedAt && round.pausedAt === undefined && !round.completedAt;
-  const isPaused = !!round.startedAt && round.pausedAt !== undefined;
-  const hasStarted = !!round.startedAt;
+  const remainingMs = computeRemaining(state, now);
+  const isRunning = !!state.startedAt && state.pausedAt === undefined && !state.completedAt;
+  const isPaused = !!state.startedAt && state.pausedAt !== undefined;
+  const hasStarted = !!state.startedAt;
   const hasFinished = remainingMs <= 0;
 
   if (hasStarted && hasFinished && !firedZeroRef.current && isRunning) {
     firedZeroRef.current = true;
-    // Defer to avoid setState-in-render
     queueMicrotask(() => onZeroRef.current?.());
   }
 
-  // Suppress unused warning while still triggering rerenders.
   void tick;
 
   return { remainingMs, isRunning, isPaused, hasStarted, hasFinished };

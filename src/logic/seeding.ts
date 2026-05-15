@@ -69,6 +69,7 @@ export function buildQualifierRound(
   teams: Team[],
   courts: Court[],
   seed: number,
+  durationMs: number,
 ): QualifierRound {
   const activeTeams = teams.filter((t) => t.active);
   if (activeTeams.length !== courts.length * 2) {
@@ -94,7 +95,7 @@ export function buildQualifierRound(
       pointValueAtTime: court.pointValue,
     });
   }
-  return { matches, shuffleSeed: seed };
+  return { matches, shuffleSeed: seed, totalPausedMs: 0, durationMs };
 }
 
 export const QUALIFIER_TOTAL = 16;

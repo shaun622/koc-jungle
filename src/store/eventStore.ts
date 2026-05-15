@@ -50,6 +50,10 @@ interface Actions {
 
   startQualifier: () => void;
   setQualifierScore: (matchId: string, scoreA: number, scoreB: number) => void;
+  startQualifierTimer: () => void;
+  pauseQualifierTimer: () => void;
+  resetQualifierTimer: () => void;
+  adjustQualifierTimer: (deltaMs: number) => void;
   confirmQualifierResults: () => void;
   reorderSeeding: (orderedTeamIds: string[]) => void;
   lockSeedingAndStartRound1: () => void;
@@ -303,10 +307,65 @@ export const useEventStore = create<EventStore>()(
           return;
         }
         const seed = newSeed();
-        const qualifier = buildQualifierRound(event.teams, event.courts, seed);
+        const qualifier = buildQualifierRound(
+          event.teams,
+          event.courts,
+          seed,
+          event.settings.defaultRoundDurationMs,
+        );
         set({
           event: { ...event, qualifier, status: 'qualifier' },
           lastError: null,
+        });
+      },
+
+      startQualifierTimer: () => {
+        const event = get().event;
+        if (!event?.qualifier) return;
+        const q = event.qualifier;
+        const now = Date.now();
+        let next = q;
+        if (!q.startedAt) {
+          next = { ...q, startedAt: now, pausedAt: undefined };
+        } else if (q.pausedAt !== undefined) {
+          const pausedFor = now - q.pausedAt;
+          next = { ...q, totalPausedMs: q.totalPausedMs + pausedFor, pausedAt: undefined };
+        } else {
+          return;
+        }
+        set({ event: { ...event, qualifier: next } });
+      },
+
+      pauseQualifierTimer: () => {
+        const event = get().event;
+        if (!event?.qualifier) return;
+        const q = event.qualifier;
+        if (!q.startedAt || q.pausedAt !== undefined) return;
+        set({ event: { ...event, qualifier: { ...q, pausedAt: Date.now() } } });
+      },
+
+      resetQualifierTimer: () => {
+        const event = get().event;
+        if (!event?.qualifier) return;
+        set({
+          event: {
+            ...event,
+            qualifier: {
+              ...event.qualifier,
+              startedAt: undefined,
+              pausedAt: undefined,
+              totalPausedMs: 0,
+            },
+          },
+        });
+      },
+
+      adjustQualifierTimer: (deltaMs) => {
+        const event = get().event;
+        if (!event?.qualifier) return;
+        const next = Math.max(0, event.qualifier.durationMs + deltaMs);
+        set({
+          event: { ...event, qualifier: { ...event.qualifier, durationMs: next } },
         });
       },
 

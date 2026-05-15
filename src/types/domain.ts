@@ -44,20 +44,23 @@ export interface Match {
   pointValueAtTime: number;
 }
 
-export interface QualifierRound {
+export interface TimerState {
+  startedAt?: number;
+  pausedAt?: number;
+  totalPausedMs: number;
+  durationMs: number;
+}
+
+export interface QualifierRound extends TimerState {
   matches: Match[];
   shuffleSeed: number;
   completedAt?: number;
 }
 
-export interface MainRound {
+export interface MainRound extends TimerState {
   id: ID;
   index: number;
   matches: Match[];
-  startedAt?: number;
-  pausedAt?: number;
-  totalPausedMs: number;
-  durationMs: number;
   completedAt?: number;
 }
 

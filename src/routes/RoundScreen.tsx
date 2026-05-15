@@ -15,7 +15,10 @@ export function RoundScreen() {
   const incrementScore = useEventStore((s) => s.incrementScore);
   const nominateTieWinner = useEventStore((s) => s.nominateTieWinner);
   const endRound = useEventStore((s) => s.endRound);
+  const startRoundTimer = useEventStore((s) => s.startRoundTimer);
+  const pauseRoundTimer = useEventStore((s) => s.pauseRoundTimer);
   const resetTimer = useEventStore((s) => s.resetRoundTimer);
+  const adjustTimer = useEventStore((s) => s.adjustTimer);
   const navigate = useNavigate();
 
   const round = currentRound(event);
@@ -45,9 +48,14 @@ export function RoundScreen() {
     <div className="op-body">
       <div className="op-side">
         <Timer
-          round={round}
+          state={round}
+          label={`Round ${round.index}`}
           warningAtMs={event.settings.warningAtMs}
           soundEnabled={event.settings.soundOnTimerEnd}
+          onStart={startRoundTimer}
+          onPause={pauseRoundTimer}
+          onReset={resetTimer}
+          onAdjust={adjustTimer}
         />
 
         <div className="op-mini-lb">

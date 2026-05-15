@@ -4,11 +4,16 @@ import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
 import { QUALIFIER_TOTAL } from '@/logic/seeding';
 import { validateQualifierScore } from '@/logic/validation';
+import { Timer } from '@/components/Timer';
 
 export function QualifierScreen() {
   const event = useEventStore((s) => s.event);
   const setQualifierScore = useEventStore((s) => s.setQualifierScore);
   const confirmQualifierResults = useEventStore((s) => s.confirmQualifierResults);
+  const startQualifierTimer = useEventStore((s) => s.startQualifierTimer);
+  const pauseQualifierTimer = useEventStore((s) => s.pauseQualifierTimer);
+  const resetQualifierTimer = useEventStore((s) => s.resetQualifierTimer);
+  const adjustQualifierTimer = useEventStore((s) => s.adjustQualifierTimer);
   const navigate = useNavigate();
 
   if (!event || !event.qualifier) {
@@ -45,6 +50,19 @@ export function QualifierScreen() {
         <div className="qual-meta">
           {validCount} / {total} matches valid
         </div>
+      </div>
+
+      <div className="qual-timer-row">
+        <Timer
+          state={event.qualifier}
+          label="Qualifier round"
+          warningAtMs={event.settings.warningAtMs}
+          soundEnabled={event.settings.soundOnTimerEnd}
+          onStart={startQualifierTimer}
+          onPause={pauseQualifierTimer}
+          onReset={resetQualifierTimer}
+          onAdjust={adjustQualifierTimer}
+        />
       </div>
 
       <div className="qual-grid">

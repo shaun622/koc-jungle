@@ -1,27 +1,36 @@
 import { useEffect } from 'react';
-import { useEventStore } from '@/store/eventStore';
 import { useTimer } from '@/hooks/useTimer';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { usePresentationMode } from '@/hooks/usePresentationMode';
 import { formatMs } from '@/utils/time';
-import type { MainRound } from '@/types/domain';
+import type { TimerState } from '@/types/domain';
 import { Icons } from './Icons';
 
 interface Props {
-  round: MainRound;
+  state: (TimerState & { id?: string; completedAt?: number }) | null;
+  label: string;
   warningAtMs: number;
   soundEnabled: boolean;
+  onStart: () => void;
+  onPause: () => void;
+  onReset: () => void;
+  onAdjust: (deltaMs: number) => void;
 }
 
-export function Timer({ round, warningAtMs, soundEnabled }: Props) {
+export function Timer({
+  state,
+  label,
+  warningAtMs,
+  soundEnabled,
+  onStart,
+  onPause,
+  onReset,
+  onAdjust,
+}: Props) {
   const [presentation] = usePresentationMode();
-  const start = useEventStore((s) => s.startRoundTimer);
-  const pause = useEventStore((s) => s.pauseRoundTimer);
-  const reset = useEventStore((s) => s.resetRoundTimer);
-  const adjust = useEventStore((s) => s.adjustTimer);
   const buzz = useBuzzer();
 
-  const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(round, () => {
+  const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
     if (soundEnabled) buzz();
     try {
       document.title = '🔔 Time! — KOC';
@@ -49,7 +58,7 @@ export function Timer({ round, warningAtMs, soundEnabled }: Props) {
   return (
     <div className="op-timer">
       <div className="op-timer-head">
-        <div className="op-timer-round">Round {round.index}</div>
+        <div className="op-timer-round">{label}</div>
         <div className={'op-timer-status ' + statusCls}>
           <span className="dot" />
           {statusLabel}
@@ -57,18 +66,18 @@ export function Timer({ round, warningAtMs, soundEnabled }: Props) {
       </div>
       <div className={'op-timer-value ' + timerCls}>{formatMs(remainingMs)}</div>
       <div className="op-timer-controls">
-        <button className="btn" onClick={() => adjust(-60_000)} aria-label="Subtract 1 minute">
+        <button className="btn" onClick={() => onAdjust(-60_000)} aria-label="Subtract 1 minute">
           {presentation ? <Icons.Minus className="icon" /> : '−1 MIN'}
         </button>
-        <button className="btn" onClick={() => reset()} aria-label="Reset timer">
+        <button className="btn" onClick={() => onReset()} aria-label="Reset timer">
           <Icons.Reset className="icon" />
         </button>
-        <button className="btn" onClick={() => adjust(60_000)} aria-label="Add 1 minute">
+        <button className="btn" onClick={() => onAdjust(60_000)} aria-label="Add 1 minute">
           {presentation ? <Icons.Plus className="icon" /> : '+1 MIN'}
         </button>
         <button
           className={'btn op-timer-play ' + (isPaused ? 'paused' : !hasStarted ? 'idle' : '')}
-          onClick={() => (isIdleOrPaused ? start() : pause())}
+          onClick={() => (isIdleOrPaused ? onStart() : onPause())}
         >
           {isIdleOrPaused ? (
             <>

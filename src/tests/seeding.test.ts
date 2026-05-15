@@ -47,6 +47,8 @@ describe('qualifierScoresByTeam', () => {
     const qualifier: QualifierRound = {
       shuffleSeed: 1,
       matches: [qmatch('c-1', 'a', 'b', 12, 4), qmatch('c-2', 'c', 'd', 8, 8)],
+      totalPausedMs: 0,
+      durationMs: 0,
     };
     const scores = qualifierScoresByTeam(qualifier, teams);
     expect(new Map(scores.map((s) => [s.teamId, s.score]))).toEqual(
@@ -66,6 +68,8 @@ describe('rankTeamsByQualifier', () => {
     const qualifier: QualifierRound = {
       shuffleSeed: 1,
       matches: [qmatch('c-1', 'a', 'b', 10, 6), qmatch('c-2', 'c', 'd', 8, 8)],
+      totalPausedMs: 0,
+      durationMs: 0,
     };
     const ranked = rankTeamsByQualifier(qualifier, teams, (id) => teams.find((t) => t.id === id)!.name!);
     expect(ranked.map((r) => r.teamId)).toEqual(['a', 'c', 'd', 'b']);
