@@ -12,7 +12,6 @@ import { useEventStore } from '@/store/eventStore';
 import { SetupScreen } from '@/routes/SetupScreen';
 import { QualifierScreen } from '@/routes/QualifierScreen';
 import { SeedingScreen } from '@/routes/SeedingScreen';
-import { BetweenRoundsScreen } from '@/routes/BetweenRoundsScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
 import { PodiumScreen } from '@/routes/PodiumScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
@@ -31,7 +30,7 @@ function routeForStatus(status: EventStatus): string {
     case 'round-in-progress':
       return '/display';
     case 'between-rounds':
-      return '/between';
+      return '/display';
     case 'complete':
       return '/complete';
     case 'setup':
@@ -105,7 +104,6 @@ export function App() {
           <Route path="/setup" element={<SetupScreen />} />
           <Route path="/qualifier" element={<QualifierScreen />} />
           <Route path="/seeding" element={<SeedingScreen />} />
-          <Route path="/between" element={<BetweenRoundsScreen />} />
           <Route path="/complete" element={<PodiumScreen />} />
           <Route path="/leaderboard" element={<LeaderboardScreen />} />
           <Route path="*" element={<NotFound />} />

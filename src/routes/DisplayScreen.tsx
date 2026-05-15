@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
-import type { Court, Match, Team } from '@/types/domain';
+import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { formatMs } from '@/utils/time';
@@ -10,6 +10,14 @@ import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
+
+type MovementArrow = 'up' | 'down' | 'stay' | 'king';
+interface Movement {
+  teamId: string;
+  fromCourt: Court | undefined;
+  toCourt: Court;
+  arrow: MovementArrow;
+}
 
 export function DisplayScreen() {
   useStorageBroadcast();
@@ -29,6 +37,7 @@ export function DisplayScreen() {
   const pauseRoundTimer = useEventStore((s) => s.pauseRoundTimer);
   const resetRoundTimer = useEventStore((s) => s.resetRoundTimer);
   const adjustTimer = useEventStore((s) => s.adjustTimer);
+  const startNextRound = useEventStore((s) => s.startNextRound);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve 96px at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind it.
@@ -64,6 +73,7 @@ export function DisplayScreen() {
   }
 
   const showOperatorRound = event.status === 'round-in-progress' && !!round;
+  const showBetweenRounds = event.status === 'between-rounds' && !!event.pendingAssignments;
   const showCompleteCanvas = event.status === 'complete';
 
   // Round-end state for the bottom toolbar
@@ -89,6 +99,8 @@ export function DisplayScreen() {
         >
           {showCompleteCanvas ? (
             <TvCompleteCanvas event={event} />
+          ) : showBetweenRounds ? (
+            <TvBetweenCanvas event={event} />
           ) : (
             <TvLiveCanvas
               event={event}
@@ -132,6 +144,81 @@ export function DisplayScreen() {
         />
       )}
 
+      {showBetweenRounds && (
+        <div className="display-toolbar display-toolbar--between">
+          <div className="display-toolbar-summary" style={{ justifyContent: 'flex-start' }}>
+            <span style={{ color: 'var(--text-1)' }}>
+              Round {event.rounds.at(-1)?.index ?? '—'} complete · rotation preview
+            </span>
+          </div>
+          <button
+            className="btn lg primary display-end-round"
+            onClick={() => {
+              startNextRound();
+            }}
+          >
+            Start Round {(event.rounds.at(-1)?.index ?? 0) + 1} →
+          </button>
+          <div className="display-toolbar-menu">
+            <button
+              className="btn"
+              aria-label="Menu"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+            >
+              ≡
+            </button>
+            {menuOpen && (
+              <>
+                <div className="display-menu-backdrop" onClick={() => setMenuOpen(false)} />
+                <div className="display-menu">
+                  <button
+                    className="display-menu-item"
+                    onClick={() => {
+                      navigate('/leaderboard');
+                      setMenuOpen(false);
+                    }}
+                  >
+                    Full standings
+                  </button>
+                  <button
+                    className="display-menu-item"
+                    onClick={() => {
+                      navigate('/setup');
+                      setMenuOpen(false);
+                    }}
+                  >
+                    Setup &amp; teams
+                  </button>
+                  <div className="display-menu-divider" />
+                  <button
+                    className="display-menu-item"
+                    onClick={() => {
+                      const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
+                        .toISOString()
+                        .slice(0, 10)}.json`;
+                      downloadJsonFile(filename, toExportJson(event));
+                      setMenuOpen(false);
+                    }}
+                  >
+                    Export JSON
+                  </button>
+                  <button
+                    className="display-menu-item display-menu-danger"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmNew(true);
+                    }}
+                  >
+                    + New event
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {showCompleteCanvas && (
         <div className="display-toolbar display-toolbar--complete">
           <div className="display-toolbar-spacer" />
@@ -153,6 +240,7 @@ export function DisplayScreen() {
         </div>
       )}
 
+      {/* ConfirmDialog left as-is below */}
       <ConfirmDialog
         open={confirmEnd}
         title={
@@ -171,14 +259,8 @@ export function DisplayScreen() {
         onConfirm={() => {
           setConfirmEnd(false);
           endRound();
-          setTimeout(() => {
-            const status = useEventStore.getState().event?.status;
-            if (status === 'complete') {
-              // /display already shows the complete state, no navigation needed
-              return;
-            }
-            navigate('/between');
-          }, 0);
+          // No navigation: /display now also renders the rotation preview and
+          // the podium itself, switching by event.status.
         }}
         onCancel={() => setConfirmEnd(false)}
       />
@@ -1034,6 +1116,320 @@ function TvPodiumColumn({
       <div className={'tv-podium-block tv-podium-block--' + place}>
         <span className="place-num">{placeNum}</span>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// TV Between-rounds canvas — rotation preview rendered on /display
+// ============================================================
+
+function TvBetweenCanvas({
+  event,
+}: {
+  event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>;
+}) {
+  const lb = useMemo(() => leaderboard(event), [event]);
+  const top5 = lb.slice(0, 5);
+  const rest = lb.slice(5, 14);
+
+  const lastRound = event.rounds.at(-1);
+  const lastRoundIndex = lastRound?.index ?? 0;
+  const nextRoundIndex = lastRoundIndex + 1;
+  const totalRounds = event.settings.roundsTotal;
+  const pending = event.pendingAssignments ?? [];
+
+  // Compute UP/DOWN/STAY/KING for every team in the upcoming round
+  const movements = useMemo(() => {
+    const map = new Map<string, Movement>();
+    if (!lastRound) return map;
+    const prevByTeam = new Map<string, string>();
+    for (const m of lastRound.matches) {
+      prevByTeam.set(m.teamAId, m.courtId);
+      prevByTeam.set(m.teamBId, m.courtId);
+    }
+    for (const a of pending) {
+      const toCourt = event.courts.find((c) => c.id === a.courtId);
+      if (!toCourt) continue;
+      const isCentre = isCentreCourt(toCourt, event.courts);
+      for (const teamId of [a.teamAId, a.teamBId]) {
+        const fromCourtId = prevByTeam.get(teamId);
+        const fromCourt = fromCourtId
+          ? event.courts.find((c) => c.id === fromCourtId)
+          : undefined;
+        let arrow: MovementArrow;
+        if (!fromCourt) arrow = 'stay';
+        else if (toCourt.position > fromCourt.position) arrow = 'up';
+        else if (toCourt.position < fromCourt.position) arrow = 'down';
+        else if (isCentre) arrow = 'king';
+        else arrow = 'stay';
+        map.set(teamId, { teamId, fromCourt, toCourt, arrow });
+      }
+    }
+    return map;
+  }, [event.courts, lastRound, pending]);
+
+  const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
+  const centre = sortedCourtsDesc[0];
+  const restCourts = sortedCourtsDesc.slice(1);
+  const leftCol: Court[] = [];
+  const rightCol: Court[] = [];
+  restCourts.forEach((c, i) => (i % 2 === 0 ? rightCol.push(c) : leftCol.push(c)));
+
+  const centreAssign = pending.find((a) => a.courtId === centre?.id);
+  const centreA = centreAssign && event.teams.find((t) => t.id === centreAssign.teamAId);
+  const centreB = centreAssign && event.teams.find((t) => t.id === centreAssign.teamBId);
+
+  const king = lb[0];
+  const kingLabel = king
+    ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
+    : '—';
+
+  return (
+    <div className="tv-display">
+      <div className="tv-header">
+        <div className="tv-header-brand">
+          <div className="brand-mark lg">K</div>
+          <div className="tv-header-event">
+            <div className="tv-header-event-name">{event.name}</div>
+            <div className="tv-header-event-meta">
+              {event.venue ? `${event.venue} • ` : ''}
+              Round {lastRoundIndex} complete · Round {nextRoundIndex} starting
+            </div>
+          </div>
+        </div>
+        <div className="tv-header-right">
+          <span>{event.teams.filter((t) => t.active).length} teams</span>
+          <span style={{ opacity: 0.3 }}>•</span>
+          <span>{event.courts.length} courts</span>
+          <span style={{ opacity: 0.3 }}>•</span>
+          <div
+            className="tv-header-live"
+            style={{
+              background: 'oklch(28% 0.06 75)',
+              borderColor: 'color-mix(in oklch, var(--amber) 50%, transparent)',
+            }}
+          >
+            <span
+              style={{
+                color: 'var(--amber)',
+                letterSpacing: '0.18em',
+                fontWeight: 700,
+              }}
+            >
+              ROTATION
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="tv-body">
+        <div className="tv-lb">
+          <div className="tv-lb-header">
+            <div className="tv-lb-title">Standings</div>
+            <div className="tv-lb-subtitle">After Round {lastRoundIndex}</div>
+          </div>
+          <div className="tv-lb-list">
+            {top5.map((row, idx) => {
+              const isKing = idx === 0 && row.total > 0;
+              return (
+                <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
+                  <span className="rank">{idx + 1}</span>
+                  <div className="team-name">
+                    {isKing && <Icons.Crown className="tv-lb-crown" />}
+                    <span>{teamNameFor(event, row.teamId)}</span>
+                  </div>
+                  <span className="wl">
+                    {row.wins}W-{row.losses}L
+                  </span>
+                  <span className="pts">{row.total}</span>
+                </div>
+              );
+            })}
+            {rest.length > 0 && <div style={{ height: 8 }} />}
+            {rest.map((row, idx) => (
+              <div key={row.teamId} className="tv-lb-row">
+                <span className="rank">{idx + 6}</span>
+                <div className="team-name">
+                  <span>{teamNameFor(event, row.teamId)}</span>
+                </div>
+                <span className="wl">
+                  {row.wins}W-{row.losses}L
+                </span>
+                <span className="pts">{row.total}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tv-main">
+          <div className="tv-centre">
+            <div className="tv-centre-label">
+              <div className="tv-centre-crown">
+                <Icons.Crown className="icon lg" /> King's Court
+              </div>
+              <div className="tv-centre-name">{centre?.name ?? '—'}</div>
+              <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+            </div>
+            <div className="tv-centre-team">
+              {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
+              <div className="tv-centre-team-name">
+                {centreA ? teamLabelShort(centreA) : '—'}
+              </div>
+              {centreA && (
+                <MovementChip
+                  arrow={movements.get(centreA.id)?.arrow ?? 'stay'}
+                  large
+                />
+              )}
+            </div>
+            <div className="tv-centre-scores tv-centre-scores--between">
+              <span className="tv-centre-vs">VS</span>
+            </div>
+            <div className="tv-centre-team right">
+              {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
+              <div className="tv-centre-team-name">
+                {centreB ? teamLabelShort(centreB) : '—'}
+              </div>
+              {centreB && (
+                <MovementChip
+                  arrow={movements.get(centreB.id)?.arrow ?? 'stay'}
+                  large
+                />
+              )}
+            </div>
+            <div />
+          </div>
+
+          <div className="tv-lower">
+            <div className="tv-courts-col">
+              {leftCol.map((c) => (
+                <TvBetweenCourtCard
+                  key={c.id}
+                  court={c}
+                  assignment={pending.find((a) => a.courtId === c.id)}
+                  teams={event.teams}
+                  movements={movements}
+                />
+              ))}
+            </div>
+
+            <div className="tv-timer-block tv-timer-block--between">
+              <div className="tv-timer-label">Next Round</div>
+              <div className="tv-timer-value size-xl" style={{ color: 'var(--amber)' }}>
+                R{nextRoundIndex}
+              </div>
+              <div className="tv-timer-round">
+                Round <strong>{nextRoundIndex}</strong> of <strong>{totalRounds}</strong>
+              </div>
+              <div className="tv-timer-bottom">
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">Just played</span>
+                  <span className="tv-timer-stat-value">R{lastRoundIndex}</span>
+                </div>
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">Duration</span>
+                  <span className="tv-timer-stat-value">
+                    {Math.round(event.settings.defaultRoundDurationMs / 60000)}m
+                  </span>
+                </div>
+                <div className="tv-timer-stat">
+                  <span className="tv-timer-stat-label">King</span>
+                  <span
+                    className="tv-timer-stat-value"
+                    style={{ color: 'var(--gold)' }}
+                  >
+                    {kingLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="tv-courts-col">
+              {rightCol.map((c) => (
+                <TvBetweenCourtCard
+                  key={c.id}
+                  court={c}
+                  assignment={pending.find((a) => a.courtId === c.id)}
+                  teams={event.teams}
+                  movements={movements}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TvBetweenCourtCard({
+  court,
+  assignment,
+  teams,
+  movements,
+}: {
+  court: Court;
+  assignment: { teamAId: string; teamBId: string } | undefined;
+  teams: Team[];
+  movements: Map<string, Movement>;
+}) {
+  if (!assignment) {
+    return (
+      <div className="tv-court" style={{ opacity: 0.5 }}>
+        <div className="tv-court-head">
+          <div className="tv-court-name">{court.name}</div>
+          <div className="tv-court-pts">
+            <span>{court.pointValue}</span> PTS
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', color: 'var(--text-2)' }}>No assignment</div>
+      </div>
+    );
+  }
+  const teamA = teams.find((t) => t.id === assignment.teamAId);
+  const teamB = teams.find((t) => t.id === assignment.teamBId);
+  return (
+    <div className="tv-court">
+      <div className="tv-court-head">
+        <div className="tv-court-name">{court.name}</div>
+        <div className="tv-court-pts">
+          <span>{court.pointValue}</span> PTS
+        </div>
+      </div>
+      <div className="tv-court-row">
+        <div className="tv-court-team">
+          {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
+          <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+        </div>
+        {teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
+      </div>
+      <div className="tv-court-row">
+        <div className="tv-court-team">
+          {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
+          <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+        </div>
+        {teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
+      </div>
+    </div>
+  );
+}
+
+function MovementChip({ arrow, large }: { arrow: MovementArrow; large?: boolean }) {
+  const Icon =
+    arrow === 'up'
+      ? Icons.ArrowUp
+      : arrow === 'down'
+        ? Icons.ArrowDown
+        : arrow === 'king'
+          ? Icons.Crown
+          : Icons.Dash;
+  const label =
+    arrow === 'up' ? 'UP' : arrow === 'down' ? 'DOWN' : arrow === 'king' ? 'KING' : 'STAY';
+  return (
+    <div className={'tv-movement ' + arrow + (large ? ' large' : '')}>
+      <Icon className="icon" />
+      <span>{label}</span>
     </div>
   );
 }
