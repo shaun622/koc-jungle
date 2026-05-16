@@ -20,7 +20,7 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { TeamAvatars } from '@/components/Avatar';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
-import { captureAndShare } from '@/utils/shareCard';
+import { captureAndShare, captureAndShareGif } from '@/utils/shareCard';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 
@@ -55,6 +55,10 @@ export function DisplayScreen() {
   const startNextRound = useEventStore((s) => s.startNextRound);
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
+  const [gifProgress, setGifProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
@@ -262,7 +266,7 @@ export function DisplayScreen() {
           </button>
           <button
             className="btn"
-            disabled={sharing}
+            disabled={sharing || gifProgress !== null}
             onClick={async () => {
               if (!podiumShareRef.current) return;
               setSharing(true);
@@ -278,6 +282,28 @@ export function DisplayScreen() {
             }}
           >
             {sharing ? 'Generating…' : 'Share results'}
+          </button>
+          <button
+            className="btn display-export-gif"
+            disabled={sharing || gifProgress !== null}
+            onClick={async () => {
+              if (!podiumShareRef.current) return;
+              setGifProgress({ done: 0, total: 15 });
+              try {
+                await captureAndShareGif(podiumShareRef.current, {
+                  filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.gif`,
+                  shareTitle: `${event.name} — results`,
+                  shareText: 'Tonight\'s King of the Court results 🏆',
+                  onProgress: (done, total) => setGifProgress({ done, total }),
+                });
+              } finally {
+                setGifProgress(null);
+              }
+            }}
+          >
+            {gifProgress
+              ? `Generating GIF… ${gifProgress.done}/${gifProgress.total}`
+              : '🎬 Export GIF'}
           </button>
           <button
             className="btn"

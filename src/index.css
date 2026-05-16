@@ -5187,4 +5187,9 @@ button {
   .display-toolbar--complete > .btn.ghost {
     display: none;
   }
+  /* Export GIF needs ~5-7s of UI; doesn't fit the tiny landscape toolbar
+     and the operator will export from iPad or phone portrait anyway. */
+  .display-export-gif {
+    display: none;
+  }
 }
