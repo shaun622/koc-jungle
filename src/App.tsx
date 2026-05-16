@@ -18,6 +18,7 @@ import { DisplayScreen } from '@/routes/DisplayScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { ErrorBanner } from '@/components/ErrorBanner';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import type { EventStatus } from '@/types/domain';
 
@@ -96,6 +97,7 @@ export function App() {
   return (
     <HashRouter>
       <ErrorBanner />
+      <UpdatePrompt />
       <RouteGate />
       <Routes>
         <Route path="/display" element={<DisplayScreen />} />

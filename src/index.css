@@ -2346,6 +2346,47 @@ button {
   font-size: 11px;
 }
 
+/* PWA update / offline-ready toast */
+.pwa-toast {
+  position: fixed;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: oklch(18% 0.03 245 / 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  max-width: 360px;
+  box-shadow: var(--shadow-glow);
+  font-size: 13px;
+}
+.pwa-toast--update {
+  border-color: color-mix(in oklch, var(--lime) 40%, transparent);
+}
+.pwa-toast--offline {
+  border-color: color-mix(in oklch, var(--blue) 40%, transparent);
+}
+.pwa-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.pwa-toast-body strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-0);
+}
+.pwa-toast-body span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
 /* Error banner */
 .banner-error {
   position: fixed;
