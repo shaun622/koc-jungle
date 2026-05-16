@@ -20,18 +20,16 @@ import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
 import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
-import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
+import { parseImportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
 import { ShareCard } from '@/components/ShareCard';
-import { SettingsModal } from '@/components/SettingsModal';
 import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
 import { cropImageFileToAvatar } from '@/utils/avatar';
 import {
   deleteTemplate,
   listTemplates,
-  saveTemplate,
   templateToEventState,
   type Template,
 } from '@/store/templates';
@@ -70,9 +68,6 @@ export function SetupScreen() {
   const [sharingRoster, setSharingRoster] = useState(false);
   const rosterShareRef = useRef<HTMLDivElement>(null);
   const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [templateName, setTemplateName] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
 
   const refreshTemplates = () => setTemplates(listTemplates());
 
@@ -214,6 +209,20 @@ export function SetupScreen() {
             valueMs={event.settings.warningAtMs}
             onChange={(ms) => updateSettings({ warningAtMs: ms })}
           />
+          <div className="setup-field">
+            <label>Buzzer on timer end</label>
+            <ToggleField
+              value={event.settings.soundOnTimerEnd}
+              onChange={(v) => updateSettings({ soundOnTimerEnd: v })}
+            />
+          </div>
+          <div className="setup-field">
+            <label>Announce round start</label>
+            <ToggleField
+              value={event.settings.announceRoundStart}
+              onChange={(v) => updateSettings({ announceRoundStart: v })}
+            />
+          </div>
         </div>
 
         <h2 className="setup-h" style={{ marginTop: 12 }}>
@@ -297,17 +306,6 @@ export function SetupScreen() {
         <div className="setup-actions">
           <button
             className="btn"
-            onClick={() => {
-              const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
-                .toISOString()
-                .slice(0, 10)}.json`;
-              downloadJsonFile(filename, toExportJson(event));
-            }}
-          >
-            Export JSON
-          </button>
-          <button
-            className="btn"
             disabled={sharingRoster || teams.length === 0}
             onClick={async () => {
               if (!rosterShareRef.current) return;
@@ -324,24 +322,6 @@ export function SetupScreen() {
             }}
           >
             {sharingRoster ? 'Generating…' : 'Share roster'}
-          </button>
-          <button
-            className="btn"
-            onClick={() => setShowSettings(true)}
-            title="Edit settings"
-          >
-            Settings
-          </button>
-          <button
-            className="btn"
-            disabled={teams.length === 0}
-            onClick={() => {
-              setTemplateName(event.name);
-              setShowSaveTemplate(true);
-            }}
-            title="Save current setup as a reusable template"
-          >
-            Save as template
           </button>
           <button
             className="btn lg"
@@ -385,50 +365,6 @@ export function SetupScreen() {
       />
 
       <ShareCard ref={rosterShareRef} variant="roster" event={event} />
-
-      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
-
-      {showSaveTemplate && (
-        <div className="modal-backdrop" onClick={() => setShowSaveTemplate(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '24rem' }}>
-            <h2>Save as template</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-1)' }}>
-              Templates store the teams, courts, and settings — no scores or rounds. You can spin
-              up a fresh event from this template next time.
-            </p>
-            <input
-              className="setup-input"
-              placeholder="Template name"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && templateName.trim()) {
-                  saveTemplate(templateName, event);
-                  refreshTemplates();
-                  setShowSaveTemplate(false);
-                }
-              }}
-            />
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setShowSaveTemplate(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn primary"
-                disabled={!templateName.trim()}
-                onClick={() => {
-                  saveTemplate(templateName, event);
-                  refreshTemplates();
-                  setShowSaveTemplate(false);
-                }}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ConfirmDialog
         open={!!confirmedTeam}
@@ -519,6 +455,25 @@ function PlayerInput({
         </button>
       )}
     </div>
+  );
+}
+
+function ToggleField({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={'settings-toggle ' + (value ? 'on' : '')}
+      onClick={() => onChange(!value)}
+      aria-pressed={value}
+    >
+      <span className="settings-toggle-dot" />
+    </button>
   );
 }
 
