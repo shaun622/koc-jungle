@@ -210,6 +210,12 @@ export function SeedingScreen() {
                 <div
                   key={court?.id ?? courtIndex}
                   className={'seed-pair ' + (isCentre ? 'seed-pair--centre' : '')}
+                  // --court-order is read by the mobile media queries to
+                  // reorder pairs into strict court-position-desc on 1-col
+                  // layouts. On desktop the property is ignored (no order
+                  // rule applies), so the JSX interleave preserves the
+                  // column-major 2-col layout.
+                  style={{ ['--court-order' as string]: courtIndex }}
                 >
                   <div className="seed-pair-header">
                     <span className="seed-pair-court-name">
