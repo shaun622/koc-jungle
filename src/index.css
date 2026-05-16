@@ -926,11 +926,12 @@ button {
   overflow: hidden;
 }
 .seed-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  overflow: hidden;
   min-height: 0;
+  align-content: start;
   padding-right: 4px;
 }
 
@@ -938,10 +939,14 @@ button {
   background: var(--bg-1);
   border: 1px solid var(--line-soft);
   border-radius: 12px;
-  padding: 6px 10px 10px 10px;
+  padding: 6px 12px 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
+}
+.seed-pair--centre {
+  grid-column: 1 / -1;
 }
 .seed-pair--centre {
   background: linear-gradient(135deg, oklch(22% 0.05 80) 0%, oklch(18% 0.04 80) 100%);
@@ -952,9 +957,9 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
+  padding: 4px 4px 6px 4px;
   border-bottom: 1px solid var(--line-soft);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-family: var(--font-display);
 }
 .seed-pair--centre .seed-pair-header {
@@ -980,14 +985,21 @@ button {
 
 .seed-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto auto;
-  gap: 12px;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  gap: 10px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
   user-select: none;
+  font-size: 13px;
+}
+.seed-row .seed-team-name {
+  font-size: 14px;
+}
+.seed-row .seed-qscore {
+  font-size: 12px;
 }
 .seed-row.dragging {
   opacity: 0.6;
@@ -3118,7 +3130,12 @@ button {
     overflow: visible;
   }
   .seed-list {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
     overflow: visible;
+  }
+  .seed-pair--centre {
+    grid-column: auto;
   }
   .seed-row {
     grid-template-columns: 24px 80px 1fr auto;
