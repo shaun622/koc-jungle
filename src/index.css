@@ -1031,12 +1031,26 @@ button {
     transparent 70%
   );
 }
+/* Second palette colour (blue) for adjacent tie groups so 9/9 + 8/8 + 7/7
+   stay visually distinct. Selector specificity matches .tied above so the
+   ordering of these rules decides; .tied--b lives below to override. */
+.seed-row.tied--b {
+  border-color: color-mix(in oklch, var(--blue) 55%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--blue) 14%, transparent) 0%,
+    transparent 70%
+  );
+}
 .seed-row--empty {
   opacity: 0.5;
 }
 .seed-qscore.tied {
   color: var(--amber);
   font-weight: 700;
+}
+.seed-qscore.tied--b {
+  color: var(--blue);
 }
 .seed-rank {
   font-family: var(--font-mono);

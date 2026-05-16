@@ -62,7 +62,12 @@ export function SeedingScreen() {
   // Any team whose qualifier score is shared with at least one other team
   // gets flagged — same-court ties matter too because the operator may want
   // to rotate which team takes the higher seed within a court.
-  const tiedTeams = new Set<string>();
+  //
+  // Each tied score is assigned an alternating palette index (0/1) so adjacent
+  // tie groups in the sorted seeding list always render in different colours
+  // (amber vs blue). Keying off score — not list position — means a dragged
+  // team keeps its group colour even when scattered across the list.
+  const tiedTeamPalette = new Map<string, 0 | 1>();
   const tieGroupCount = (() => {
     const counts = new Map<number, number>();
     for (const teamId of order) {
@@ -70,15 +75,21 @@ export function SeedingScreen() {
       if (s === undefined) continue;
       counts.set(s, (counts.get(s) ?? 0) + 1);
     }
+    // Tied scores in descending order so the first-encountered tie group
+    // (highest score) gets palette index 0.
+    const tiedScoresDesc = Array.from(counts.entries())
+      .filter(([, n]) => n > 1)
+      .map(([s]) => s)
+      .sort((a, b) => b - a);
+    const paletteByScore = new Map<number, 0 | 1>();
+    tiedScoresDesc.forEach((s, i) => paletteByScore.set(s, (i % 2) as 0 | 1));
     for (const teamId of order) {
       const s = scoreByTeam.get(teamId);
-      if (s !== undefined && (counts.get(s) ?? 0) > 1) tiedTeams.add(teamId);
+      if (s === undefined) continue;
+      const palette = paletteByScore.get(s);
+      if (palette !== undefined) tiedTeamPalette.set(teamId, palette);
     }
-    let groups = 0;
-    counts.forEach((n) => {
-      if (n > 1) groups += 1;
-    });
-    return groups;
+    return tiedScoresDesc.length;
   })();
 
   // Chunk the flat order into 2-team pairs aligned with sortedCourtsDesc.
@@ -165,7 +176,7 @@ export function SeedingScreen() {
                       playerLabel={playerLabelFor(event, aId)}
                       score={scoreByTeam.get(aId) ?? 0}
                       showScore={!!event.qualifier}
-                      tied={tiedTeams.has(aId)}
+                      tiePalette={tiedTeamPalette.get(aId)}
                     />
                   )}
                   {bId && (
@@ -176,7 +187,7 @@ export function SeedingScreen() {
                       playerLabel={playerLabelFor(event, bId)}
                       score={scoreByTeam.get(bId) ?? 0}
                       showScore={!!event.qualifier}
-                      tied={tiedTeams.has(bId)}
+                      tiePalette={tiedTeamPalette.get(bId)}
                     />
                   )}
                   {!bId && (
@@ -249,7 +260,7 @@ function SortableRow({
   playerLabel,
   score,
   showScore,
-  tied,
+  tiePalette,
 }: {
   id: string;
   rank: number;
@@ -257,7 +268,8 @@ function SortableRow({
   playerLabel: string;
   score: number;
   showScore: boolean;
-  tied: boolean;
+  /** undefined → not tied. 0 → palette A (amber). 1 → palette B (blue). */
+  tiePalette: 0 | 1 | undefined;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -266,13 +278,13 @@ function SortableRow({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const tied = tiePalette !== undefined;
+  const tiedClass = tied ? `tied tied--${tiePalette === 0 ? 'a' : 'b'} ` : '';
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={
-        'seed-row ' + (tied ? 'tied ' : '') + (isDragging ? 'dragging ' : '')
-      }
+      className={'seed-row ' + tiedClass + (isDragging ? 'dragging ' : '')}
     >
       <span className="seed-rank">#{rank}</span>
       <span className="seed-team-name">
@@ -280,7 +292,7 @@ function SortableRow({
         {playerLabel && <span className="players">· {playerLabel}</span>}
       </span>
       {showScore ? (
-        <span className={'seed-qscore ' + (tied ? 'tied' : '')}>Q {score}</span>
+        <span className={'seed-qscore ' + tiedClass}>Q {score}</span>
       ) : (
         <span />
       )}
