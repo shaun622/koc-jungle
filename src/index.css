@@ -1629,6 +1629,458 @@ button {
   align-items: center;
   justify-content: flex-start;
 }
+/* Mobile variant: scrollable page (the scaled-canvas approach is swapped for
+   a real responsive list view in <MobileDisplay />). */
+.display-shell--mobile {
+  position: static;
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+  align-items: stretch;
+  background: var(--bg-0);
+}
+
+/* ============================================================
+   Mobile /display layout (phone portrait + landscape)
+   Activated when useIsMobileDisplay matches:
+     (max-width: 600px), (max-height: 500px)
+   ============================================================ */
+.mobile-display {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-display-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+  background: oklch(from var(--bg-0) calc(l + 0.02) c h / 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.mobile-display-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mobile-display-event {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-display-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mobile-display-timer {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lime);
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+.mobile-display-timer.warn {
+  color: var(--amber);
+}
+.mobile-display-timer.danger {
+  color: var(--red);
+}
+.mobile-display-timer.idle {
+  color: var(--text-1);
+}
+.mobile-display-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+/* Court cards */
+.mobile-court {
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-court--centre {
+  background: linear-gradient(135deg, oklch(22% 0.05 80) 0%, oklch(18% 0.04 80) 100%);
+  border-color: color-mix(in oklch, var(--gold) 40%, transparent);
+}
+.mobile-court-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mobile-court-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mobile-court--centre .mobile-court-name {
+  color: var(--gold);
+}
+.mobile-court--centre .mobile-court-name .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--gold);
+}
+.mobile-court-pts {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+.mobile-court-empty {
+  text-align: center;
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.mobile-court-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.mobile-court-team-name {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Score group: − [value] + */
+.mobile-score-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mobile-score-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: oklch(28% 0.03 245 / 0.6);
+  border: 1px solid var(--line-soft);
+  color: var(--text-0);
+  font-size: 20px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mobile-score-btn:active {
+  background: var(--lime);
+  color: var(--bg-0);
+}
+.mobile-score-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  min-width: 28px;
+  text-align: center;
+  color: var(--text-0);
+}
+.mobile-score-value.winner {
+  color: var(--lime);
+}
+.mobile-score-value.tied {
+  color: var(--amber);
+}
+
+/* Tie picker row */
+.mobile-court-tie {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in oklch, var(--amber) 40%, transparent);
+}
+.mobile-court-tie-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.mobile-tie-btn {
+  background: transparent;
+  border: 1px solid color-mix(in oklch, var(--amber) 55%, transparent);
+  color: var(--amber);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-tie-btn.active {
+  background: var(--amber);
+  color: var(--bg-0);
+}
+
+/* Movement chips (between rounds) */
+.mobile-movement {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+}
+.mobile-movement.up {
+  color: var(--lime);
+  border-color: color-mix(in oklch, var(--lime) 55%, transparent);
+  background: color-mix(in oklch, var(--lime) 12%, transparent);
+}
+.mobile-movement.down {
+  color: var(--red);
+  border-color: color-mix(in oklch, var(--red) 55%, transparent);
+  background: color-mix(in oklch, var(--red) 10%, transparent);
+}
+.mobile-movement.king {
+  color: var(--gold);
+  border-color: color-mix(in oklch, var(--gold) 60%, transparent);
+  background: color-mix(in oklch, var(--gold) 12%, transparent);
+}
+.mobile-movement.stay {
+  color: var(--text-2);
+}
+.mobile-movement .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* Standings drawer (live mode) */
+.mobile-standings-toggle {
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  color: var(--text-1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mobile-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.mobile-standings-head {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 4px 12px;
+}
+.mobile-standings-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.mobile-standings-row.king {
+  border-color: color-mix(in oklch, var(--gold) 55%, transparent);
+}
+.mobile-standings-row .rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.mobile-standings-row .name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-standings-row .name .icon {
+  width: 12px;
+  height: 12px;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+.mobile-standings-row .wl {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.mobile-standings-row .pts {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--lime);
+}
+.mobile-standings-row.king .pts {
+  color: var(--gold);
+}
+
+/* Podium (complete) */
+.mobile-podium {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-podium-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.mobile-podium-row .place {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text-2);
+}
+.mobile-podium-row--first {
+  background: linear-gradient(135deg, oklch(22% 0.05 80) 0%, oklch(18% 0.04 80) 100%);
+  border-color: color-mix(in oklch, var(--gold) 50%, transparent);
+}
+.mobile-podium-row--first .place {
+  color: var(--gold);
+}
+.mobile-podium-row .info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mobile-podium-row .info .name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-podium-row--first .info .name {
+  color: var(--gold);
+}
+.mobile-podium-row .info .name .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--gold);
+}
+.mobile-podium-row .info .meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-2);
+  letter-spacing: 0.1em;
+}
+.mobile-podium-row .pts {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--lime);
+}
+.mobile-podium-row--first .pts {
+  color: var(--gold);
+}
+
+.mobile-podium-rest {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.mobile-podium-rest-head {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 0 4px 4px;
+}
+
+/* Nightly stats */
+.mobile-stats {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mobile-stats-head {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 0 4px 4px;
+}
+.mobile-stat {
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.mobile-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mobile-stat-value {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text-0);
+}
+.mobile-stat-detail {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
 .display-canvas-wrap {
   flex: 1;
   width: 100%;

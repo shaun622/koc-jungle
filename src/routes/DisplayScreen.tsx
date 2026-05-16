@@ -19,8 +19,10 @@ import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
 import { Avatar, TeamAvatars } from '@/components/Avatar';
+import { MobileDisplay } from '@/components/MobileDisplay';
 import { captureAndShare } from '@/utils/shareCard';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
+import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -40,6 +42,7 @@ export function DisplayScreen() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
   const navigate = useNavigate();
+  const isMobile = useIsMobileDisplay();
 
   const incrementScore = useEventStore((s) => s.incrementScore);
   const nominateTieWinner = useEventStore((s) => s.nominateTieWinner);
@@ -101,32 +104,36 @@ export function DisplayScreen() {
   const isFinalRound = round ? round.index >= event.settings.roundsTotal : false;
 
   return (
-    <div className="display-shell">
-      <div className="display-canvas-wrap" style={{ height: 1080 * scale }}>
-        <div
-          className="display-canvas"
-          style={{
-            width: 1920,
-            height: 1080,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top center',
-          }}
-        >
-          {showCompleteCanvas ? (
-            <TvCompleteCanvas event={event} />
-          ) : showBetweenRounds ? (
-            <TvBetweenCanvas event={event} />
-          ) : (
-            <TvLiveCanvas
-              event={event}
-              round={round}
-              showControls={showOperatorRound}
-              onIncrement={incrementScore}
-              onNominateTieWinner={nominateTieWinner}
-            />
-          )}
+    <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
+      {isMobile ? (
+        <MobileDisplay event={event} />
+      ) : (
+        <div className="display-canvas-wrap" style={{ height: 1080 * scale }}>
+          <div
+            className="display-canvas"
+            style={{
+              width: 1920,
+              height: 1080,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top center',
+            }}
+          >
+            {showCompleteCanvas ? (
+              <TvCompleteCanvas event={event} />
+            ) : showBetweenRounds ? (
+              <TvBetweenCanvas event={event} />
+            ) : (
+              <TvLiveCanvas
+                event={event}
+                round={round}
+                showControls={showOperatorRound}
+                onIncrement={incrementScore}
+                onNominateTieWinner={nominateTieWinner}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Sticky operator toolbar — outside the scaled canvas so taps are sized
           to iPad pixels, not the 1920×1080 logical canvas. */}
