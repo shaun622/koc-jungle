@@ -2187,7 +2187,7 @@ button {
 }
 .tv-centre-team-name {
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1.05;
   word-break: break-word;
 }
@@ -2302,7 +2302,7 @@ button {
 }
 .tv-court-team-name {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1.05;
   white-space: nowrap;
   overflow: hidden;
@@ -2322,8 +2322,8 @@ button {
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text-0);
-  text-align: right;
-  min-width: 60px;
+  text-align: center;
+  min-width: 32px;
 }
 .tv-court-score.winner {
   color: var(--lime);
