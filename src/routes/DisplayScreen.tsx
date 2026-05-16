@@ -17,6 +17,7 @@ import { Icons } from '@/components/Icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
+import { SettingsModal } from '@/components/SettingsModal';
 import { captureAndShare } from '@/utils/shareCard';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
@@ -48,6 +49,7 @@ export function DisplayScreen() {
   const startNextRound = useEventStore((s) => s.startNextRound);
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve 96px at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind it.
@@ -140,6 +142,7 @@ export function DisplayScreen() {
           onMenuToggle={() => setMenuOpen((v) => !v)}
           menuOpen={menuOpen}
           onNavigate={navigate}
+          onSettings={() => setShowSettings(true)}
           onExport={() => {
             const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
               .toISOString()
@@ -196,6 +199,15 @@ export function DisplayScreen() {
                     }}
                   >
                     Setup &amp; teams
+                  </button>
+                  <button
+                    className="display-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setShowSettings(true);
+                    }}
+                  >
+                    Settings
                   </button>
                   <div className="display-menu-divider" />
                   <button
@@ -306,6 +318,8 @@ export function DisplayScreen() {
         }}
         onCancel={() => setConfirmNew(false)}
       />
+
+      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }
@@ -328,6 +342,7 @@ interface DisplayToolbarProps {
   onMenuToggle: () => void;
   menuOpen: boolean;
   onNavigate: (path: string) => void;
+  onSettings: () => void;
   onExport: () => void;
   onNewEvent: () => void;
 }
@@ -396,6 +411,7 @@ function DisplayToolbar({
   onMenuToggle,
   menuOpen,
   onNavigate,
+  onSettings,
   onExport,
   onNewEvent,
 }: DisplayToolbarProps) {
@@ -499,6 +515,15 @@ function DisplayToolbar({
                 }}
               >
                 Setup &amp; teams
+              </button>
+              <button
+                className="display-menu-item"
+                onClick={() => {
+                  onMenuToggle();
+                  onSettings();
+                }}
+              >
+                Settings
               </button>
               <div className="display-menu-divider" />
               <button className="display-menu-item" onClick={onExport}>

@@ -2954,6 +2954,107 @@ button {
   justify-content: center;
 }
 
+/* Templates list on the landing card (Phase 5.1) */
+.landing-templates {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.landing-templates-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  text-align: center;
+}
+.landing-templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.landing-template-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.landing-template-row .btn {
+  display: flex;
+  align-items: center;
+  text-align: left;
+}
+
+/* Settings modal (Phase 5.2) */
+.settings-modal {
+  width: 100%;
+}
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: oklch(from var(--bg-0) calc(l + 0.02) c h);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-row-label > span:first-child {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-0);
+}
+.settings-row-hint {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+.settings-toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: oklch(28% 0.01 245);
+  border: 1px solid var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  padding: 0;
+}
+.settings-toggle.on {
+  background: color-mix(in oklch, var(--lime) 60%, transparent);
+  border-color: color-mix(in oklch, var(--lime) 70%, transparent);
+}
+.settings-toggle-dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-0);
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.settings-toggle.on .settings-toggle-dot {
+  transform: translateX(20px);
+  background: var(--bg-0);
+}
+
 /* Loading splash */
 .splash {
   position: fixed;

@@ -24,7 +24,15 @@ import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportI
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
 import { ShareCard } from '@/components/ShareCard';
+import { SettingsModal } from '@/components/SettingsModal';
 import { captureAndShare } from '@/utils/shareCard';
+import {
+  deleteTemplate,
+  listTemplates,
+  saveTemplate,
+  templateToEventState,
+  type Template,
+} from '@/store/templates';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -58,6 +66,12 @@ export function SetupScreen() {
   const [importError, setImportError] = useState<string | null>(null);
   const [sharingRoster, setSharingRoster] = useState(false);
   const rosterShareRef = useRef<HTMLDivElement>(null);
+  const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+
+  const refreshTemplates = () => setTemplates(listTemplates());
 
   const requestRemoveTeam = (id: string) => {
     // Hard-delete during setup is non-destructive. Otherwise confirm.
@@ -92,6 +106,38 @@ export function SetupScreen() {
             <ImportButton onLoad={loadEvent} onError={setImportError} />
           </div>
           {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
+
+          {templates.length > 0 && (
+            <div className="landing-templates">
+              <div className="landing-templates-title">Saved templates</div>
+              <div className="landing-templates-list">
+                {templates.map((t) => (
+                  <div key={t.id} className="landing-template-row">
+                    <button
+                      className="btn ghost"
+                      style={{ flex: 1, justifyContent: 'flex-start' }}
+                      onClick={() => loadEvent(templateToEventState(t))}
+                    >
+                      <span style={{ fontWeight: 700 }}>{t.name}</span>
+                      <span style={{ color: 'var(--text-2)', marginLeft: 8, fontSize: 12 }}>
+                        {t.teams.length} teams · {t.courts.length} courts
+                      </span>
+                    </button>
+                    <button
+                      className="op-score-btn"
+                      onClick={() => {
+                        deleteTemplate(t.id);
+                        refreshTemplates();
+                      }}
+                      aria-label="Delete template"
+                    >
+                      <Icons.Minus className="icon" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -271,6 +317,24 @@ export function SetupScreen() {
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
           <button
+            className="btn"
+            onClick={() => setShowSettings(true)}
+            title="Edit settings"
+          >
+            Settings
+          </button>
+          <button
+            className="btn"
+            disabled={teams.length === 0}
+            onClick={() => {
+              setTemplateName(event.name);
+              setShowSaveTemplate(true);
+            }}
+            title="Save current setup as a reusable template"
+          >
+            Save as template
+          </button>
+          <button
             className="btn lg"
             disabled={!canStartQualifier}
             onClick={() => {
@@ -312,6 +376,50 @@ export function SetupScreen() {
       />
 
       <ShareCard ref={rosterShareRef} variant="roster" event={event} />
+
+      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+
+      {showSaveTemplate && (
+        <div className="modal-backdrop" onClick={() => setShowSaveTemplate(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '24rem' }}>
+            <h2>Save as template</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-1)' }}>
+              Templates store the teams, courts, and settings — no scores or rounds. You can spin
+              up a fresh event from this template next time.
+            </p>
+            <input
+              className="setup-input"
+              placeholder="Template name"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && templateName.trim()) {
+                  saveTemplate(templateName, event);
+                  refreshTemplates();
+                  setShowSaveTemplate(false);
+                }
+              }}
+            />
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowSaveTemplate(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                disabled={!templateName.trim()}
+                onClick={() => {
+                  saveTemplate(templateName, event);
+                  refreshTemplates();
+                  setShowSaveTemplate(false);
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmedTeam}
