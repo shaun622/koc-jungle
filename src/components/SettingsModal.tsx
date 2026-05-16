@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useEventStore } from '@/store/eventStore';
 import type { TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
+import { useVoices } from '@/hooks/useVoices';
+import { SAMPLE_PHRASE, speakPhrase } from '@/hooks/useAnnouncements';
+import { formatVoiceLabel, isEnglishVoice, pickDefaultVoice } from '@/utils/voices';
 import { Icons } from './Icons';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
@@ -91,6 +94,12 @@ export function SettingsModal({ open, onClose }: Props) {
             onCommit={(v) => updateSettings({ announceRoundStart: v })}
             hint="Reads the round number and Centre Court matchup aloud when a round starts."
           />
+          {s.announceRoundStart && (
+            <VoiceRow
+              valueUri={s.announcementVoiceURI}
+              onCommit={(uri) => updateSettings({ announcementVoiceURI: uri })}
+            />
+          )}
         </div>
 
         <div className="modal-actions">
@@ -256,5 +265,61 @@ function ToggleRow({
         <span className="settings-toggle-dot" />
       </button>
     </label>
+  );
+}
+
+function VoiceRow({
+  valueUri,
+  onCommit,
+}: {
+  valueUri: string | undefined;
+  onCommit: (uri: string | undefined) => void;
+}) {
+  const voices = useVoices();
+  const englishVoices = useMemo(
+    () => voices.filter(isEnglishVoice).slice().sort((a, b) => a.name.localeCompare(b.name)),
+    [voices],
+  );
+  const autoPick = useMemo(() => pickDefaultVoice(voices), [voices]);
+  const autoLabel = autoPick
+    ? `Auto — ${formatVoiceLabel(autoPick)}`
+    : 'Auto (browser default)';
+
+  return (
+    <div className="settings-row settings-row--stack">
+      <div className="settings-row-label">
+        <span>Announcement voice</span>
+        <span className="settings-row-hint">
+          Auto picks a characterful voice if one is installed. Tap Test to preview.
+        </span>
+      </div>
+      <div className="settings-voice-controls">
+        <select
+          className="setup-input"
+          value={valueUri ?? ''}
+          onChange={(e) => onCommit(e.target.value || undefined)}
+        >
+          <option value="">{autoLabel}</option>
+          {englishVoices.map((v) => (
+            <option key={v.voiceURI} value={v.voiceURI}>
+              {formatVoiceLabel(v)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn"
+          disabled={voices.length === 0}
+          onClick={() => speakPhrase(SAMPLE_PHRASE, voices, valueUri)}
+        >
+          Test voice
+        </button>
+      </div>
+      {englishVoices.length === 0 && (
+        <div className="settings-row-hint" style={{ color: 'var(--amber)' }}>
+          No voices available on this device.
+        </div>
+      )}
+    </div>
   );
 }

@@ -3055,6 +3055,22 @@ button {
   background: var(--bg-0);
 }
 
+.settings-row--stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.settings-voice-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.settings-voice-controls select {
+  width: 100%;
+}
+
 /* ============================================================
    Avatars (Phase 6.1)
    ============================================================ */

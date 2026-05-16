@@ -80,6 +80,8 @@ export interface EventSettings {
   roundsTotal: number;
   /** When true, the operator's iPad reads "Round X. Centre Court: A and B versus C and D" at round start via the Web Speech API. */
   announceRoundStart: boolean;
+  /** Optional Web Speech voiceURI; undefined means auto-pick a sensible voice. */
+  announcementVoiceURI?: string;
 }
 
 export interface PendingAssignment {
