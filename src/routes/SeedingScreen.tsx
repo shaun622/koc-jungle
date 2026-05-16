@@ -20,6 +20,7 @@ import { teamLabelShort } from '@/store/selectors';
 import { rankTeamsByQualifier } from '@/logic/seeding';
 import { isCentreCourt, type Court } from '@/types/domain';
 import { Icons } from '@/components/Icons';
+import { RandomiseTieModal, type TieGroup } from '@/components/RandomiseTieModal';
 
 export function SeedingScreen() {
   const event = useEventStore((s) => s.event);
@@ -49,6 +50,7 @@ export function SeedingScreen() {
   }, [event?.pendingAssignments, event?.courts, ranked]);
 
   const [order, setOrder] = useState<string[]>(initialOrder);
+  const [activeTieGroup, setActiveTieGroup] = useState<TieGroup | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -92,6 +94,45 @@ export function SeedingScreen() {
     return tiedScoresDesc.length;
   })();
 
+  // Cross-boundary tie groups: contiguous runs of equal-score teams in the
+  // current `order` that span more than one court. These get a "🎲 Randomise"
+  // chip so the operator can resolve the tie with a slot-machine draw.
+  // Same-court runs are excluded because seeding order within a court has no
+  // effect on the round 1 matchups.
+  const crossBoundaryGroups: TieGroup[] = [];
+  {
+    let i = 0;
+    while (i < order.length) {
+      let j = i + 1;
+      while (
+        j < order.length &&
+        scoreByTeam.get(order[j]) === scoreByTeam.get(order[i])
+      ) {
+        j += 1;
+      }
+      if (j - i > 1) {
+        const courtMin = Math.floor(i / 2);
+        const courtMax = Math.floor((j - 1) / 2);
+        if (courtMin !== courtMax) {
+          const courtMinTopBoundary = (courtMin + 1) * 2; // first rank in next court
+          const winnersDefault = Math.min(j, courtMinTopBoundary) - i;
+          crossBoundaryGroups.push({
+            score: scoreByTeam.get(order[i]) ?? 0,
+            teamIds: order.slice(i, j),
+            rankMin: i,
+            rankMax: j - 1,
+            winnersDefault,
+          });
+        }
+      }
+      i = j;
+    }
+  }
+  const groupByTopTeamId = new Map<string, TieGroup>();
+  for (const g of crossBoundaryGroups) {
+    groupByTopTeamId.set(g.teamIds[0], g);
+  }
+
   // Chunk the flat order into 2-team pairs aligned with sortedCourtsDesc.
   // Each pair[i] corresponds to court sortedCourtsDesc[i] and seed ranks
   // (i*2 + 1, i*2 + 2). The visual render order is shuffled below so the
@@ -129,6 +170,15 @@ export function SeedingScreen() {
     const to = order.indexOf(String(over.id));
     if (from < 0 || to < 0) return;
     const next = arrayMove(order, from, to);
+    setOrder(next);
+    reorderSeeding(next);
+  };
+
+  const applyRandomise = (newOrderInRange: string[], rankMin: number) => {
+    const next = order.slice();
+    for (let i = 0; i < newOrderInRange.length; i++) {
+      next[rankMin + i] = newOrderInRange[i];
+    }
     setOrder(next);
     reorderSeeding(next);
   };
@@ -177,6 +227,11 @@ export function SeedingScreen() {
                       score={scoreByTeam.get(aId) ?? 0}
                       showScore={!!event.qualifier}
                       tiePalette={tiedTeamPalette.get(aId)}
+                      randomiseGroup={groupByTopTeamId.get(aId)}
+                      onRandomise={() => {
+                        const g = groupByTopTeamId.get(aId);
+                        if (g) setActiveTieGroup(g);
+                      }}
                     />
                   )}
                   {bId && (
@@ -188,6 +243,11 @@ export function SeedingScreen() {
                       score={scoreByTeam.get(bId) ?? 0}
                       showScore={!!event.qualifier}
                       tiePalette={tiedTeamPalette.get(bId)}
+                      randomiseGroup={groupByTopTeamId.get(bId)}
+                      onRandomise={() => {
+                        const g = groupByTopTeamId.get(bId);
+                        if (g) setActiveTieGroup(g);
+                      }}
                     />
                   )}
                   {!bId && (
@@ -233,6 +293,13 @@ export function SeedingScreen() {
           </button>
         </div>
       </div>
+
+      <RandomiseTieModal
+        open={!!activeTieGroup}
+        group={activeTieGroup}
+        onClose={() => setActiveTieGroup(null)}
+        onApply={applyRandomise}
+      />
     </div>
   );
 }
@@ -261,6 +328,8 @@ function SortableRow({
   score,
   showScore,
   tiePalette,
+  randomiseGroup,
+  onRandomise,
 }: {
   id: string;
   rank: number;
@@ -270,6 +339,9 @@ function SortableRow({
   showScore: boolean;
   /** undefined → not tied. 0 → palette A (amber). 1 → palette B (blue). */
   tiePalette: 0 | 1 | undefined;
+  /** If set, this row is the top of a cross-boundary tie group and gets a 🎲 chip. */
+  randomiseGroup: TieGroup | undefined;
+  onRandomise: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -288,8 +360,24 @@ function SortableRow({
     >
       <span className="seed-rank">#{rank}</span>
       <span className="seed-team-name">
-        {teamLabel}
-        {playerLabel && <span className="players">· {playerLabel}</span>}
+        <span className="seed-team-name-text">
+          {teamLabel}
+          {playerLabel && <span className="players">· {playerLabel}</span>}
+        </span>
+        {randomiseGroup && (
+          <button
+            className="seed-randomise-chip"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRandomise();
+            }}
+            title={`Randomise the ${randomiseGroup.teamIds.length} tied teams at Q ${randomiseGroup.score}`}
+            aria-label="Randomise this tie"
+          >
+            <span aria-hidden="true">🎲</span>
+            <span>Randomise</span>
+          </button>
+        )}
       </span>
       {showScore ? (
         <span className={'seed-qscore ' + tiedClass}>Q {score}</span>

@@ -1052,6 +1052,215 @@ button {
 .seed-qscore.tied--b {
   color: var(--blue);
 }
+
+/* Team-name slot now needs to host the optional 🎲 Randomise chip alongside
+   the team text without disturbing the parent grid. */
+.seed-team-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.seed-team-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seed-randomise-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: color-mix(in oklch, var(--lime) 18%, transparent);
+  border: 1px solid color-mix(in oklch, var(--lime) 55%, transparent);
+  color: var(--lime);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.seed-randomise-chip:hover {
+  background: color-mix(in oklch, var(--lime) 32%, transparent);
+}
+.seed-randomise-chip:active {
+  transform: scale(0.96);
+}
+
+/* ============================================================
+   Randomise-tie modal (slot-machine reels)
+   ============================================================ */
+.randomise-modal h2 {
+  margin: 0;
+}
+.randomise-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.randomise-reels {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.randomise-reel {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: oklch(from var(--bg-0) calc(l + 0.02) c h);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  min-height: 44px;
+  overflow: hidden;
+  position: relative;
+}
+.randomise-reel-rank {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: 0.12em;
+}
+.randomise-reel-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: transform 80ms ease-out;
+}
+.randomise-reel.rolling {
+  border-color: color-mix(in oklch, var(--amber) 50%, transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--amber) 12%, transparent) 50%,
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: randomise-shimmer 0.7s linear infinite;
+}
+.randomise-reel.rolling .randomise-reel-name {
+  animation: randomise-name-jitter 0.18s ease-in-out infinite alternate;
+  color: var(--amber);
+}
+.randomise-reel.winner {
+  border-color: color-mix(in oklch, var(--lime) 60%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--lime) 18%, transparent) 0%,
+    transparent 70%
+  );
+  animation: randomise-winner-pop 0.5s ease-out;
+}
+.randomise-reel.loser {
+  opacity: 0.55;
+}
+.randomise-reel-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.randomise-reel-badge.winner {
+  background: color-mix(in oklch, var(--lime) 25%, transparent);
+  color: var(--lime);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.randomise-reel-badge.loser {
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--line-soft);
+}
+
+.randomise-stepper-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: oklch(from var(--bg-0) calc(l + 0.02) c h);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.randomise-stepper-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.randomise-stepper-label > span:first-child {
+  font-weight: 600;
+  font-size: 14px;
+}
+.randomise-stepper-hint {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+.randomise-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.randomise-stepper-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  min-width: 32px;
+  text-align: center;
+  color: var(--lime);
+}
+.randomise-status {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--amber);
+  text-transform: uppercase;
+}
+
+@keyframes randomise-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes randomise-name-jitter {
+  from {
+    transform: translateY(-1px);
+  }
+  to {
+    transform: translateY(1px);
+  }
+}
+@keyframes randomise-winner-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 .seed-rank {
   font-family: var(--font-mono);
   font-size: 13px;
