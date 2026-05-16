@@ -3266,6 +3266,16 @@ button {
   box-sizing: border-box;
   pointer-events: none;
 }
+/* Podium variant uses the full TvCompleteView (1920×1080) inside, which
+   carries its own background and absolute-positioned layout. Reset the
+   default share-card chrome so the captured PNG matches the TV exactly. */
+.share-card--podium {
+  width: 1920px;
+  height: 1080px;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+}
 .share-card-header {
   display: flex;
   justify-content: space-between;
