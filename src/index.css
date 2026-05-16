@@ -2091,6 +2091,11 @@ button {
 }
 .display-canvas {
   position: relative;
+  /* Stay at the 1920px design width — otherwise the flex parent shrinks
+     this to viewport width and the inner tv-display layout is squashed
+     BEFORE transform: scale() applies. With flex-shrink: 0 the canvas
+     keeps its 1920×1080 box, then scales as intended. */
+  flex-shrink: 0;
 }
 
 .display-toolbar {
