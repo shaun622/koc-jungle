@@ -12,9 +12,17 @@ export type MatchStatus = 'scheduled' | 'in-progress' | 'completed';
 
 export type TieRule = 'operator-decides' | 'team-a-wins' | 'split-points' | 'replay';
 
+export interface PlayerAvatar {
+  /** Optional uploaded photo as a data URL (typically 128×128 PNG). */
+  photoDataUrl?: string;
+  /** Optional custom colour (oklch). Falls back to a deterministic hash of the name. */
+  color?: string;
+}
+
 export interface Player {
   id: ID;
   name: string;
+  avatar?: PlayerAvatar;
 }
 
 export interface Team {
@@ -70,6 +78,8 @@ export interface EventSettings {
   soundOnTimerEnd: boolean;
   warningAtMs: number;
   roundsTotal: number;
+  /** When true, the operator's iPad reads "Round X. Centre Court: A and B versus C and D" at round start via the Web Speech API. */
+  announceRoundStart: boolean;
 }
 
 export interface PendingAssignment {
@@ -98,6 +108,7 @@ export const DEFAULT_SETTINGS: EventSettings = {
   soundOnTimerEnd: true,
   warningAtMs: 60 * 1000,
   roundsTotal: 6,
+  announceRoundStart: false,
 };
 
 export function isCentreCourt(court: Court, courts: Court[]): boolean {

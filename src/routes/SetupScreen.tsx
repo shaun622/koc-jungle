@@ -18,14 +18,16 @@ import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
-import { isCentreCourt, type Court, type TieRule } from '@/types/domain';
+import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
+import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
+import { cropImageFileToAvatar } from '@/utils/avatar';
 import {
   deleteTemplate,
   listTemplates,
@@ -56,6 +58,7 @@ export function SetupScreen() {
   const reorderCourts = useEventStore((s) => s.reorderCourts);
   const setEventName = useEventStore((s) => s.setEventName);
   const setEventVenue = useEventStore((s) => s.setEventVenue);
+  const setPlayerAvatar = useEventStore((s) => s.setPlayerAvatar);
   const updateSettings = useEventStore((s) => s.updateSettings);
   const startQualifier = useEventStore((s) => s.startQualifier);
   const skipQualifierToSeeding = useEventStore((s) => s.skipQualifierToSeeding);
@@ -257,17 +260,23 @@ export function SetupScreen() {
             <div key={team.id} className="setup-team-row">
               <div className="setup-team-num">{i + 1}</div>
               <div className="setup-team-inputs">
-                <input
-                  className="setup-input"
-                  value={team.players[0].name}
-                  onChange={(e) => updateTeam(team.id, { player1: e.target.value })}
+                <PlayerInput
+                  player={team.players[0]}
                   placeholder="Player A"
+                  onNameChange={(value) => updateTeam(team.id, { player1: value })}
+                  onAvatarUpload={(dataUrl) =>
+                    setPlayerAvatar(team.id, 0, { photoDataUrl: dataUrl })
+                  }
+                  onAvatarClear={() => setPlayerAvatar(team.id, 0, undefined)}
                 />
-                <input
-                  className="setup-input"
-                  value={team.players[1].name}
-                  onChange={(e) => updateTeam(team.id, { player2: e.target.value })}
+                <PlayerInput
+                  player={team.players[1]}
                   placeholder="Player B"
+                  onNameChange={(value) => updateTeam(team.id, { player2: value })}
+                  onAvatarUpload={(dataUrl) =>
+                    setPlayerAvatar(team.id, 1, { photoDataUrl: dataUrl })
+                  }
+                  onAvatarClear={() => setPlayerAvatar(team.id, 1, undefined)}
                 />
               </div>
               <button
@@ -437,6 +446,78 @@ export function SetupScreen() {
         }}
         onCancel={() => setConfirmRemoveTeamId(null)}
       />
+    </div>
+  );
+}
+
+function PlayerInput({
+  player,
+  placeholder,
+  onNameChange,
+  onAvatarUpload,
+  onAvatarClear,
+}: {
+  player: Player;
+  placeholder: string;
+  onNameChange: (value: string) => void;
+  onAvatarUpload: (dataUrl: string) => void;
+  onAvatarClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const hasPhoto = !!player.avatar?.photoDataUrl;
+  return (
+    <div className="setup-player-input">
+      <button
+        type="button"
+        className="setup-player-avatar"
+        onClick={() => inputRef.current?.click()}
+        aria-label={hasPhoto ? `Change photo for ${player.name}` : `Add photo for ${player.name}`}
+        title={hasPhoto ? 'Change photo' : 'Add photo'}
+      >
+        <Avatar player={player} size="sm" />
+        <span className="setup-player-avatar-overlay">
+          {busy ? '…' : hasPhoto ? '✎' : '+'}
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setBusy(true);
+          try {
+            const dataUrl = await cropImageFileToAvatar(file);
+            onAvatarUpload(dataUrl);
+          } catch {
+            // Swallow: invalid image; the avatar simply doesn't update.
+          } finally {
+            setBusy(false);
+            // Allow re-selecting the same file.
+            e.target.value = '';
+          }
+        }}
+      />
+      <input
+        className="setup-input setup-player-name"
+        value={player.name}
+        onChange={(e) => onNameChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {hasPhoto && (
+        <button
+          type="button"
+          className="setup-player-avatar-clear"
+          onClick={onAvatarClear}
+          aria-label="Remove photo"
+          title="Remove photo"
+        >
+          <Icons.Close className="icon" />
+        </button>
+      )}
     </div>
   );
 }

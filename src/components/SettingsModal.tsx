@@ -85,6 +85,12 @@ export function SettingsModal({ open, onClose }: Props) {
             onCommit={(v) => updateSettings({ soundOnTimerEnd: v })}
             hint="Plays a generated tone when the round timer hits zero."
           />
+          <ToggleRow
+            label="Announce round start"
+            value={s.announceRoundStart}
+            onCommit={(v) => updateSettings({ announceRoundStart: v })}
+            hint="Reads the round number and Centre Court matchup aloud when a round starts."
+          />
         </div>
 
         <div className="modal-actions">

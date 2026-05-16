@@ -7,6 +7,7 @@ import type {
   Match,
   PendingAssignment,
   Player,
+  PlayerAvatar,
   Team,
   EventSettings,
 } from '@/types/domain';
@@ -36,6 +37,7 @@ interface Actions {
   addTeam: (input: { name?: string; player1: string; player2: string }) => void;
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
   removeTeam: (id: string) => void;
+  setPlayerAvatar: (teamId: string, playerIndex: 0 | 1, avatar: PlayerAvatar | undefined) => void;
 
   setCourts: (courts: Court[]) => void;
   renameCourt: (id: string, name: string) => void;
@@ -195,6 +197,27 @@ export const useEventStore = create<EventStore>()(
             },
           });
         }
+      },
+
+      setPlayerAvatar: (teamId, playerIndex, avatar) => {
+        const event = get().event;
+        if (!event) return;
+        const teams = event.teams.map((t) => {
+          if (t.id !== teamId) return t;
+          const players: [Player, Player] = [
+            { ...t.players[0] },
+            { ...t.players[1] },
+          ];
+          const next: Player = { ...players[playerIndex] };
+          if (avatar === undefined) {
+            delete next.avatar;
+          } else {
+            next.avatar = avatar;
+          }
+          players[playerIndex] = next;
+          return { ...t, players };
+        });
+        set({ event: { ...event, teams } });
       },
 
       setCourts: (courts) => {

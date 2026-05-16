@@ -3055,6 +3055,153 @@ button {
   background: var(--bg-0);
 }
 
+/* ============================================================
+   Avatars (Phase 6.1)
+   ============================================================ */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: var(--bg-0);
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  user-select: none;
+  box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.35) inset;
+}
+.avatar--xs {
+  font-size: 10px;
+}
+.avatar--sm {
+  font-size: 13px;
+}
+.avatar--md {
+  font-size: 22px;
+}
+.avatar--lg {
+  font-size: 36px;
+}
+.avatar--initials {
+  font-weight: 700;
+  color: oklch(98% 0 0);
+  text-shadow: 0 1px 1px oklch(0% 0 0 / 0.3);
+}
+
+.team-avatars {
+  display: inline-flex;
+  align-items: center;
+}
+.team-avatars--xs > .avatar + .avatar {
+  margin-left: -6px;
+}
+.team-avatars--sm > .avatar + .avatar {
+  margin-left: -10px;
+}
+.team-avatars--md > .avatar + .avatar {
+  margin-left: -16px;
+}
+.team-avatars--lg > .avatar + .avatar {
+  margin-left: -22px;
+}
+.team-avatars > .avatar {
+  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px oklch(0% 0 0 / 0.35) inset;
+}
+
+/* Side-court rows: avatars sit beside the team text */
+.tv-court-team {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+}
+.tv-court-team-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Centre court avatars sit above the labels — flex-column already does that */
+.tv-centre-team > .team-avatars {
+  margin-bottom: 4px;
+}
+
+/* Podium avatars: row above the big team name */
+.tv-podium-avatars {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+}
+.tv-podium-avatars > .avatar + .avatar {
+  margin-left: -28px;
+}
+.tv-podium-avatars > .avatar {
+  box-shadow: 0 0 0 3px var(--bg-1), 0 0 0 4px oklch(0% 0 0 / 0.3) inset;
+}
+
+/* Setup screen — player input with avatar upload */
+.setup-player-input {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.setup-player-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+}
+.setup-player-avatar-overlay {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: var(--lime);
+  color: var(--bg-0);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  border: 2px solid var(--bg-2);
+  font-family: var(--font-mono);
+}
+.setup-player-name {
+  min-width: 0;
+}
+.setup-player-avatar-clear {
+  background: transparent;
+  border: 0;
+  color: var(--text-2);
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}
+.setup-player-avatar-clear:hover {
+  color: var(--red);
+  background: oklch(from var(--bg-1) calc(l + 0.04) c h);
+}
+.setup-player-avatar-clear .icon {
+  width: 12px;
+  height: 12px;
+}
+
 /* Loading splash */
 .splash {
   position: fixed;

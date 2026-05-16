@@ -18,7 +18,9 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
+import { Avatar, TeamAvatars } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
+import { useAnnouncements } from '@/hooks/useAnnouncements';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -30,6 +32,7 @@ interface Movement {
 
 export function DisplayScreen() {
   useStorageBroadcast();
+  useAnnouncements();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);
   const [scale, setScale] = useState(1);
@@ -681,6 +684,7 @@ function TvLiveCanvas({
               <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
             </div>
             <div className="tv-centre-team">
+              {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
                 {centreA ? teamLabelShort(centreA) : '—'}
@@ -716,6 +720,7 @@ function TvLiveCanvas({
               />
             </div>
             <div className="tv-centre-team right">
+              {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
                 {centreB ? teamLabelShort(centreB) : '—'}
@@ -933,8 +938,11 @@ function TvCourtCard({
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
-          {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-          <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+          {teamA && <TeamAvatars players={teamA.players} size="sm" />}
+          <div className="tv-court-team-text">
+            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
+            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+          </div>
         </div>
         <ScoreCell
           value={match.scoreA}
@@ -946,8 +954,11 @@ function TvCourtCard({
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
-          {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-          <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+          {teamB && <TeamAvatars players={teamB.players} size="sm" />}
+          <div className="tv-court-team-text">
+            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
+            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+          </div>
         </div>
         <ScoreCell
           value={match.scoreB}
@@ -1228,6 +1239,12 @@ function TvPodiumColumn({
       <div className={'tv-podium-team tv-podium-team--' + place}>
         {isChampion && <Icons.Crown className="tv-podium-crown" />}
         <div className="place-tag">{placeLabel}</div>
+        {team && (
+          <div className="tv-podium-avatars">
+            <Avatar player={team.players[0]} size="lg" />
+            <Avatar player={team.players[1]} size="lg" />
+          </div>
+        )}
         <div className="team-name">{team ? teamLabelShort(team) : '—'}</div>
         {team && team.name && (
           <div className="team-players">
@@ -1402,6 +1419,7 @@ function TvBetweenCanvas({
               <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
             </div>
             <div className="tv-centre-team">
+              {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
                 {centreA ? teamLabelShort(centreA) : '—'}
@@ -1417,6 +1435,7 @@ function TvBetweenCanvas({
               <span className="tv-centre-vs">VS</span>
             </div>
             <div className="tv-centre-team right">
+              {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
                 {centreB ? teamLabelShort(centreB) : '—'}
@@ -1529,15 +1548,21 @@ function TvBetweenCourtCard({
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
-          {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-          <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+          {teamA && <TeamAvatars players={teamA.players} size="sm" />}
+          <div className="tv-court-team-text">
+            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
+            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+          </div>
         </div>
         {teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
-          {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-          <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+          {teamB && <TeamAvatars players={teamB.players} size="sm" />}
+          <div className="tv-court-team-text">
+            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
+            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+          </div>
         </div>
         {teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
       </div>
