@@ -4309,3 +4309,249 @@ button {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Phone landscape compact mode
+   Targets ~iPhone landscape (height 375-430). iPad in any orientation has
+   height >= 768 so this never triggers on tablets.
+   The mobile (max-width: 768px) block already covers phone portrait and
+   smaller phone landscape widths; this block adds the height-sensitive
+   tweaks so the timer/podium/grids actually fit in ~393 px of height.
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* App shell: page becomes scrollable vertically (mirrors mobile portrait). */
+  html,
+  body {
+    overflow: auto;
+    height: auto;
+    min-height: 100%;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+  .op {
+    position: static;
+    inset: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  /* Top nav: tighten */
+  .op-top {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding-top: calc(6px + env(safe-area-inset-top, 0px));
+    padding-bottom: 6px;
+  }
+  .op-top-meta {
+    display: none;
+  }
+  .chrome-brand span {
+    display: none;
+  }
+
+  /* ============ Qualifier ============ */
+  .qual {
+    position: relative;
+    inset: auto;
+    padding: 8px 12px 12px;
+    overflow: visible;
+    gap: 8px;
+  }
+  .qual-head {
+    margin: 0;
+    padding: 0 2px;
+    gap: 8px;
+  }
+  .qual-title {
+    font-size: 15px;
+  }
+  .qual-sub {
+    display: none;
+  }
+  .qual-meta {
+    font-size: 11px;
+  }
+  .qual-timer-row > .op-timer {
+    max-width: 100%;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .qual-timer-row .op-timer-value {
+    font-size: 40px;
+  }
+  .qual-timer-row .op-timer-controls {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .qual-timer-row .op-timer-controls .btn {
+    padding: 6px 4px;
+    font-size: 11px;
+    min-width: 0;
+  }
+  .qual-timer-row .op-timer-play {
+    grid-column: auto !important;
+    padding: 8px 4px !important;
+    font-size: 12px !important;
+  }
+  .qual-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+  .qual-match {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+  .qual-match-head {
+    font-size: 11px;
+  }
+  .qual-row {
+    gap: 6px;
+  }
+  .qual-row .name {
+    font-size: 12px;
+  }
+  .qual-row input {
+    width: 44px;
+    padding: 4px 6px;
+    font-size: 16px;
+  }
+  .qual-sum {
+    font-size: 10px;
+  }
+  .qual-bottom {
+    padding: 10px 14px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .qual-bottom-info {
+    font-size: 11px;
+    min-width: 0;
+  }
+
+  /* ============ Seeding ============ */
+  .seed {
+    position: relative;
+    inset: auto;
+    padding: 8px 12px 12px;
+    overflow: visible;
+    gap: 8px;
+  }
+  .seed-list {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+    gap: 8px;
+  }
+  .seed-pair--centre {
+    grid-column: auto;
+  }
+  .seed-pair {
+    padding: 4px 10px 8px;
+  }
+  .seed-pair-header {
+    font-size: 11px;
+  }
+  .seed-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    padding: 4px 6px;
+    column-gap: 8px;
+  }
+  .seed-row .seed-team-name {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .seed-row .players {
+    display: none;
+  }
+  .seed-row .seed-qscore {
+    grid-column: auto;
+    grid-row: auto;
+    text-align: right;
+    font-size: 12px;
+  }
+  .seed-randomise-chip {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+  .seed-randomise-chip > span:last-child {
+    display: none;
+  }
+
+  /* ============ Leaderboard ============ */
+  .lbfull {
+    position: relative;
+    inset: auto;
+    padding: 12px;
+    overflow: visible;
+  }
+  .lbfull-header,
+  .lbfull-row {
+    grid-template-columns: 38px 1fr 56px;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .lbfull-header > span:nth-child(3),
+  .lbfull-header > span:nth-child(4),
+  .lbfull-header > span:nth-child(5),
+  .lbfull-row .lbfull-stat:nth-of-type(1),
+  .lbfull-row .lbfull-stat:nth-of-type(2),
+  .lbfull-row .lbfull-stat:nth-of-type(3) {
+    display: none;
+  }
+
+  /* ============ Podium ============ */
+  .podium-screen {
+    position: relative;
+    inset: auto;
+    padding: 12px 14px 24px;
+    overflow: visible;
+  }
+  .podium-head-title {
+    font-size: 22px;
+  }
+  .podium-stage {
+    gap: 6px;
+  }
+  .podium-team .place-tag {
+    font-size: 9px;
+  }
+  .podium-team .team-name {
+    font-size: 14px;
+  }
+  .podium-team--first .team-name {
+    font-size: 17px;
+  }
+  .podium-team .team-players {
+    display: none;
+  }
+  .podium-team .team-points span {
+    font-size: 13px;
+  }
+  .podium-block--first {
+    height: 110px;
+    font-size: 60px;
+  }
+  .podium-block--second {
+    height: 84px;
+    font-size: 46px;
+  }
+  .podium-block--third {
+    height: 64px;
+    font-size: 38px;
+  }
+  .podium-rest-row {
+    grid-template-columns: 34px 1fr auto;
+    padding: 8px 12px;
+  }
+  .podium-rest-row .wl {
+    display: none;
+  }
+}
