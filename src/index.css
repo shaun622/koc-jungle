@@ -2346,6 +2346,257 @@ button {
   font-size: 11px;
 }
 
+/* ==========================================================================
+   Off-screen share card (captured via html-to-image)
+   ========================================================================== */
+.share-card {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 1080px;
+  height: 1350px;
+  padding: 64px 80px;
+  background:
+    radial-gradient(circle at 50% 0%, oklch(22% 0.06 80) 0%, transparent 55%),
+    linear-gradient(180deg, oklch(15% 0.025 245) 0%, oklch(10% 0.02 245) 100%);
+  color: var(--text-0);
+  font-family: var(--font-body);
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.share-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.share-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 0.04em;
+}
+.share-card-brand .brand-mark {
+  width: 56px;
+  height: 56px;
+  font-size: 28px;
+  border-radius: 12px;
+}
+.share-card-meta {
+  text-align: right;
+}
+.share-card-event-name {
+  font-family: var(--font-display);
+  font-size: 32px;
+  color: var(--text-0);
+}
+.share-card-event-date {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.share-card-headline {
+  font-family: var(--font-display);
+  font-size: 88px;
+  text-align: center;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 80px color-mix(in oklch, var(--gold) 50%, transparent);
+  line-height: 1;
+}
+.share-card-podium {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: end;
+  gap: 24px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+.share-card-podium-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.share-card-podium-team {
+  text-align: center;
+  font-family: var(--font-display);
+}
+.share-card-podium-team--first .team-name {
+  color: var(--gold);
+  font-size: 32px;
+}
+.share-card-podium-team .team-name {
+  font-size: 24px;
+  margin-top: 8px;
+}
+.share-card-podium-team .team-points {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-1);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+.share-card-podium-team .team-points span {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--lime);
+  margin-right: 4px;
+}
+.share-card-podium-team--first .team-points span {
+  color: var(--gold);
+}
+.share-card-podium-crown {
+  width: 40px;
+  height: 40px;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.share-card-podium-block {
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--bg-0);
+  position: relative;
+  box-shadow:
+    inset 0 -12px 36px -4px oklch(0% 0 0 / 0.5),
+    0 24px 64px -16px oklch(0% 0 0 / 0.7);
+}
+.share-card-podium-block--first {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-deep) 100%);
+  height: 280px;
+  font-size: 160px;
+}
+.share-card-podium-block--second {
+  background: linear-gradient(135deg, oklch(86% 0.015 245) 0%, oklch(65% 0.02 245) 100%);
+  height: 220px;
+  font-size: 120px;
+}
+.share-card-podium-block--third {
+  background: linear-gradient(135deg, oklch(70% 0.13 50) 0%, oklch(52% 0.13 40) 100%);
+  height: 170px;
+  font-size: 96px;
+}
+.share-card-rest {
+  margin-top: 16px;
+}
+.share-card-rest-title {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--text-2);
+  text-align: center;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+.share-card-rest-list {
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  overflow: hidden;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.share-card-rest-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 80px;
+  gap: 16px;
+  padding: 12px 24px;
+  font-size: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--line-soft);
+}
+.share-card-rest-row:last-child {
+  border-bottom: 0;
+}
+.share-card-rest-row .rank {
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  font-size: 16px;
+}
+.share-card-rest-row .name {
+  font-family: var(--font-display);
+}
+.share-card-rest-row .pts {
+  font-family: var(--font-display);
+  color: var(--lime);
+  font-size: 22px;
+  text-align: right;
+}
+.share-card-footer {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--text-2);
+  margin-top: auto;
+}
+
+/* Roster variant */
+.share-card-roster {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  flex: 1;
+}
+.share-card-roster-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-card-roster-row {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 16px;
+  padding: 14px 20px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  align-items: center;
+}
+.share-card-roster-row .rank {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--text-2);
+}
+.share-card-roster-row .name {
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+.share-card-roster-meta {
+  display: flex;
+  justify-content: space-around;
+  gap: 24px;
+  padding: 16px 24px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.share-card-roster-meta strong {
+  color: var(--lime);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0;
+  margin-right: 4px;
+}
+
 /* PWA update / offline-ready toast */
 .pwa-toast {
   position: fixed;

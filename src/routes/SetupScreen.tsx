@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -23,6 +23,8 @@ import { formatMs, parseDurationInput } from '@/utils/time';
 import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
+import { ShareCard } from '@/components/ShareCard';
+import { captureAndShare } from '@/utils/shareCard';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -54,6 +56,8 @@ export function SetupScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [sharingRoster, setSharingRoster] = useState(false);
+  const rosterShareRef = useRef<HTMLDivElement>(null);
 
   const requestRemoveTeam = (id: string) => {
     // Hard-delete during setup is non-destructive. Otherwise confirm.
@@ -248,6 +252,25 @@ export function SetupScreen() {
             Export JSON
           </button>
           <button
+            className="btn"
+            disabled={sharingRoster || teams.length === 0}
+            onClick={async () => {
+              if (!rosterShareRef.current) return;
+              setSharingRoster(true);
+              try {
+                await captureAndShare(rosterShareRef.current, {
+                  filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
+                  shareTitle: `${event.name} — lineup`,
+                  shareText: 'Tonight\'s King of the Court lineup 🎾',
+                });
+              } finally {
+                setSharingRoster(false);
+              }
+            }}
+          >
+            {sharingRoster ? 'Generating…' : 'Share roster'}
+          </button>
+          <button
             className="btn lg"
             disabled={!canStartQualifier}
             onClick={() => {
@@ -287,6 +310,8 @@ export function SetupScreen() {
         }}
         onCancel={() => setConfirmReset(false)}
       />
+
+      <ShareCard ref={rosterShareRef} variant="roster" event={event} />
 
       <ConfirmDialog
         open={!!confirmedTeam}

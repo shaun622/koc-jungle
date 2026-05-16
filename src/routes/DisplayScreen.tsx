@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
@@ -10,6 +10,8 @@ import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
+import { ShareCard } from '@/components/ShareCard';
+import { captureAndShare } from '@/utils/shareCard';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -38,6 +40,8 @@ export function DisplayScreen() {
   const resetRoundTimer = useEventStore((s) => s.resetRoundTimer);
   const adjustTimer = useEventStore((s) => s.adjustTimer);
   const startNextRound = useEventStore((s) => s.startNextRound);
+  const podiumShareRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve 96px at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind it.
@@ -224,18 +228,39 @@ export function DisplayScreen() {
           </button>
           <button
             className="btn"
+            disabled={sharing}
+            onClick={async () => {
+              if (!podiumShareRef.current) return;
+              setSharing(true);
+              try {
+                await captureAndShare(podiumShareRef.current, {
+                  filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
+                  shareTitle: `${event.name} — results`,
+                  shareText: 'Tonight\'s King of the Court results 🏆',
+                });
+              } finally {
+                setSharing(false);
+              }
+            }}
+          >
+            {sharing ? 'Generating…' : 'Share results'}
+          </button>
+          <button
+            className="btn"
             onClick={() => {
               const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-final.json`;
               downloadJsonFile(filename, toExportJson(event));
             }}
           >
-            Export results
+            Export JSON
           </button>
           <button className="btn ghost" onClick={() => navigate('/leaderboard')}>
             Full standings
           </button>
         </div>
       )}
+
+      {showCompleteCanvas && <ShareCard ref={podiumShareRef} variant="podium" event={event} />}
 
       {/* ConfirmDialog left as-is below */}
       <ConfirmDialog
