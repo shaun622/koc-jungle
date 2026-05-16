@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
-import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/selectors';
+import {
+  currentRound,
+  leaderboard,
+  nightlyStats,
+  teamLabelShort,
+  teamNameFor,
+} from '@/store/selectors';
 import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
@@ -1149,8 +1155,29 @@ function TvCompleteCanvas({
               {rest.length} more team{rest.length === 1 ? '' : 's'} in the rail →
             </div>
           )}
+
+          <NightlyStatsStrip stats={nightlyStats(event)} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function NightlyStatsStrip({
+  stats,
+}: {
+  stats: ReturnType<typeof nightlyStats>;
+}) {
+  if (stats.length === 0) return null;
+  return (
+    <div className="nightly-stats">
+      {stats.map((s) => (
+        <div key={s.label} className="nightly-stat">
+          <div className="nightly-stat-label">{s.label}</div>
+          <div className="nightly-stat-value">{s.value}</div>
+          {s.detail && <div className="nightly-stat-detail">{s.detail}</div>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1264,7 +1291,7 @@ function TvBetweenCanvas({
     : '—';
 
   return (
-    <div className="tv-display">
+    <div className="tv-display tv-display--between">
       <div className="tv-header">
         <div className="tv-header-brand">
           <div className="brand-mark lg">K</div>

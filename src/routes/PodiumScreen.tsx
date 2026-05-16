@@ -1,13 +1,33 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
-import { leaderboard, teamLabelShort } from '@/store/selectors';
+import { leaderboard, nightlyStats, teamLabelShort } from '@/store/selectors';
 import { Icons } from '@/components/Icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import type { Team } from '@/types/domain';
 
 type Place = 'first' | 'second' | 'third';
+
+function NightlyStatsStripPodium({
+  event,
+}: {
+  event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>;
+}) {
+  const stats = nightlyStats(event);
+  if (stats.length === 0) return null;
+  return (
+    <div className="nightly-stats podium-nightly-stats">
+      {stats.map((s) => (
+        <div key={s.label} className="nightly-stat">
+          <div className="nightly-stat-label">{s.label}</div>
+          <div className="nightly-stat-value">{s.value}</div>
+          {s.detail && <div className="nightly-stat-detail">{s.detail}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const CONFETTI_COUNT = 60;
 const CONFETTI_COLORS = [
@@ -117,6 +137,8 @@ export function PodiumScreen() {
           </div>
         </div>
       )}
+
+      <NightlyStatsStripPodium event={event} />
 
       <div className="podium-actions">
         <button className="btn" onClick={() => navigate('/leaderboard')}>
