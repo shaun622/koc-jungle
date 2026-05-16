@@ -5013,3 +5013,93 @@ button {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Phone portrait /display toolbar
+   Default grid (auto 1fr auto auto) overflows at 393px - end-round button
+   and menu spill off-screen. Switch to a 2-row layout: timer + menu on
+   row 1, full-width End round on row 2. Same idea for the between and
+   complete variants.
+   ========================================================================== */
+@media (max-width: 600px) {
+  .display-toolbar {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) 12px;
+  }
+  .display-toolbar-timer {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .display-toolbar-timer::-webkit-scrollbar {
+    display: none;
+  }
+  /* "7 unscored" hint is redundant on phone — score buttons show it inline. */
+  .display-toolbar-summary {
+    display: none;
+  }
+  .display-end-round {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    justify-content: center;
+  }
+  .display-toolbar-menu {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* Between-rounds: summary + menu on row 1, duration field + Start on row 2. */
+  .display-toolbar--between {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+  .display-toolbar--between .display-toolbar-summary {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: flex-start;
+    font-size: 11px;
+  }
+  .display-toolbar--between .display-toolbar-menu {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .display-toolbar--between .display-next-duration {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .display-toolbar--between .display-next-duration-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Complete: let the buttons wrap into multiple rows. */
+  .display-toolbar--complete {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .display-toolbar--complete .display-toolbar-spacer {
+    display: none;
+  }
+  .display-toolbar--complete .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Mobile scoring layout: account for the now-taller fixed toolbar. */
+  .mobile-display {
+    padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  }
+}
