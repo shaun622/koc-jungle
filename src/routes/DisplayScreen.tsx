@@ -5,7 +5,7 @@ import { currentRound, leaderboard, teamLabelShort, teamNameFor } from '@/store/
 import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
-import { formatMs } from '@/utils/time';
+import { formatMs, parseDurationInput } from '@/utils/time';
 import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -151,14 +151,11 @@ export function DisplayScreen() {
               Round {event.rounds.at(-1)?.index ?? '—'} complete · rotation preview
             </span>
           </div>
-          <button
-            className="btn lg primary display-end-round"
-            onClick={() => {
-              startNextRound();
-            }}
-          >
-            Start Round {(event.rounds.at(-1)?.index ?? 0) + 1} →
-          </button>
+          <NextRoundDurationField
+            defaultMs={event.rounds.at(-1)?.durationMs ?? event.settings.defaultRoundDurationMs}
+            onStart={(ms) => startNextRound(ms)}
+            nextRoundNumber={(event.rounds.at(-1)?.index ?? 0) + 1}
+          />
           <div className="display-toolbar-menu">
             <button
               className="btn"
@@ -302,6 +299,56 @@ interface DisplayToolbarProps {
   onNavigate: (path: string) => void;
   onExport: () => void;
   onNewEvent: () => void;
+}
+
+function NextRoundDurationField({
+  defaultMs,
+  nextRoundNumber,
+  onStart,
+}: {
+  defaultMs: number;
+  nextRoundNumber: number;
+  onStart: (ms: number) => void;
+}) {
+  const [text, setText] = useState(formatMs(defaultMs));
+  const commit = (): number => {
+    const parsed = parseDurationInput(text);
+    if (parsed === null) {
+      setText(formatMs(defaultMs));
+      return defaultMs;
+    }
+    setText(formatMs(parsed));
+    return parsed;
+  };
+  return (
+    <div className="display-next-duration">
+      <label htmlFor="next-round-duration" className="display-next-duration-label">
+        Duration
+      </label>
+      <input
+        id="next-round-duration"
+        type="text"
+        inputMode="numeric"
+        className="display-next-duration-input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+      />
+      <button
+        className="btn lg primary display-end-round"
+        onClick={() => {
+          const ms = commit();
+          onStart(ms);
+        }}
+      >
+        Start Round {nextRoundNumber} →
+      </button>
+    </div>
+  );
 }
 
 function DisplayToolbar({

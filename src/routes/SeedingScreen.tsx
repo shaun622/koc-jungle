@@ -132,6 +132,7 @@ export function SeedingScreen() {
                       teamLabel={teamLabelFor(event, aId)}
                       playerLabel={playerLabelFor(event, aId)}
                       score={scoreByTeam.get(aId) ?? 0}
+                      showScore={!!event.qualifier}
                       tied={boundaryTieTeams.has(aId)}
                     />
                   )}
@@ -142,6 +143,7 @@ export function SeedingScreen() {
                       teamLabel={teamLabelFor(event, bId)}
                       playerLabel={playerLabelFor(event, bId)}
                       score={scoreByTeam.get(bId) ?? 0}
+                      showScore={!!event.qualifier}
                       tied={boundaryTieTeams.has(bId)}
                     />
                   )}
@@ -216,6 +218,7 @@ function SortableRow({
   teamLabel,
   playerLabel,
   score,
+  showScore,
   tied,
 }: {
   id: string;
@@ -223,6 +226,7 @@ function SortableRow({
   teamLabel: string;
   playerLabel: string;
   score: number;
+  showScore: boolean;
   tied: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -245,7 +249,11 @@ function SortableRow({
         {teamLabel}
         {playerLabel && <span className="players">· {playerLabel}</span>}
       </span>
-      <span className={'seed-qscore ' + (tied ? 'tied' : '')}>Q {score}</span>
+      {showScore ? (
+        <span className={'seed-qscore ' + (tied ? 'tied' : '')}>Q {score}</span>
+      ) : (
+        <span />
+      )}
       <button
         {...attributes}
         {...listeners}

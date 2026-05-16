@@ -48,10 +48,25 @@ export function SetupScreen() {
   const setEventVenue = useEventStore((s) => s.setEventVenue);
   const updateSettings = useEventStore((s) => s.updateSettings);
   const startQualifier = useEventStore((s) => s.startQualifier);
+  const skipQualifierToSeeding = useEventStore((s) => s.skipQualifierToSeeding);
   const navigate = useNavigate();
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+
+  const requestRemoveTeam = (id: string) => {
+    // Hard-delete during setup is non-destructive. Otherwise confirm.
+    if (event?.status === 'setup') {
+      removeTeam(id);
+    } else {
+      setConfirmRemoveTeamId(id);
+    }
+  };
+  const confirmedTeam =
+    confirmRemoveTeamId && event
+      ? event.teams.find((t) => t.id === confirmRemoveTeamId)
+      : null;
 
   if (!event) {
     return (
@@ -177,9 +192,16 @@ export function SetupScreen() {
         <div className="setup-sub">
           Each team is a fixed pair of two named players. Leave team name blank to auto-label.
         </div>
-        {event.status === 'setup' && (
-          <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
+        {event.status !== 'setup' && (
+          <div className="setup-mid-event-banner">
+            <strong>Mid-event edits.</strong> Editing a player name is a safe substitution — the
+            team's points and standings stay attached to the team, not the individual player.
+            Adding or removing a team won't change the current round; removed teams stay in the
+            history but are skipped in future rotations, and added teams need to be dragged into a
+            court on the next rotation preview.
+          </div>
         )}
+        <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
         <div className="setup-list">
           {teams.map((team, i) => (
             <div key={team.id} className="setup-team-row">
@@ -198,15 +220,13 @@ export function SetupScreen() {
                   placeholder="Player B"
                 />
               </div>
-              {event.status === 'setup' && (
-                <button
-                  className="op-score-btn"
-                  onClick={() => removeTeam(team.id)}
-                  aria-label="Remove team"
-                >
-                  <Icons.Minus className="icon" />
-                </button>
-              )}
+              <button
+                className="op-score-btn"
+                onClick={() => requestRemoveTeam(team.id)}
+                aria-label="Remove team"
+              >
+                <Icons.Minus className="icon" />
+              </button>
             </div>
           ))}
           {teams.length === 0 && (
@@ -226,6 +246,17 @@ export function SetupScreen() {
             }}
           >
             Export JSON
+          </button>
+          <button
+            className="btn lg"
+            disabled={!canStartQualifier}
+            onClick={() => {
+              skipQualifierToSeeding();
+              setTimeout(() => navigate('/seeding'), 0);
+            }}
+            title="Skip qualifier, seed teams manually"
+          >
+            Skip qualifier
           </button>
           <button
             className="btn full primary lg"
@@ -255,6 +286,23 @@ export function SetupScreen() {
           setConfirmReset(false);
         }}
         onCancel={() => setConfirmReset(false)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmedTeam}
+        title="Remove this team mid-event?"
+        message={
+          confirmedTeam
+            ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be marked inactive — kept for history but skipped in future rotations. Their existing scores stay in the standings. The current round is unaffected; you'll need to drop in a replacement team via the rotation preview before starting the next round.`
+            : ''
+        }
+        confirmLabel="Yes, remove"
+        destructive
+        onConfirm={() => {
+          if (confirmRemoveTeamId) removeTeam(confirmRemoveTeamId);
+          setConfirmRemoveTeamId(null);
+        }}
+        onCancel={() => setConfirmRemoveTeamId(null)}
       />
     </div>
   );

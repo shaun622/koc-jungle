@@ -49,6 +49,7 @@ interface Actions {
   setEventVenue: (venue: string) => void;
 
   startQualifier: () => void;
+  skipQualifierToSeeding: () => void;
   setQualifierScore: (matchId: string, scoreA: number, scoreB: number) => void;
   startQualifierTimer: () => void;
   pauseQualifierTimer: () => void;
@@ -68,7 +69,7 @@ interface Actions {
   nominateTieWinner: (matchId: string, winnerId: string) => void;
   endRound: () => void;
   overrideNextAssignments: (assignments: PendingAssignment[]) => void;
-  startNextRound: () => void;
+  startNextRound: (overrideDurationMs?: number) => void;
   undoLastRound: () => void;
   endEvent: () => void;
 }
@@ -315,6 +316,33 @@ export const useEventStore = create<EventStore>()(
         );
         set({
           event: { ...event, qualifier, status: 'qualifier' },
+          lastError: null,
+        });
+      },
+
+      skipQualifierToSeeding: () => {
+        const event = get().event;
+        if (!event) return;
+        const active = event.teams.filter((t) => t.active);
+        if (active.length !== event.courts.length * 2) {
+          set({
+            lastError: `Need exactly ${event.courts.length * 2} teams (got ${active.length}).`,
+          });
+          return;
+        }
+        // Pair teams in their current order onto courts (descending position).
+        // The operator can drag them around on the seeding screen before locking.
+        const assignments = assignRankedTeamsToCourts(
+          active.map((t) => t.id),
+          event.courts,
+        );
+        set({
+          event: {
+            ...event,
+            qualifier: undefined,
+            pendingAssignments: assignments,
+            status: 'seeding',
+          },
           lastError: null,
         });
       },
@@ -625,7 +653,7 @@ export const useEventStore = create<EventStore>()(
         set({ event: { ...event, pendingAssignments: assignments }, lastError: null });
       },
 
-      startNextRound: () => {
+      startNextRound: (overrideDurationMs?: number) => {
         const event = get().event;
         if (!event?.pendingAssignments) return;
         const issues = validateAssignments(event.pendingAssignments, event.courts, event.teams);
@@ -635,11 +663,15 @@ export const useEventStore = create<EventStore>()(
         }
         const matches = buildMatchesFromAssignments(event.pendingAssignments, event.courts);
         const prev = event.rounds[event.rounds.length - 1];
+        const durationMs =
+          overrideDurationMs ??
+          prev?.durationMs ??
+          event.settings.defaultRoundDurationMs;
         const round: MainRound = {
           id: newId(),
           index: prev ? prev.index + 1 : 1,
           matches,
-          durationMs: event.settings.defaultRoundDurationMs,
+          durationMs: Math.max(0, Math.round(durationMs)),
           totalPausedMs: 0,
         };
         set({
