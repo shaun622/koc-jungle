@@ -5163,4 +5163,11 @@ button {
     padding: 6px 10px;
     font-size: 11px;
   }
+  /* Full standings is redundant on phone landscape — the screen is for
+     mirroring/AirPlay, not navigation. Hiding it also lets the remaining
+     four items (spacer + Start + Share + Export) fit the 4-col grid in
+     a single row instead of wrapping. */
+  .display-toolbar--complete > .btn.ghost {
+    display: none;
+  }
 }
