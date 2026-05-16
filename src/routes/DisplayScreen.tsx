@@ -57,12 +57,18 @@ export function DisplayScreen() {
   const [sharing, setSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Fit-to-window scaling — design canvas is 1920x1080. Reserve 96px at the
-  // bottom for the operator toolbar so the canvas doesn't get hidden behind it.
+  // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
+  // bottom for the operator toolbar so the canvas doesn't get hidden behind
+  // it. On phone landscape the toolbar shrinks (see (max-height: 500px) CSS
+  // rules), so we reserve less and let the canvas grow.
   useEffect(() => {
     function recalc() {
       const w = window.innerWidth;
-      const h = window.innerHeight - 96;
+      const phoneLandscape =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-height: 500px)').matches;
+      const reserve = phoneLandscape ? 56 : 96;
+      const h = window.innerHeight - reserve;
       setScale(Math.max(0.1, Math.min(w / 1920, h / 1080)));
     }
     recalc();

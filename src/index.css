@@ -5108,3 +5108,59 @@ button {
     padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* ==========================================================================
+   Phone landscape — minimal toolbar
+   Phone landscape is for AirPlay/HDMI to TV (the operator scores from
+   phone portrait or iPad). The toolbar shrinks to ~48px to give the
+   1920×1080 canvas more vertical room. The DisplayScreen scaler uses
+   a matching 56px reserve via window.matchMedia('(max-height: 500px)').
+   iPad height >= 744 so this never triggers on tablets.
+   ========================================================================== */
+@media (max-height: 500px) {
+  .display-toolbar {
+    height: auto;
+    min-height: 48px;
+    padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px)) 12px;
+    gap: 6px;
+  }
+  .display-toolbar-timer {
+    gap: 4px;
+  }
+  .display-toolbar-timer .btn {
+    padding: 4px 8px;
+    font-size: 10px;
+    min-width: 0;
+  }
+  .display-toolbar-timer .display-play {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  .display-toolbar-timer .icon {
+    width: 12px;
+    height: 12px;
+  }
+  .display-toolbar-summary {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .display-end-round {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+  }
+  .display-toolbar-menu .btn {
+    padding: 4px 10px;
+    font-size: 14px;
+  }
+  .display-toolbar--between .display-next-duration-label {
+    font-size: 9px;
+  }
+  .display-toolbar--between .display-next-duration-input {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  .display-toolbar--complete .btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}
