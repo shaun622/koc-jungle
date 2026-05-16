@@ -4772,9 +4772,16 @@ button {
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 500px) {
+  /* Phone portrait — tighten setup so the team inputs fit the names.
+     Two player inputs side-by-side (~130px each) was cramped; stack
+     them so each row is full-width (~265px). */
   .setup-form {
     grid-template-columns: 1fr;
+  }
+  .setup-team-inputs {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
   .op-top-meta {
     display: none;
