@@ -928,31 +928,86 @@ button {
 .seed-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 14px;
   overflow-y: auto;
   min-height: 0;
+  padding-right: 4px;
 }
-.seed-row {
-  display: grid;
-  grid-template-columns: 24px 110px 1fr auto auto;
-  gap: 12px;
-  align-items: center;
-  padding: 8px 12px;
+
+.seed-pair {
   background: var(--bg-1);
   border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 6px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.seed-pair--centre {
+  background: linear-gradient(135deg, oklch(22% 0.05 80) 0%, oklch(18% 0.04 80) 100%);
+  border-color: color-mix(in oklch, var(--gold) 40%, transparent);
+  box-shadow: 0 8px 28px -16px oklch(0% 0 0 / 0.6);
+}
+.seed-pair-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 4px;
+  font-family: var(--font-display);
+}
+.seed-pair--centre .seed-pair-header {
+  color: var(--gold);
+  border-bottom-color: color-mix(in oklch, var(--gold) 30%, transparent);
+}
+.seed-pair-court-name {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+}
+.seed-pair-court-pts {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.seed-pair--centre .seed-pair-court-pts {
+  color: var(--gold);
+}
+
+.seed-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 8px;
   user-select: none;
 }
 .seed-row.dragging {
   opacity: 0.6;
+  background: var(--bg-2);
   box-shadow: var(--shadow-glow);
 }
 .seed-row.tied {
-  border-color: var(--amber);
-  background: linear-gradient(90deg, color-mix(in oklch, var(--amber) 10%, transparent) 0%, var(--bg-1) 60%);
+  border-color: color-mix(in oklch, var(--amber) 55%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--amber) 14%, transparent) 0%,
+    transparent 70%
+  );
 }
-.seed-row.pair-divider {
-  margin-top: 6px;
+.seed-row--empty {
+  opacity: 0.5;
+}
+.seed-qscore.tied {
+  color: var(--amber);
+  font-weight: 700;
 }
 .seed-rank {
   font-family: var(--font-mono);

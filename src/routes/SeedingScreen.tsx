@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
 import { rankTeamsByQualifier } from '@/logic/seeding';
-import { isCentreCourt } from '@/types/domain';
+import { isCentreCourt, type Court } from '@/types/domain';
 import { Icons } from '@/components/Icons';
 
 export function SeedingScreen() {
@@ -59,14 +59,25 @@ export function SeedingScreen() {
   const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
   const scoreByTeam = new Map(ranked.map((r) => [r.teamId, r.score]));
 
-  // Detect ties (groups of teams with the same qualifier score)
-  const tieScores = new Set<number>();
-  const counts = new Map<number, number>();
-  ranked.forEach((r) => counts.set(r.score, (counts.get(r.score) ?? 0) + 1));
-  counts.forEach((count, score) => {
-    if (count > 1) tieScores.add(score);
-  });
-  const tiedGroupCount = tieScores.size;
+  // Boundary ties: teams at positions i and i+1 with the same qualifier
+  // score who would end up on *different* courts. Same-court ties are
+  // irrelevant to the seeding and shouldn't draw the operator's attention.
+  const boundaryTieTeams = new Set<string>();
+  for (let i = 0; i + 1 < order.length; i++) {
+    const a = order[i];
+    const b = order[i + 1];
+    const courtA = Math.floor(i / 2);
+    const courtB = Math.floor((i + 1) / 2);
+    if (courtA === courtB) continue;
+    if (scoreByTeam.get(a) !== scoreByTeam.get(b)) continue;
+    boundaryTieTeams.add(a);
+    boundaryTieTeams.add(b);
+  }
+  const boundaryTieCount = boundaryTieTeams.size / 2;
+
+  // Chunk the flat order into 2-team pairs aligned with sortedCourtsDesc
+  const pairs: Array<[string, string | undefined]> = [];
+  for (let i = 0; i < order.length; i += 2) pairs.push([order[i], order[i + 1]]);
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -85,40 +96,66 @@ export function SeedingScreen() {
         <div>
           <div className="qual-title">Seeding preview</div>
           <div className="qual-sub">
-            Teams ranked by qualifier score. Drag to reorder ties. Top two take Centre Court;
-            bottom two take Court 1.
+            Teams ranked by qualifier score. Drag to reorder ties across court boundaries. Top two
+            take Centre Court; bottom two take Court 1.
           </div>
         </div>
         <div className="qual-meta">
-          {tiedGroupCount > 0 ? `${tiedGroupCount} tied group(s)` : 'No ties'}
+          {boundaryTieCount > 0
+            ? `${boundaryTieCount} boundary tie${boundaryTieCount === 1 ? '' : 's'}`
+            : 'No ties to resolve'}
         </div>
       </div>
 
       <div className="seed-list">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            {order.map((teamId, idx) => {
-              const team = event.teams.find((t) => t.id === teamId);
-              const score = scoreByTeam.get(teamId) ?? 0;
-              const courtIdx = Math.floor(idx / 2);
-              const court = sortedCourtsDesc[courtIdx];
-              const tied = tieScores.has(score);
-              const pairFirst = idx % 2 === 0;
+            {pairs.map(([aId, bId], pairIdx) => {
+              const court = sortedCourtsDesc[pairIdx];
+              const isCentre = court ? isCentreCourt(court, event.courts) : false;
               return (
-                <SortableRow
-                  key={teamId}
-                  id={teamId}
-                  rank={idx + 1}
-                  teamLabel={team ? teamLabelShort(team) : teamId}
-                  playerLabel={
-                    team && team.name ? `${team.players[0].name} & ${team.players[1].name}` : ''
-                  }
-                  score={score}
-                  court={court}
-                  isCentre={court ? isCentreCourt(court, event.courts) : false}
-                  tied={tied}
-                  pairFirst={pairFirst}
-                />
+                <div
+                  key={court?.id ?? pairIdx}
+                  className={'seed-pair ' + (isCentre ? 'seed-pair--centre' : '')}
+                >
+                  <div className="seed-pair-header">
+                    <span className="seed-pair-court-name">
+                      {isCentre && <Icons.Crown className="icon" style={{ marginRight: 6 }} />}
+                      {court?.name ?? '—'}
+                    </span>
+                    <span className="seed-pair-court-pts">{court?.pointValue ?? 0} pts</span>
+                  </div>
+                  {aId && (
+                    <SortableRow
+                      id={aId}
+                      rank={pairIdx * 2 + 1}
+                      teamLabel={teamLabelFor(event, aId)}
+                      playerLabel={playerLabelFor(event, aId)}
+                      score={scoreByTeam.get(aId) ?? 0}
+                      tied={boundaryTieTeams.has(aId)}
+                    />
+                  )}
+                  {bId && (
+                    <SortableRow
+                      id={bId}
+                      rank={pairIdx * 2 + 2}
+                      teamLabel={teamLabelFor(event, bId)}
+                      playerLabel={playerLabelFor(event, bId)}
+                      score={scoreByTeam.get(bId) ?? 0}
+                      tied={boundaryTieTeams.has(bId)}
+                    />
+                  )}
+                  {!bId && (
+                    <div className="seed-row seed-row--empty" aria-hidden="true">
+                      <span className="seed-rank">—</span>
+                      <span className="seed-team-name" style={{ color: 'var(--text-2)' }}>
+                        Slot open
+                      </span>
+                      <span />
+                      <span />
+                    </div>
+                  )}
+                </div>
               );
             })}
           </SortableContext>
@@ -127,10 +164,12 @@ export function SeedingScreen() {
 
       <div className="qual-bottom">
         <div className="qual-bottom-info">
-          {tiedGroupCount > 0 ? (
+          {boundaryTieCount > 0 ? (
             <>
-              Ties highlighted in <span style={{ color: 'var(--amber)' }}>amber</span> — drag to
-              reorder before locking.
+              <span style={{ color: 'var(--amber)' }}>
+                Tied scores across court boundaries
+              </span>{' '}
+              — drag to choose which team gets the higher court.
             </>
           ) : (
             <>Ready to lock seeding and start Round 1.</>
@@ -144,7 +183,7 @@ export function SeedingScreen() {
             className="btn lg primary"
             onClick={() => {
               lockSeedingAndStartRound1();
-              setTimeout(() => navigate('/round'), 0);
+              setTimeout(() => navigate('/display'), 0);
             }}
           >
             Lock seeding &amp; start Round 1 →
@@ -155,26 +194,36 @@ export function SeedingScreen() {
   );
 }
 
+function teamLabelFor(
+  event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>,
+  id: string,
+): string {
+  const t = event.teams.find((tt) => tt.id === id);
+  return t ? teamLabelShort(t) : id;
+}
+
+function playerLabelFor(
+  event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>,
+  id: string,
+): string {
+  const t = event.teams.find((tt) => tt.id === id);
+  return t && t.name ? `${t.players[0].name} & ${t.players[1].name}` : '';
+}
+
 function SortableRow({
   id,
   rank,
   teamLabel,
   playerLabel,
   score,
-  court,
-  isCentre,
   tied,
-  pairFirst,
 }: {
   id: string;
   rank: number;
   teamLabel: string;
   playerLabel: string;
   score: number;
-  court: { name: string; position: number; pointValue: number } | undefined;
-  isCentre: boolean;
   tied: boolean;
-  pairFirst: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -188,21 +237,15 @@ function SortableRow({
       ref={setNodeRef}
       style={style}
       className={
-        'seed-row ' +
-        (tied ? 'tied ' : '') +
-        (isDragging ? 'dragging ' : '') +
-        (pairFirst ? 'pair-divider' : '')
+        'seed-row ' + (tied ? 'tied ' : '') + (isDragging ? 'dragging ' : '')
       }
     >
       <span className="seed-rank">#{rank}</span>
-      <span className={'seed-court-chip ' + (isCentre ? 'centre' : '')}>
-        {court?.name ?? ''}
-      </span>
       <span className="seed-team-name">
         {teamLabel}
         {playerLabel && <span className="players">· {playerLabel}</span>}
       </span>
-      <span className="seed-qscore">Q {score}</span>
+      <span className={'seed-qscore ' + (tied ? 'tied' : '')}>Q {score}</span>
       <button
         {...attributes}
         {...listeners}
@@ -214,3 +257,6 @@ function SortableRow({
     </div>
   );
 }
+
+// Silence the unused-import warning for Court (kept for future expansion)
+void (null as unknown as Court);
