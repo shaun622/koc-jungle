@@ -91,13 +91,15 @@ export function TopNav({ event }: Props) {
           >
             Export
           </button>
-          <button
-            className="btn ghost sm"
-            onClick={() => navigate('/display')}
-            title="Open TV display"
-          >
-            TV
-          </button>
+          {event.status !== 'qualifier' && (
+            <button
+              className="btn ghost sm"
+              onClick={() => navigate('/display')}
+              title="Open TV display"
+            >
+              TV
+            </button>
+          )}
         </div>
       </div>
 
