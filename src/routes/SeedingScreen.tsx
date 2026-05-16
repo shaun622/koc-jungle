@@ -59,25 +59,57 @@ export function SeedingScreen() {
   const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
   const scoreByTeam = new Map(ranked.map((r) => [r.teamId, r.score]));
 
-  // Boundary ties: teams at positions i and i+1 with the same qualifier
-  // score who would end up on *different* courts. Same-court ties are
-  // irrelevant to the seeding and shouldn't draw the operator's attention.
-  const boundaryTieTeams = new Set<string>();
-  for (let i = 0; i + 1 < order.length; i++) {
-    const a = order[i];
-    const b = order[i + 1];
-    const courtA = Math.floor(i / 2);
-    const courtB = Math.floor((i + 1) / 2);
-    if (courtA === courtB) continue;
-    if (scoreByTeam.get(a) !== scoreByTeam.get(b)) continue;
-    boundaryTieTeams.add(a);
-    boundaryTieTeams.add(b);
-  }
-  const boundaryTieCount = boundaryTieTeams.size / 2;
+  // Any team whose qualifier score is shared with at least one other team
+  // gets flagged — same-court ties matter too because the operator may want
+  // to rotate which team takes the higher seed within a court.
+  const tiedTeams = new Set<string>();
+  const tieGroupCount = (() => {
+    const counts = new Map<number, number>();
+    for (const teamId of order) {
+      const s = scoreByTeam.get(teamId);
+      if (s === undefined) continue;
+      counts.set(s, (counts.get(s) ?? 0) + 1);
+    }
+    for (const teamId of order) {
+      const s = scoreByTeam.get(teamId);
+      if (s !== undefined && (counts.get(s) ?? 0) > 1) tiedTeams.add(teamId);
+    }
+    let groups = 0;
+    counts.forEach((n) => {
+      if (n > 1) groups += 1;
+    });
+    return groups;
+  })();
 
-  // Chunk the flat order into 2-team pairs aligned with sortedCourtsDesc
+  // Chunk the flat order into 2-team pairs aligned with sortedCourtsDesc.
+  // Each pair[i] corresponds to court sortedCourtsDesc[i] and seed ranks
+  // (i*2 + 1, i*2 + 2). The visual render order is shuffled below so the
+  // courts fill column-major (matching the TV display) but the underlying
+  // rank → court mapping stays unchanged.
   const pairs: Array<[string, string | undefined]> = [];
   for (let i = 0; i < order.length; i += 2) pairs.push([order[i], order[i + 1]]);
+
+  // Column-major render order: Centre full-width first, then interleave the
+  // left/right columns so the CSS grid (which is row-major) draws them as
+  // top-to-bottom-left then top-to-bottom-right. With 7 side courts the
+  // left column gets 4 (highest 4) and the right gets 3 (the trailing left
+  // entry sits alone in its row).
+  const renderOrder: Array<{
+    pair: [string, string | undefined];
+    courtIndex: number;
+  }> = [];
+  if (pairs.length > 0) renderOrder.push({ pair: pairs[0], courtIndex: 0 });
+  const sidePairs = pairs.slice(1).map((pair, idx) => ({
+    pair,
+    courtIndex: idx + 1,
+  }));
+  const half = Math.ceil(sidePairs.length / 2);
+  const leftCol = sidePairs.slice(0, half);
+  const rightCol = sidePairs.slice(half);
+  for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
+    if (leftCol[i]) renderOrder.push(leftCol[i]);
+    if (rightCol[i]) renderOrder.push(rightCol[i]);
+  }
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -96,13 +128,13 @@ export function SeedingScreen() {
         <div>
           <div className="qual-title">Seeding preview</div>
           <div className="qual-sub">
-            Teams ranked by qualifier score. Drag to reorder ties across court boundaries. Top two
-            take Centre Court; bottom two take Court 1.
+            Teams ranked by qualifier score. Drag to reorder tied teams. Top two take Centre Court;
+            bottom two take Court 1.
           </div>
         </div>
         <div className="qual-meta">
-          {boundaryTieCount > 0
-            ? `${boundaryTieCount} boundary tie${boundaryTieCount === 1 ? '' : 's'}`
+          {tieGroupCount > 0
+            ? `${tieGroupCount} tie${tieGroupCount === 1 ? '' : 's'}`
             : 'No ties to resolve'}
         </div>
       </div>
@@ -110,12 +142,12 @@ export function SeedingScreen() {
       <div className="seed-list">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            {pairs.map(([aId, bId], pairIdx) => {
-              const court = sortedCourtsDesc[pairIdx];
+            {renderOrder.map(({ pair: [aId, bId], courtIndex }) => {
+              const court = sortedCourtsDesc[courtIndex];
               const isCentre = court ? isCentreCourt(court, event.courts) : false;
               return (
                 <div
-                  key={court?.id ?? pairIdx}
+                  key={court?.id ?? courtIndex}
                   className={'seed-pair ' + (isCentre ? 'seed-pair--centre' : '')}
                 >
                   <div className="seed-pair-header">
@@ -128,23 +160,23 @@ export function SeedingScreen() {
                   {aId && (
                     <SortableRow
                       id={aId}
-                      rank={pairIdx * 2 + 1}
+                      rank={courtIndex * 2 + 1}
                       teamLabel={teamLabelFor(event, aId)}
                       playerLabel={playerLabelFor(event, aId)}
                       score={scoreByTeam.get(aId) ?? 0}
                       showScore={!!event.qualifier}
-                      tied={boundaryTieTeams.has(aId)}
+                      tied={tiedTeams.has(aId)}
                     />
                   )}
                   {bId && (
                     <SortableRow
                       id={bId}
-                      rank={pairIdx * 2 + 2}
+                      rank={courtIndex * 2 + 2}
                       teamLabel={teamLabelFor(event, bId)}
                       playerLabel={playerLabelFor(event, bId)}
                       score={scoreByTeam.get(bId) ?? 0}
                       showScore={!!event.qualifier}
-                      tied={boundaryTieTeams.has(bId)}
+                      tied={tiedTeams.has(bId)}
                     />
                   )}
                   {!bId && (
@@ -166,12 +198,10 @@ export function SeedingScreen() {
 
       <div className="qual-bottom">
         <div className="qual-bottom-info">
-          {boundaryTieCount > 0 ? (
+          {tieGroupCount > 0 ? (
             <>
-              <span style={{ color: 'var(--amber)' }}>
-                Tied scores across court boundaries
-              </span>{' '}
-              — drag to choose which team gets the higher court.
+              <span style={{ color: 'var(--amber)' }}>Tied qualifier scores</span>{' '}
+              — drag to choose seeding order.
             </>
           ) : (
             <>Ready to lock seeding and start Round 1.</>
