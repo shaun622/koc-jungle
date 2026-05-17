@@ -141,23 +141,19 @@ export function SeedingScreen() {
   const pairs: Array<[string, string | undefined]> = [];
   for (let i = 0; i < order.length; i += 2) pairs.push([order[i], order[i + 1]]);
 
-  // Column-major render order: Centre full-width first, then interleave the
-  // left/right columns so the CSS grid (which is row-major) draws them as
-  // top-to-bottom-left then top-to-bottom-right. With 7 side courts the
-  // left column gets 4 (highest 4) and the right gets 3 (the trailing left
-  // entry sits alone in its row).
+  // Column-major render order: all courts (Centre included) split into a
+  // left and right column, then interleaved so the row-major CSS grid draws
+  // them top-to-bottom-left then top-to-bottom-right. Centre Court is a
+  // normal-width cell — it keeps its gold styling but no longer spans the
+  // full row, so all courts fit one screen on iPad landscape.
+  const allPairs = pairs.map((pair, idx) => ({ pair, courtIndex: idx }));
+  const half = Math.ceil(allPairs.length / 2);
+  const leftCol = allPairs.slice(0, half);
+  const rightCol = allPairs.slice(half);
   const renderOrder: Array<{
     pair: [string, string | undefined];
     courtIndex: number;
   }> = [];
-  if (pairs.length > 0) renderOrder.push({ pair: pairs[0], courtIndex: 0 });
-  const sidePairs = pairs.slice(1).map((pair, idx) => ({
-    pair,
-    courtIndex: idx + 1,
-  }));
-  const half = Math.ceil(sidePairs.length / 2);
-  const leftCol = sidePairs.slice(0, half);
-  const rightCol = sidePairs.slice(half);
   for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
     if (leftCol[i]) renderOrder.push(leftCol[i]);
     if (rightCol[i]) renderOrder.push(rightCol[i]);
