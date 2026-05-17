@@ -58,6 +58,7 @@ interface Actions {
   resetQualifierTimer: () => void;
   adjustQualifierTimer: (deltaMs: number) => void;
   confirmQualifierResults: () => void;
+  reopenFromSeeding: () => void;
   reorderSeeding: (orderedTeamIds: string[]) => void;
   lockSeedingAndStartRound1: () => void;
 
@@ -458,6 +459,31 @@ export const useEventStore = create<EventStore>()(
           },
           lastError: null,
         });
+      },
+
+      reopenFromSeeding: () => {
+        // The seeding "← Back" button. Reverts the event status so RouteGate
+        // lets the operator return — either to the qualifier (to edit scores)
+        // or to setup (if the qualifier was skipped).
+        const event = get().event;
+        if (!event || event.status !== 'seeding') return;
+        if (event.qualifier) {
+          set({
+            event: {
+              ...event,
+              status: 'qualifier',
+              pendingAssignments: undefined,
+              // No longer "complete" while being edited; scores are kept.
+              qualifier: { ...event.qualifier, completedAt: undefined },
+            },
+            lastError: null,
+          });
+        } else {
+          set({
+            event: { ...event, status: 'setup', pendingAssignments: undefined },
+            lastError: null,
+          });
+        }
       },
 
       reorderSeeding: (orderedTeamIds) => {

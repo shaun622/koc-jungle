@@ -26,6 +26,7 @@ export function SeedingScreen() {
   const event = useEventStore((s) => s.event);
   const reorderSeeding = useEventStore((s) => s.reorderSeeding);
   const lockSeedingAndStartRound1 = useEventStore((s) => s.lockSeedingAndStartRound1);
+  const reopenFromSeeding = useEventStore((s) => s.reopenFromSeeding);
   const navigate = useNavigate();
 
   const ranked = useMemo(() => {
@@ -281,7 +282,14 @@ export function SeedingScreen() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate('/qualifier')}>
+          <button
+            className="btn"
+            onClick={() => {
+              const toQualifier = !!event.qualifier;
+              reopenFromSeeding();
+              setTimeout(() => navigate(toQualifier ? '/qualifier' : '/setup'), 0);
+            }}
+          >
             ← Back
           </button>
           <button
