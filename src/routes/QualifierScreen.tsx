@@ -150,12 +150,16 @@ function QualifierScoreInput({
   };
   return (
     <input
-      type="number"
+      // type="text" + inputMode + pattern is the reliable iOS recipe for the
+      // plain numeric keypad. type="number" on iOS can still surface the full
+      // keyboard. Score is 0–16 so digits only, max 2 chars; the commit()
+      // handler clamps to 0..QUALIFIER_TOTAL.
+      type="text"
       inputMode="numeric"
-      min={0}
-      max={QUALIFIER_TOTAL}
+      pattern="[0-9]*"
+      maxLength={2}
       value={text}
-      onChange={(e) => setText(e.target.value)}
+      onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ''))}
       onFocus={(e) => {
         setFocused(true);
         e.currentTarget.select();
