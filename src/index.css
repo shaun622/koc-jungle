@@ -813,9 +813,36 @@ button {
   display: grid;
   justify-items: center;
 }
+/* The qualifier is an operator working screen — the match grid matters
+   more than a big clock. Lay the timer out as a compact horizontal strip
+   (~66px tall) instead of the stacked ~256px block. */
 .qual-timer-row > .op-timer {
   width: 100%;
-  max-width: 520px;
+  max-width: 720px;
+  flex-direction: row;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 18px;
+}
+.qual-timer-row .op-timer-round {
+  /* Redundant — the screen header already says "Qualifier round". */
+  display: none;
+}
+.qual-timer-row .op-timer-head {
+  flex-shrink: 0;
+}
+.qual-timer-row .op-timer-value {
+  font-size: 46px;
+  flex-shrink: 0;
+}
+.qual-timer-row .op-timer-controls {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+.qual-timer-row .op-timer-play {
+  grid-column: auto;
+  flex: 1;
 }
 .qual-head {
   display: flex;
