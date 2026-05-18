@@ -1644,6 +1644,23 @@ button {
 .lbfull-row.king .lbfull-pts {
   color: var(--gold);
 }
+/* Editable points input (post-event score correction). */
+.lbfull-pts-input {
+  justify-self: end;
+  width: 72px;
+  padding: 6px 8px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  text-align: right;
+  color: var(--lime);
+  background: var(--bg-0);
+  border: 1px solid color-mix(in oklch, var(--lime) 45%, var(--line));
+  border-radius: 8px;
+}
+.lbfull-pts-input:focus {
+  outline: none;
+  border-color: var(--lime);
+}
 
 /* ==========================================================================
    Display shell — the canvas + the fixed bottom operator toolbar

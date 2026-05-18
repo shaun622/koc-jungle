@@ -38,6 +38,7 @@ interface Actions {
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
   removeTeam: (id: string) => void;
   setPlayerAvatar: (teamId: string, playerIndex: 0 | 1, avatar: PlayerAvatar | undefined) => void;
+  setPointsOverride: (teamId: string, value: number | undefined) => void;
 
   setCourts: (courts: Court[]) => void;
   renameCourt: (id: string, name: string) => void;
@@ -75,6 +76,7 @@ interface Actions {
   startNextRound: (overrideDurationMs?: number) => void;
   undoLastRound: () => void;
   endEvent: () => void;
+  finishEventNow: () => void;
 }
 
 export type EventStore = State & Actions;
@@ -217,6 +219,22 @@ export const useEventStore = create<EventStore>()(
           }
           players[playerIndex] = next;
           return { ...t, players };
+        });
+        set({ event: { ...event, teams } });
+      },
+
+      setPointsOverride: (teamId, value) => {
+        const event = get().event;
+        if (!event) return;
+        const teams = event.teams.map((t) => {
+          if (t.id !== teamId) return t;
+          const next: Team = { ...t };
+          if (value === undefined || Number.isNaN(value)) {
+            delete next.pointsOverride;
+          } else {
+            next.pointsOverride = Math.max(0, Math.round(value));
+          }
+          return next;
         });
         set({ event: { ...event, teams } });
       },
@@ -775,6 +793,36 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event) return;
         set({ event: { ...event, status: 'complete' } });
+      },
+
+      finishEventNow: () => {
+        // Force-finish escape hatch — jumps straight to the podium. Used
+        // when the operator is stuck (e.g. roundsTotal was lowered below
+        // the current round, leaving an unscored phantom round with the
+        // End Round button disabled).
+        const event = get().event;
+        if (!event) return;
+        const round = getCurrentRound(event);
+        let rounds = event.rounds;
+        if (round && !round.completedAt) {
+          const anyScored = round.matches.some(
+            (m) => m.scoreA > 0 || m.scoreB > 0,
+          );
+          rounds = anyScored
+            ? // Has scores — keep it, mark complete so it counts.
+              event.rounds.slice(0, -1).concat({ ...round, completedAt: Date.now() })
+            : // Unscored phantom round — drop it entirely.
+              event.rounds.slice(0, -1);
+        }
+        set({
+          event: {
+            ...event,
+            rounds,
+            pendingAssignments: undefined,
+            status: 'complete',
+          },
+          lastError: null,
+        });
       },
     }),
     {

@@ -41,6 +41,7 @@ export function DisplayScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const navigate = useNavigate();
   const isMobile = useIsMobileDisplay();
 
@@ -53,6 +54,7 @@ export function DisplayScreen() {
   const resetRoundTimer = useEventStore((s) => s.resetRoundTimer);
   const adjustTimer = useEventStore((s) => s.adjustTimer);
   const startNextRound = useEventStore((s) => s.startNextRound);
+  const finishEventNow = useEventStore((s) => s.finishEventNow);
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -159,6 +161,10 @@ export function DisplayScreen() {
           menuOpen={menuOpen}
           onNavigate={navigate}
           onSettings={() => setShowSettings(true)}
+          onFinishEvent={() => {
+            setMenuOpen(false);
+            setConfirmFinish(true);
+          }}
           onExport={() => {
             const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
               .toISOString()
@@ -224,6 +230,15 @@ export function DisplayScreen() {
                     }}
                   >
                     Settings
+                  </button>
+                  <button
+                    className="display-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmFinish(true);
+                    }}
+                  >
+                    Finish event → podium
                   </button>
                   <div className="display-menu-divider" />
                   <button
@@ -335,6 +350,18 @@ export function DisplayScreen() {
         onCancel={() => setConfirmNew(false)}
       />
 
+      <ConfirmDialog
+        open={confirmFinish}
+        title="Finish the event now?"
+        message="The podium is revealed with the scores entered so far. A round in progress that hasn't been scored is dropped."
+        confirmLabel="Finish event"
+        onConfirm={() => {
+          setConfirmFinish(false);
+          finishEventNow();
+        }}
+        onCancel={() => setConfirmFinish(false)}
+      />
+
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
@@ -359,6 +386,7 @@ interface DisplayToolbarProps {
   menuOpen: boolean;
   onNavigate: (path: string) => void;
   onSettings: () => void;
+  onFinishEvent: () => void;
   onExport: () => void;
   onNewEvent: () => void;
 }
@@ -428,6 +456,7 @@ function DisplayToolbar({
   menuOpen,
   onNavigate,
   onSettings,
+  onFinishEvent,
   onExport,
   onNewEvent,
 }: DisplayToolbarProps) {
@@ -540,6 +569,9 @@ function DisplayToolbar({
                 }}
               >
                 Settings
+              </button>
+              <button className="display-menu-item" onClick={onFinishEvent}>
+                Finish event → podium
               </button>
               <div className="display-menu-divider" />
               <button className="display-menu-item" onClick={onExport}>

@@ -39,6 +39,15 @@ export function computeStandings(event: EventState): TeamStanding[] {
     accumulateRound(round, standings, event.settings.tieRule);
   }
 
+  // Operator manual corrections — a set pointsOverride replaces the
+  // match-derived total (post-event wrong-score fix).
+  for (const team of event.teams) {
+    if (typeof team.pointsOverride === 'number') {
+      const s = standings.get(team.id);
+      if (s) s.total = team.pointsOverride;
+    }
+  }
+
   return Array.from(standings.values());
 }
 

@@ -31,6 +31,9 @@ export interface Team {
   players: [Player, Player];
   createdAt: number;
   active: boolean;
+  /** Operator-set total that overrides the match-derived points on the
+   *  standings — used to correct a wrong score after the event. */
+  pointsOverride?: number;
 }
 
 export interface Court {
