@@ -13,7 +13,6 @@ import { SetupScreen } from '@/routes/SetupScreen';
 import { QualifierScreen } from '@/routes/QualifierScreen';
 import { SeedingScreen } from '@/routes/SeedingScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
-import { PodiumScreen } from '@/routes/PodiumScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
@@ -33,7 +32,8 @@ function routeForStatus(status: EventStatus): string {
     case 'between-rounds':
       return '/display';
     case 'complete':
-      return '/complete';
+      // The TV-mode complete canvas on /display is the podium.
+      return '/display';
     case 'setup':
     default:
       return '/setup';
@@ -106,7 +106,9 @@ export function App() {
           <Route path="/setup" element={<SetupScreen />} />
           <Route path="/qualifier" element={<QualifierScreen />} />
           <Route path="/seeding" element={<SeedingScreen />} />
-          <Route path="/complete" element={<PodiumScreen />} />
+          {/* Legacy route — the podium now lives on the /display complete
+              canvas. Redirect any stale /complete link there. */}
+          <Route path="/complete" element={<Navigate to="/display" replace />} />
           <Route path="/leaderboard" element={<LeaderboardScreen />} />
           <Route path="*" element={<NotFound />} />
         </Route>
