@@ -2161,7 +2161,14 @@ button {
   z-index: 40;
 }
 .display-toolbar--complete {
-  grid-template-columns: 1fr auto auto auto;
+  /* Flex-wrap (rather than a fixed-column grid) so the button row — now
+     Start / Share / Edit points / Export / Full standings — flows without
+     overflowing on any width. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 .display-toolbar-timer {
   display: flex;
@@ -3649,6 +3656,41 @@ button {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* Edit-points modal (post-event manual correction) */
+.edit-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 52vh;
+  overflow-y: auto;
+  margin: 4px 0;
+  padding-right: 2px;
+}
+.edit-points-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: oklch(from var(--bg-0) calc(l + 0.02) c h);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+.edit-points-name {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-points-input {
+  width: 72px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 16px;
 }
 
 /* Landing card */

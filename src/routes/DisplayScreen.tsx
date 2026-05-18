@@ -17,6 +17,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
+import { EditPointsModal } from '@/components/EditPointsModal';
 import { TeamAvatars } from '@/components/Avatar';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
@@ -58,6 +59,7 @@ export function DisplayScreen() {
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEditPoints, setShowEditPoints] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind
@@ -271,7 +273,6 @@ export function DisplayScreen() {
 
       {showCompleteCanvas && (
         <div className="display-toolbar display-toolbar--complete">
-          <div className="display-toolbar-spacer" />
           <button className="btn primary lg" onClick={() => setConfirmNew(true)}>
             Start new event →
           </button>
@@ -293,6 +294,9 @@ export function DisplayScreen() {
             }}
           >
             {sharing ? 'Generating…' : 'Share results'}
+          </button>
+          <button className="btn" onClick={() => setShowEditPoints(true)}>
+            Edit points
           </button>
           <button
             className="btn"
@@ -363,6 +367,10 @@ export function DisplayScreen() {
       />
 
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+
+      {showEditPoints && (
+        <EditPointsModal onClose={() => setShowEditPoints(false)} />
+      )}
     </div>
   );
 }
