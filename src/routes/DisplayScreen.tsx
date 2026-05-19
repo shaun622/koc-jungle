@@ -328,14 +328,19 @@ export function DisplayScreen() {
         message={
           isFinalRound
             ? 'This is the final scheduled round. Scores will be locked and the podium will be revealed.'
-            : 'Scores will be locked and the next round’s assignments will be computed.'
+            : `Scores lock and the courts rotate — winners up, losers down. Round ${(round?.index ?? 0) + 1} starts straight away.`
         }
-        confirmLabel={isFinalRound ? 'End event' : 'End round'}
+        confirmLabel={
+          isFinalRound ? 'End event' : `Start Round ${(round?.index ?? 0) + 1} →`
+        }
         onConfirm={() => {
           setConfirmEnd(false);
+          // End the round and immediately start the next one — the
+          // rotation-preview screen is skipped. endRound() flips to
+          // 'between-rounds' and computes assignments; startNextRound()
+          // consumes them and begins the next round in the same tick.
           endRound();
-          // No navigation: /display now also renders the rotation preview and
-          // the podium itself, switching by event.status.
+          if (!isFinalRound) startNextRound();
         }}
         onCancel={() => setConfirmEnd(false)}
       />
@@ -535,7 +540,7 @@ function DisplayToolbar({
         onClick={onEndRound}
         disabled={endDisabled || realTiesCount > 0}
       >
-        {isFinalRound ? 'End event → podium' : 'End round → rotation'}
+        {isFinalRound ? 'End event → podium' : 'End round'}
       </button>
 
       <div className="display-toolbar-menu">
