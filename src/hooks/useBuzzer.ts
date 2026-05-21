@@ -20,26 +20,30 @@ export function useBuzzer() {
     return ctx;
   };
 
-  /** End-of-timer buzzer — a short 3-tone sequence (~0.65 s). */
+  /**
+   * End-of-timer buzzer — sustained low square-wave "BZZZZZ" for ~1.5s,
+   * the kind that ends a basketball quarter. Two slightly-detuned
+   * oscillators (220 + 223 Hz) give it the classic electromechanical
+   * beating; fast attack, short decay tail.
+   */
   const buzz = useCallback(() => {
     try {
       const ctx = ensureCtx();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const tones = [880, 660, 880];
-      tones.forEach((freq, i) => {
+      const duration = 1.5;
+      [220, 223].forEach((freq) => {
         const o = ctx.createOscillator();
         const g = ctx.createGain();
         o.type = 'square';
         o.frequency.value = freq;
-        const start = now + i * 0.25;
-        const end = start + 0.2;
-        g.gain.setValueAtTime(0.0001, start);
-        g.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, end);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
+        g.gain.setValueAtTime(0.22, now + duration - 0.1);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
         o.connect(g).connect(ctx.destination);
-        o.start(start);
-        o.stop(end + 0.05);
+        o.start(now);
+        o.stop(now + duration + 0.05);
       });
     } catch {
       /* ignore audio failures */

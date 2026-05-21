@@ -2,9 +2,6 @@ import { useEffect } from 'react';
 import { useTimer } from '@/hooks/useTimer';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { usePresentationMode } from '@/hooks/usePresentationMode';
-import { useVoices } from '@/hooks/useVoices';
-import { speakTimerEnd } from '@/hooks/useAnnouncements';
-import { useEventStore } from '@/store/eventStore';
 import { formatMs } from '@/utils/time';
 import type { TimerState } from '@/types/domain';
 import { Icons } from './Icons';
@@ -32,14 +29,9 @@ export function Timer({
 }: Props) {
   const [presentation] = usePresentationMode();
   const { buzz, tick } = useBuzzer();
-  const voices = useVoices();
-  const voiceUri = useEventStore((s) => s.event?.settings.announcementVoiceURI);
 
   const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
-    if (soundEnabled) {
-      buzz();
-      speakTimerEnd(voices, voiceUri);
-    }
+    if (soundEnabled) buzz();
     try {
       document.title = '🔔 Time! — KOC';
     } catch {

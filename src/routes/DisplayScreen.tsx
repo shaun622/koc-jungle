@@ -22,11 +22,10 @@ import { EditPointsModal } from '@/components/EditPointsModal';
 import { TeamAvatars } from '@/components/Avatar';
 import { RankMovement } from '@/components/RankMovement';
 import { useBuzzer } from '@/hooks/useBuzzer';
-import { useVoices } from '@/hooks/useVoices';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
 import { captureAndShare } from '@/utils/shareCard';
-import { speakTimerEnd, useAnnouncements } from '@/hooks/useAnnouncements';
+import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
@@ -479,15 +478,12 @@ function DisplayToolbar({
 }: DisplayToolbarProps) {
   const round = currentRound(event);
   const { buzz, tick } = useBuzzer();
-  const voices = useVoices();
-  const voiceUri = event.settings.announcementVoiceURI;
   const soundOn = event.settings.soundOnTimerEnd;
   const timer = useTimer(round, () => {
-    // Round timer hit zero. Play the end buzzer + the (placeholder) voice
-    // line. Gated on soundOnTimerEnd so the operator can mute it.
+    // Round timer hit zero — play the sustained finishing buzzer.
+    // Gated on soundOnTimerEnd so the operator can mute it.
     if (!soundOn) return;
     buzz();
-    speakTimerEnd(voices, voiceUri);
   });
   const isRunning = timer.isRunning;
   const hasStarted = timer.hasStarted;

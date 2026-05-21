@@ -104,16 +104,3 @@ export function speakPhrase(
     // Ignore — the operator can always glance at the screen.
   }
 }
-
-/**
- * Placeholder "buzzer" voice line played when any timer hits zero. Uses
- * the operator's announcement voice + a slower rate so it doesn't sound
- * robotic. The phrase is a deliberate joke per operator request — the
- * proper countdown phrasing comes later.
- */
-export function speakTimerEnd(
-  voices: SpeechSynthesisVoice[],
-  preferredUri: string | undefined,
-) {
-  speakPhrase('Kriss is a cunt', voices, preferredUri, { rate: 0.85 });
-}
