@@ -4,6 +4,7 @@ import {
   currentRound,
   leaderboard,
   nightlyStats,
+  rankMovements,
   teamLabelShort,
   teamNameFor,
 } from '@/store/selectors';
@@ -13,6 +14,7 @@ import { formatMs } from '@/utils/time';
 import { decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from './Icons';
 import { TeamAvatars } from './Avatar';
+import { RankMovement } from './RankMovement';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 
@@ -256,6 +258,7 @@ function MobileStandings({
   lb: ReturnType<typeof leaderboard>;
   completed: number;
 }) {
+  const movements = useMemo(() => rankMovements(event), [event]);
   return (
     <div className="mobile-standings">
       <div className="mobile-standings-head">
@@ -272,6 +275,7 @@ function MobileStandings({
             <span className="rank">{idx + 1}</span>
             <span className="name">
               {isKing && <Icons.Crown className="icon" />}
+              <RankMovement movement={movements.get(row.teamId)} />
               {teamNameFor(event, row.teamId)}
             </span>
             <span className="wl">
@@ -429,6 +433,7 @@ function MobileComplete({ event }: { event: EventState }) {
     [event],
   );
   const stats = useMemo(() => nightlyStats(event), [event]);
+  const movements = useMemo(() => rankMovements(event), [event]);
   const completed = event.rounds.filter((r) => r.completedAt).length;
 
   const first = rows[0];
@@ -465,7 +470,10 @@ function MobileComplete({ event }: { event: EventState }) {
             {rest.map((row, idx) => (
               <div key={row.teamId} className="mobile-standings-row">
                 <span className="rank">{idx + 4}</span>
-                <span className="name">{teamNameFor(event, row.teamId)}</span>
+                <span className="name">
+                  <RankMovement movement={movements.get(row.teamId)} />
+                  {teamNameFor(event, row.teamId)}
+                </span>
                 <span className="wl">
                   {row.wins}W-{row.losses}L
                 </span>

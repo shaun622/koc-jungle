@@ -4,6 +4,7 @@ import { useEventStore } from '@/store/eventStore';
 import {
   currentRound,
   leaderboard,
+  rankMovements,
   teamLabelShort,
   teamNameFor,
 } from '@/store/selectors';
@@ -19,6 +20,8 @@ import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
 import { EditPointsModal } from '@/components/EditPointsModal';
 import { TeamAvatars } from '@/components/Avatar';
+import { RankMovement } from '@/components/RankMovement';
+import { useBuzzer } from '@/hooks/useBuzzer';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
 import { captureAndShare } from '@/utils/shareCard';
@@ -474,7 +477,29 @@ function DisplayToolbar({
   onNewEvent,
 }: DisplayToolbarProps) {
   const round = currentRound(event);
-  const timer = useTimer(round);
+  const buzz = useBuzzer();
+  const soundOn = event.settings.soundOnTimerEnd;
+  const timer = useTimer(round, () => {
+    // Round timer hit zero. Play the buzzer + speak a placeholder phrase
+    // (proper 3-2-1 countdown comes later). Gated on soundOnTimerEnd so
+    // the operator can mute it.
+    if (!soundOn) return;
+    try {
+      buzz();
+    } catch {
+      /* ignore audio errors */
+    }
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(
+          new SpeechSynthesisUtterance('Kriss is a cunt'),
+        );
+      }
+    } catch {
+      /* ignore speech failures */
+    }
+  });
   const isRunning = timer.isRunning;
   const hasStarted = timer.hasStarted;
   const isPaused = timer.isPaused;
@@ -623,6 +648,7 @@ function TvLiveCanvas({
 }) {
   const timerView = useTimer(round);
   const lb = useMemo(() => leaderboard(event), [event]);
+  const movements = useMemo(() => rankMovements(event), [event]);
   const top5 = lb.slice(0, 5);
   const rest = lb.slice(5, 14);
 
@@ -707,6 +733,7 @@ function TvLiveCanvas({
                   <span className="rank">{idx + 1}</span>
                   <div className="team-name">
                     {isKing && <Icons.Crown className="tv-lb-crown" />}
+                    <RankMovement movement={movements.get(row.teamId)} />
                     <span>{teamNameFor(event, row.teamId)}</span>
                   </div>
                   <span className="wl">
@@ -721,6 +748,7 @@ function TvLiveCanvas({
               <div key={row.teamId} className="tv-lb-row">
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
+                  <RankMovement movement={movements.get(row.teamId)} />
                   <span>{teamNameFor(event, row.teamId)}</span>
                 </div>
                 <span className="wl">
@@ -1109,6 +1137,7 @@ function TvBetweenCanvas({
   event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>;
 }) {
   const lb = useMemo(() => leaderboard(event), [event]);
+  const rankMoves = useMemo(() => rankMovements(event), [event]);
   const top5 = lb.slice(0, 5);
   const rest = lb.slice(5, 14);
 
@@ -1219,6 +1248,7 @@ function TvBetweenCanvas({
                   <span className="rank">{idx + 1}</span>
                   <div className="team-name">
                     {isKing && <Icons.Crown className="tv-lb-crown" />}
+                    <RankMovement movement={rankMoves.get(row.teamId)} />
                     <span>{teamNameFor(event, row.teamId)}</span>
                   </div>
                   <span className="wl">
@@ -1233,6 +1263,7 @@ function TvBetweenCanvas({
               <div key={row.teamId} className="tv-lb-row">
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
+                  <RankMovement movement={rankMoves.get(row.teamId)} />
                   <span>{teamNameFor(event, row.teamId)}</span>
                 </div>
                 <span className="wl">

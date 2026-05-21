@@ -85,6 +85,43 @@ export function teamMatchHistory(
   return out;
 }
 
+/**
+ * Per-team rank delta between the current standings and the standings
+ * *before* the most recent completed round.
+ *
+ *   'up'   — team's rank improved (smaller index) after the latest round.
+ *   'down' — team's rank dropped.
+ *   'same' — no change.
+ *   not in map — team didn't exist in the previous comparison (rare).
+ *
+ * Returns an empty map when no rounds have completed yet (nothing to
+ * compare against).
+ */
+export function rankMovements(
+  event: EventState | null,
+): Map<string, 'up' | 'down' | 'same'> {
+  const out = new Map<string, 'up' | 'down' | 'same'>();
+  if (!event) return out;
+  const completed = event.rounds.filter((r) => r.completedAt);
+  if (completed.length === 0) return out;
+  const lastCompleted = completed[completed.length - 1];
+  const current = leaderboard(event);
+  const eventPrev: EventState = {
+    ...event,
+    rounds: event.rounds.filter((r) => r !== lastCompleted),
+  };
+  const previous = leaderboard(eventPrev);
+  const previousRanks = new Map(previous.map((r, i) => [r.teamId, i]));
+  current.forEach((row, idx) => {
+    const prevIdx = previousRanks.get(row.teamId);
+    if (prevIdx === undefined) return;
+    if (idx < prevIdx) out.set(row.teamId, 'up');
+    else if (idx > prevIdx) out.set(row.teamId, 'down');
+    else out.set(row.teamId, 'same');
+  });
+  return out;
+}
+
 export interface NightlyStat {
   label: string;
   value: string;

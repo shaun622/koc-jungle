@@ -2629,6 +2629,21 @@ button {
   flex-shrink: 0;
 }
 
+/* Tiny up/down arrow next to a team in the standings — shows the rank
+   change since the most recent completed round. Subtle on purpose. */
+.rank-movement {
+  font-size: 9px;
+  line-height: 1;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.rank-movement--up {
+  color: var(--lime);
+}
+.rank-movement--down {
+  color: var(--red);
+}
+
 .tv-main {
   display: grid;
   grid-template-rows: auto 1fr;

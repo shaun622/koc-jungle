@@ -3,9 +3,11 @@ import type { EventState, Team } from '@/types/domain';
 import {
   leaderboard,
   nightlyStats,
+  rankMovements,
   teamLabelShort,
 } from '@/store/selectors';
 import { Avatar } from './Avatar';
+import { RankMovement } from './RankMovement';
 import { Icons } from './Icons';
 
 /**
@@ -34,6 +36,7 @@ export function TvCompleteView({ event }: { event: EventState }) {
       }),
     [event],
   );
+  const movements = useMemo(() => rankMovements(event), [event]);
 
   const confetti = useMemo(
     () =>
@@ -116,6 +119,7 @@ export function TvCompleteView({ event }: { event: EventState }) {
                 <span className="rank">{idx + 1}</span>
                 <div className="team-name">
                   {idx === 0 && <Icons.Crown className="tv-lb-crown" />}
+                  <RankMovement movement={movements.get(row.teamId)} />
                   <span>{teamLabel(row.teamId)}</span>
                 </div>
                 <span className="wl">

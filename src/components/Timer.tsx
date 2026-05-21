@@ -31,7 +31,19 @@ export function Timer({
   const buzz = useBuzzer();
 
   const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
-    if (soundEnabled) buzz();
+    if (soundEnabled) {
+      buzz();
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(
+            new SpeechSynthesisUtterance('Kriss is a cunt'),
+          );
+        }
+      } catch {
+        // ignore speech failures
+      }
+    }
     try {
       document.title = '🔔 Time! — KOC';
     } catch {

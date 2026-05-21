@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEventStore } from '@/store/eventStore';
 import {
   leaderboard,
+  rankMovements,
   teamLabelShort,
   teamMatchHistory,
   teamNameFor,
 } from '@/store/selectors';
 import { Icons } from '@/components/Icons';
+import { RankMovement } from '@/components/RankMovement';
 
 export function LeaderboardScreen() {
   const event = useEventStore((s) => s.event);
@@ -20,6 +22,7 @@ export function LeaderboardScreen() {
     const team = event.teams.find((t) => t.id === r.teamId);
     return team?.active;
   });
+  const movements = useMemo(() => rankMovements(event), [event]);
   const topId = rows[0]?.teamId;
   const completedRounds = event.rounds.filter((r) => r.completedAt).length;
   // Manual point correction is offered once the event is over.
@@ -73,6 +76,7 @@ export function LeaderboardScreen() {
                 <span className="lbfull-rank">#{idx + 1}</span>
                 <span className="lbfull-name">
                   {isKing && <Icons.Crown className="icon lg" style={{ color: 'var(--gold)' }} />}
+                  <RankMovement movement={movements.get(row.teamId)} />
                   {team ? teamLabelShort(team) : row.teamId}
                   {team && team.name && (
                     <span className="players">
