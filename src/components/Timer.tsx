@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { useTimer } from '@/hooks/useTimer';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { usePresentationMode } from '@/hooks/usePresentationMode';
+import { useVoices } from '@/hooks/useVoices';
+import { speakTimerEnd } from '@/hooks/useAnnouncements';
+import { useEventStore } from '@/store/eventStore';
 import { formatMs } from '@/utils/time';
 import type { TimerState } from '@/types/domain';
 import { Icons } from './Icons';
@@ -28,21 +31,14 @@ export function Timer({
   onAdjust,
 }: Props) {
   const [presentation] = usePresentationMode();
-  const buzz = useBuzzer();
+  const { buzz, tick } = useBuzzer();
+  const voices = useVoices();
+  const voiceUri = useEventStore((s) => s.event?.settings.announcementVoiceURI);
 
   const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
     if (soundEnabled) {
       buzz();
-      try {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(
-            new SpeechSynthesisUtterance('Kriss is a cunt'),
-          );
-        }
-      } catch {
-        // ignore speech failures
-      }
+      speakTimerEnd(voices, voiceUri);
     }
     try {
       document.title = '🔔 Time! — KOC';
@@ -50,6 +46,15 @@ export function Timer({
       // ignore
     }
   });
+
+  // Countdown ticks at T-3, T-2, T-1.
+  const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+  useEffect(() => {
+    if (!soundEnabled || !isRunning) return;
+    if (secondsLeft === 3 || secondsLeft === 2 || secondsLeft === 1) {
+      tick();
+    }
+  }, [secondsLeft, isRunning, soundEnabled, tick]);
 
   useEffect(() => {
     if (remainingMs > 0) {

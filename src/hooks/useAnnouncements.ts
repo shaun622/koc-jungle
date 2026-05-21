@@ -76,18 +76,22 @@ export const SAMPLE_PHRASE =
 /**
  * Speak a phrase with the user's preferred voice (or the auto-picked default).
  * Cancels any in-flight utterance so we never stack up announcements.
+ *
+ * `opts.rate` overrides the default playback rate (0.95). The timer-end
+ * callout uses a slower rate (~0.85) so it sounds less robotic.
  */
 export function speakPhrase(
   phrase: string,
   voices: SpeechSynthesisVoice[],
   preferredUri: string | undefined,
+  opts: { rate?: number; pitch?: number } = {},
 ) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(phrase);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
+    utterance.rate = opts.rate ?? 0.95;
+    utterance.pitch = opts.pitch ?? 1.05;
     utterance.volume = 1;
     const voice = resolveVoice(voices, preferredUri);
     if (voice) {
@@ -99,4 +103,17 @@ export function speakPhrase(
   } catch {
     // Ignore — the operator can always glance at the screen.
   }
+}
+
+/**
+ * Placeholder "buzzer" voice line played when any timer hits zero. Uses
+ * the operator's announcement voice + a slower rate so it doesn't sound
+ * robotic. The phrase is a deliberate joke per operator request — the
+ * proper countdown phrasing comes later.
+ */
+export function speakTimerEnd(
+  voices: SpeechSynthesisVoice[],
+  preferredUri: string | undefined,
+) {
+  speakPhrase('Kriss is a cunt', voices, preferredUri, { rate: 0.85 });
 }

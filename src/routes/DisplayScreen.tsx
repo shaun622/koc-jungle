@@ -22,10 +22,11 @@ import { EditPointsModal } from '@/components/EditPointsModal';
 import { TeamAvatars } from '@/components/Avatar';
 import { RankMovement } from '@/components/RankMovement';
 import { useBuzzer } from '@/hooks/useBuzzer';
+import { useVoices } from '@/hooks/useVoices';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
 import { captureAndShare } from '@/utils/shareCard';
-import { useAnnouncements } from '@/hooks/useAnnouncements';
+import { speakTimerEnd, useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
@@ -477,32 +478,30 @@ function DisplayToolbar({
   onNewEvent,
 }: DisplayToolbarProps) {
   const round = currentRound(event);
-  const buzz = useBuzzer();
+  const { buzz, tick } = useBuzzer();
+  const voices = useVoices();
+  const voiceUri = event.settings.announcementVoiceURI;
   const soundOn = event.settings.soundOnTimerEnd;
   const timer = useTimer(round, () => {
-    // Round timer hit zero. Play the buzzer + speak a placeholder phrase
-    // (proper 3-2-1 countdown comes later). Gated on soundOnTimerEnd so
-    // the operator can mute it.
+    // Round timer hit zero. Play the end buzzer + the (placeholder) voice
+    // line. Gated on soundOnTimerEnd so the operator can mute it.
     if (!soundOn) return;
-    try {
-      buzz();
-    } catch {
-      /* ignore audio errors */
-    }
-    try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(
-          new SpeechSynthesisUtterance('Kriss is a cunt'),
-        );
-      }
-    } catch {
-      /* ignore speech failures */
-    }
+    buzz();
+    speakTimerEnd(voices, voiceUri);
   });
   const isRunning = timer.isRunning;
   const hasStarted = timer.hasStarted;
   const isPaused = timer.isPaused;
+
+  // Countdown ticks at T-3, T-2, T-1. `secondsLeft` only changes once per
+  // second so the effect fires three times in the run-up to zero.
+  const secondsLeft = Math.max(0, Math.ceil(timer.remainingMs / 1000));
+  useEffect(() => {
+    if (!soundOn || !isRunning) return;
+    if (secondsLeft === 3 || secondsLeft === 2 || secondsLeft === 1) {
+      tick();
+    }
+  }, [secondsLeft, isRunning, soundOn, tick]);
 
   const endDisabled = scored === 0;
 
