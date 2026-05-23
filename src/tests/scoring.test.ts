@@ -65,14 +65,95 @@ describe('computeStandings', () => {
     // B lost both = 0
     expect(map.get('b')!.total).toBe(0);
   });
+
+  it('accumulates gamesFor / gamesAgainst from main-round match scores', () => {
+    const event = build();
+    const map = new Map(computeStandings(event).map((s) => [s.teamId, s]));
+    // r1m1: a 10 vs b 5  → a gf+10/ga+5, b gf+5/ga+10
+    // r2m1: a 12 vs d 4  → a gf+12/ga+4, d gf+4/ga+12
+    expect(map.get('a')!.gamesFor).toBe(22);
+    expect(map.get('a')!.gamesAgainst).toBe(9);
+    // r1m1 b loses 5–10, r2m2 b ties 3–3
+    expect(map.get('b')!.gamesFor).toBe(8);
+    expect(map.get('b')!.gamesAgainst).toBe(13);
+    // r1m2 c loses 7–9, r2m2 c wins via tiebreak 3–3
+    expect(map.get('c')!.gamesFor).toBe(10);
+    expect(map.get('c')!.gamesAgainst).toBe(12);
+    // r1m2 d wins 9–7, r2m1 d loses 4–12
+    expect(map.get('d')!.gamesFor).toBe(13);
+    expect(map.get('d')!.gamesAgainst).toBe(19);
+  });
 });
 
 describe('sortStandings', () => {
-  it('orders by total desc then wins desc', () => {
+  it('orders by total desc primarily', () => {
     const event = build();
     const standings = sortStandings(computeStandings(event), (id) =>
       event.teams.find((t) => t.id === id)?.name ?? id,
     );
     expect(standings.map((s) => s.teamId)).toEqual(['a', 'd', 'c', 'b']);
+  });
+
+  it('breaks ties on equal totals by gamesFor', () => {
+    // Two teams both with total = 5; team x has more gamesFor → ranks first.
+    const standings = sortStandings(
+      [
+        {
+          teamId: 'x',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 10,
+          matchesPlayed: 1,
+          gamesFor: 12,
+          gamesAgainst: 4,
+        },
+        {
+          teamId: 'y',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 15, // higher qual but should NOT trump gamesFor
+          matchesPlayed: 1,
+          gamesFor: 8,
+          gamesAgainst: 4,
+        },
+      ],
+      (id) => id,
+    );
+    expect(standings.map((s) => s.teamId)).toEqual(['x', 'y']);
+  });
+
+  it('falls back to qualifierScore when totals + gamesFor are tied', () => {
+    const standings = sortStandings(
+      [
+        {
+          teamId: 'p',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 8,
+          matchesPlayed: 1,
+          gamesFor: 10,
+          gamesAgainst: 5,
+        },
+        {
+          teamId: 'q',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 12,
+          matchesPlayed: 1,
+          gamesFor: 10,
+          gamesAgainst: 5,
+        },
+      ],
+      (id) => id,
+    );
+    expect(standings.map((s) => s.teamId)).toEqual(['q', 'p']);
   });
 });

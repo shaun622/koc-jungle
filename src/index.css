@@ -1464,7 +1464,8 @@ button {
 .lbfull-header,
 .lbfull-row {
   display: grid;
-  grid-template-columns: 60px 1fr 100px 100px 100px 100px;
+  /* RANK | TEAM | WINS | LOSSES | GF | GA | QUAL | POINTS */
+  grid-template-columns: 60px 1fr 80px 80px 80px 80px 80px 100px;
   gap: 16px;
   align-items: center;
   padding: 12px 24px;
@@ -4790,12 +4791,13 @@ button {
     gap: 10px;
     padding: 10px 14px;
   }
+  /* Hide WINS / LOSSES / GF / GA / QUAL — only RANK | TEAM | POINTS show. */
   .lbfull-header > span:nth-child(3),
   .lbfull-header > span:nth-child(4),
   .lbfull-header > span:nth-child(5),
-  .lbfull-row .lbfull-stat:nth-of-type(1),
-  .lbfull-row .lbfull-stat:nth-of-type(2),
-  .lbfull-row .lbfull-stat:nth-of-type(3) {
+  .lbfull-header > span:nth-child(6),
+  .lbfull-header > span:nth-child(7),
+  .lbfull-row .lbfull-stat {
     display: none;
   }
 
@@ -5081,12 +5083,13 @@ button {
     gap: 10px;
     padding: 10px 14px;
   }
+  /* Hide WINS / LOSSES / GF / GA / QUAL — only RANK | TEAM | POINTS show. */
   .lbfull-header > span:nth-child(3),
   .lbfull-header > span:nth-child(4),
   .lbfull-header > span:nth-child(5),
-  .lbfull-row .lbfull-stat:nth-of-type(1),
-  .lbfull-row .lbfull-stat:nth-of-type(2),
-  .lbfull-row .lbfull-stat:nth-of-type(3) {
+  .lbfull-header > span:nth-child(6),
+  .lbfull-header > span:nth-child(7),
+  .lbfull-row .lbfull-stat {
     display: none;
   }
 

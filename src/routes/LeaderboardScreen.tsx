@@ -64,6 +64,8 @@ export function LeaderboardScreen() {
           <span>TEAM</span>
           <span style={{ textAlign: 'right' }}>WINS</span>
           <span style={{ textAlign: 'right' }}>LOSSES</span>
+          <span style={{ textAlign: 'right' }} title="Games scored across all rounds">GF</span>
+          <span style={{ textAlign: 'right' }} title="Games conceded across all rounds">GA</span>
           <span style={{ textAlign: 'right' }}>QUAL</span>
           <span style={{ textAlign: 'right' }}>POINTS</span>
         </div>
@@ -86,6 +88,8 @@ export function LeaderboardScreen() {
                 </span>
                 <span className="lbfull-stat">{row.wins}</span>
                 <span className="lbfull-stat">{row.losses}</span>
+                <span className="lbfull-stat">{row.gamesFor}</span>
+                <span className="lbfull-stat">{row.gamesAgainst}</span>
                 <span className="lbfull-stat">{row.qualifierScore}</span>
                 {editMode ? (
                   <PointsCell teamId={row.teamId} total={row.total} />

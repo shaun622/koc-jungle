@@ -9,6 +9,10 @@ export interface TeamStanding {
   ties: number;
   qualifierScore: number;
   matchesPlayed: number;
+  /** Sum of own scores across all completed main rounds. */
+  gamesFor: number;
+  /** Sum of opponent scores across all completed main rounds. */
+  gamesAgainst: number;
 }
 
 export function computeStandings(event: EventState): TeamStanding[] {
@@ -22,6 +26,8 @@ export function computeStandings(event: EventState): TeamStanding[] {
       ties: 0,
       qualifierScore: 0,
       matchesPlayed: 0,
+      gamesFor: 0,
+      gamesAgainst: 0,
     });
   }
 
@@ -59,8 +65,16 @@ function accumulateRound(
   for (const m of round.matches) {
     const a = standings.get(m.teamAId);
     const b = standings.get(m.teamBId);
-    if (a) a.matchesPlayed += 1;
-    if (b) b.matchesPlayed += 1;
+    if (a) {
+      a.matchesPlayed += 1;
+      a.gamesFor += m.scoreA;
+      a.gamesAgainst += m.scoreB;
+    }
+    if (b) {
+      b.matchesPlayed += 1;
+      b.gamesFor += m.scoreB;
+      b.gamesAgainst += m.scoreA;
+    }
 
     const result = decideWinnerLoser(m, tieRule);
     if (result.isTied) {
@@ -88,9 +102,14 @@ export function sortStandings(
   standings: TeamStanding[],
   teamNameFor: (id: string) => string,
 ): TeamStanding[] {
+  // Tie-break chain (operator decision):
+  //   1. points total (court pointValue per win + manual overrides)
+  //   2. games for — total scores accumulated in the rounds
+  //   3. qualifier score — best of QUALIFIER_TOTAL per match
+  //   4. team name (deterministic fallback)
   return standings.slice().sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total;
-    if (b.wins !== a.wins) return b.wins - a.wins;
+    if (b.gamesFor !== a.gamesFor) return b.gamesFor - a.gamesFor;
     if (b.qualifierScore !== a.qualifierScore) return b.qualifierScore - a.qualifierScore;
     return teamNameFor(a.teamId).localeCompare(teamNameFor(b.teamId));
   });
