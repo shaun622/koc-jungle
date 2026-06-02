@@ -32,6 +32,7 @@ import type {
   TieRule,
 } from '@/types/domain';
 import { koc } from './koc';
+import { roundRobin } from './roundRobin';
 
 export type TournamentFormatId =
   | 'koc'
@@ -81,7 +82,7 @@ export interface TournamentFormat {
 
 const REGISTRY: Record<TournamentFormatId, TournamentFormat | undefined> = {
   koc,
-  'round-robin': undefined,
+  'round-robin': roundRobin,
   americano: undefined,
   mexicano: undefined,
   bracket: undefined,
