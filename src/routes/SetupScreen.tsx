@@ -19,6 +19,8 @@ import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
 import { getFormat } from '@/logic/formats';
+import { useAuth } from '@/hooks/useAuth';
+import { AuthModal } from '@/components/AuthModal';
 import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
@@ -72,6 +74,8 @@ export function SetupScreen() {
   const [sharingRoster, setSharingRoster] = useState(false);
   const rosterShareRef = useRef<HTMLDivElement>(null);
   const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
+  const [authOpen, setAuthOpen] = useState(false);
+  const auth = useAuth();
 
   const refreshTemplates = () => setTemplates(listTemplates());
 
@@ -156,7 +160,17 @@ export function SetupScreen() {
               Load KoC demo (14 teams)
             </button>
             <ImportButton onLoad={loadEvent} onError={setImportError} />
+            {auth.cloudEnabled && (
+              <button
+                className="btn lg"
+                onClick={() => setAuthOpen(true)}
+                title={auth.user ? auth.user.email ?? 'Signed in' : 'Sync across devices'}
+              >
+                {auth.user ? `Signed in: ${(auth.user.email ?? '').split('@')[0]}` : 'Sign in / Sync'}
+              </button>
+            )}
           </div>
+          {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
           {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
 
           {templates.length > 0 && (

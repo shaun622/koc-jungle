@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
+import { useAuth } from '@/hooks/useAuth';
+import { AuthModal } from './AuthModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { EventState, EventStatus } from '@/types/domain';
 
@@ -32,6 +34,8 @@ export function TopNav({ event }: Props) {
 
   const [confirmNew, setConfirmNew] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const auth = useAuth();
 
   const currentRound = event.rounds[event.rounds.length - 1];
   const roundIndex =
@@ -72,6 +76,15 @@ export function TopNav({ event }: Props) {
           ))}
         </div>
         <div className="op-top-right">
+          {auth.cloudEnabled && (
+            <button
+              className={'btn ghost sm ' + (auth.user ? 'sync-on' : '')}
+              onClick={() => setAuthOpen(true)}
+              title={auth.user ? `Synced as ${auth.user.email ?? 'cloud user'}` : 'Sign in to sync'}
+            >
+              {auth.user ? '☁ Synced' : 'Sign in'}
+            </button>
+          )}
           <button
             className="btn ghost sm"
             onClick={() => setConfirmNew(true)}
@@ -120,6 +133,8 @@ export function TopNav({ event }: Props) {
           onCancel={() => setImportError(null)}
         />
       )}
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </>
   );
 }

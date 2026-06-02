@@ -3797,6 +3797,40 @@ button {
   line-height: 1.45;
 }
 
+/* Auth modal (Stage 2.4 — cloud sync) */
+.auth-modal {
+  max-width: 24rem;
+}
+.auth-apple {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+.auth-apple:hover {
+  background: #1a1a1a;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 8px 0;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line-soft);
+}
+.btn.sync-on {
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--line));
+}
+
 /* Format badge next to the Event heading (Stage 2.1) */
 .setup-format-badge {
   display: inline-block;

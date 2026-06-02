@@ -19,6 +19,8 @@ import { TopNav } from '@/components/TopNav';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
+import { useAuth } from '@/hooks/useAuth';
+import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
 import type { EventStatus } from '@/types/domain';
 
 function routeForStatus(status: EventStatus): string {
@@ -74,6 +76,19 @@ function OperatorShell() {
   );
 }
 
+function CloudSyncGate() {
+  const auth = useAuth();
+  useEffect(() => {
+    if (!auth.cloudEnabled || auth.loading) return;
+    if (auth.user) {
+      const stop = startCloudSync(auth.user.id);
+      return stop;
+    }
+    stopCloudSync();
+  }, [auth.cloudEnabled, auth.loading, auth.user]);
+  return null;
+}
+
 export function App() {
   const hydrated = useEventStore((s) => s.hydrated);
   useStorageBroadcast();
@@ -98,6 +113,7 @@ export function App() {
     <HashRouter>
       <ErrorBanner />
       <UpdatePrompt />
+      <CloudSyncGate />
       <RouteGate />
       <Routes>
         <Route path="/display" element={<DisplayScreen />} />
