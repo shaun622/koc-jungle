@@ -30,3 +30,17 @@ pnpm-debug.log*
 # Design handoff reference (vendor materials, not part of the app)
 Padel KoC/
 Padel KoC.zip
+
+# Capacitor — native projects regenerated locally by `npx cap add`
+# Keep them out of git so iOS / Android changes are owned per-developer.
+# Run `npx cap add ios` / `npx cap add android` once on the dev's machine.
+ios/Pods/
+ios/build/
+ios/DerivedData/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# Capacitor generates these inside the native projects on every sync.
+ios/App/App/public/
+android/app/src/main/assets/public/
