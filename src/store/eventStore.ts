@@ -609,6 +609,15 @@ export const useEventStore = create<EventStore>()(
             1,
             ...groups.map((g) => bergerRoundCount(g.length)),
           );
+        } else if (format.id === 'americano') {
+          // Freeze the team list so the Berger sequence is stable across
+          // all rounds even if teams get deactivated mid-event.
+          formatConfig = {
+            ...formatConfig,
+            teams: activeTeams.map((t) => t.id),
+          };
+          // Keep the operator's chosen settings.roundsTotal — that's the
+          // distinguishing feature of Americano vs. Round Robin.
         }
 
         try {

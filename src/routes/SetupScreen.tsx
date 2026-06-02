@@ -120,6 +120,16 @@ export function SetupScreen() {
                 top of the table wins.
               </span>
             </button>
+            <button
+              className="landing-mode"
+              onClick={() => createEvent('Americano', 'americano')}
+            >
+              <span className="landing-mode-name">Americano</span>
+              <span className="landing-mode-blurb">
+                Every team in one pool. Schedule rotates so you face as many
+                different opponents as fit in the rounds you set.
+              </span>
+            </button>
           </div>
           <div className="actions">
             <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
@@ -171,12 +181,13 @@ export function SetupScreen() {
   const canStartQualifier =
     format.usesQualifier && event.status === 'setup' && teams.length === expectedTeams;
   const teamDelta = expectedTeams - teams.length;
-  // Round Robin needs at least 2 teams; one match per group per round, packed
-  // onto the highest-position courts.
+  // Non-qualifier formats (Round Robin, Americano, ...) need at least 2
+  // active teams. Court-capacity overflow is caught at start time and
+  // surfaced via lastError.
   const rrGroupSize = Number(
     (event.formatConfig as { groupSize?: number } | undefined)?.groupSize ?? 4,
   );
-  const canStartRoundRobin =
+  const canStartNonQualifier =
     !format.usesQualifier && event.status === 'setup' && teams.length >= 2;
 
   return (
@@ -192,7 +203,7 @@ export function SetupScreen() {
         <div className="setup-sub">
           Event name, venue, round duration, and tie rules.
         </div>
-        {!format.usesQualifier && (
+        {format.id === 'round-robin' && (
           <div className="setup-form" style={{ marginBottom: 12 }}>
             <div className="setup-field">
               <label>Group size</label>
@@ -406,7 +417,7 @@ export function SetupScreen() {
           ) : (
             <button
               className="btn full primary lg"
-              disabled={!canStartRoundRobin}
+              disabled={!canStartNonQualifier}
               onClick={() => {
                 startTournament();
                 // If startTournament set a lastError it stayed on setup,
@@ -419,7 +430,7 @@ export function SetupScreen() {
                 }, 0);
               }}
             >
-              {canStartRoundRobin
+              {canStartNonQualifier
                 ? 'Start tournament →'
                 : `Need ${Math.max(0, 2 - teams.length)} more team(s)`}
             </button>

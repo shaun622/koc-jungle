@@ -14,8 +14,8 @@
  *   matches are packed onto the highest-position courts first.
  */
 
-import type { Court, PendingAssignment } from '@/types/domain';
 import type { TournamentFormat } from './index';
+import { packMatchesOntoCourts } from './util';
 
 export interface RoundRobinConfig {
   groupSize: number;
@@ -31,12 +31,12 @@ export const roundRobin: TournamentFormat = {
   usesQualifier: false,
 
   buildFirstRound({ courts, config }) {
-    return assignMatchesToCourts(buildRound(1, asConfig(config)), courts);
+    return packMatchesOntoCourts(buildRound(1, asConfig(config)), courts, 'Round Robin');
   },
 
   computeNextRound({ rounds, courts, config }) {
     const nextRoundIdx = rounds.length + 1;
-    return assignMatchesToCourts(buildRound(nextRoundIdx, asConfig(config)), courts);
+    return packMatchesOntoCourts(buildRound(nextRoundIdx, asConfig(config)), courts, 'Round Robin');
   },
 
   isComplete({ rounds, config }) {
@@ -104,22 +104,6 @@ function buildRound(
   return all;
 }
 
-function assignMatchesToCourts(
-  matches: Array<[string, string]>,
-  courts: Court[],
-): PendingAssignment[] {
-  const sortedCourts = courts.slice().sort((a, b) => b.position - a.position);
-  if (matches.length > sortedCourts.length) {
-    throw new Error(
-      `Round Robin: ${matches.length} matches scheduled but only ${sortedCourts.length} courts available.`,
-    );
-  }
-  return matches.map(([teamAId, teamBId], i) => ({
-    courtId: sortedCourts[i].id,
-    teamAId,
-    teamBId,
-  }));
-}
 
 function asConfig(config: unknown): RoundRobinConfig {
   // Defensive: callers should pass a well-formed config but legacy or
