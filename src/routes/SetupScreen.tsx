@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
 import { buildDemoEvent } from '@/logic/demoData';
+import { getFormat } from '@/logic/formats';
 import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
@@ -60,6 +61,9 @@ export function SetupScreen() {
   const updateSettings = useEventStore((s) => s.updateSettings);
   const startQualifier = useEventStore((s) => s.startQualifier);
   const skipQualifierToSeeding = useEventStore((s) => s.skipQualifierToSeeding);
+  const setFormatConfig = useEventStore((s) => s.setFormatConfig);
+  const startTournament = useEventStore((s) => s.startTournament);
+  const lastError = useEventStore((s) => s.lastError);
   const navigate = useNavigate();
 
   const [confirmReset, setConfirmReset] = useState(false);
@@ -94,12 +98,32 @@ export function SetupScreen() {
             Run your padel KOC night: timer, courts, score entry, auto-rotation, leaderboard.
             Set up an event and start the qualifier in under two minutes.
           </p>
-          <div className="actions">
-            <button className="btn primary lg" onClick={() => createEvent('KOC Night')}>
-              Create new event
+          <div className="landing-modes">
+            <div className="landing-modes-title">Pick a format</div>
+            <button
+              className="landing-mode"
+              onClick={() => createEvent('KOC Night', 'koc')}
+            >
+              <span className="landing-mode-name">King of the Court</span>
+              <span className="landing-mode-blurb">
+                Qualifier seeds teams onto courts. Winners climb, losers drop,
+                King defends Centre Court.
+              </span>
             </button>
+            <button
+              className="landing-mode"
+              onClick={() => createEvent('Round Robin', 'round-robin')}
+            >
+              <span className="landing-mode-name">Round Robin</span>
+              <span className="landing-mode-blurb">
+                Each team plays every other team in their group. Fair, complete,
+                top of the table wins.
+              </span>
+            </button>
+          </div>
+          <div className="actions">
             <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
-              Load demo (14 teams)
+              Load KoC demo (14 teams)
             </button>
             <ImportButton onLoad={loadEvent} onError={setImportError} />
           </div>
@@ -142,15 +166,25 @@ export function SetupScreen() {
   }
 
   const teams = activeTeams(event);
+  const format = getFormat(event.format);
   const expectedTeams = event.courts.length * 2;
-  const canStartQualifier = event.status === 'setup' && teams.length === expectedTeams;
+  const canStartQualifier =
+    format.usesQualifier && event.status === 'setup' && teams.length === expectedTeams;
   const teamDelta = expectedTeams - teams.length;
+  // Round Robin needs at least 2 teams; one match per group per round, packed
+  // onto the highest-position courts.
+  const rrGroupSize = Number(
+    (event.formatConfig as { groupSize?: number } | undefined)?.groupSize ?? 4,
+  );
+  const canStartRoundRobin =
+    !format.usesQualifier && event.status === 'setup' && teams.length >= 2;
 
   return (
     <div className="setup">
       <div className="setup-col">
         <h2 className="setup-h">
           Event
+          <span className="setup-format-badge">{format.name}</span>
           <button className="btn sm" onClick={() => setConfirmReset(true)}>
             Reset
           </button>
@@ -158,6 +192,24 @@ export function SetupScreen() {
         <div className="setup-sub">
           Event name, venue, round duration, and tie rules.
         </div>
+        {!format.usesQualifier && (
+          <div className="setup-form" style={{ marginBottom: 12 }}>
+            <div className="setup-field">
+              <label>Group size</label>
+              <NumberField
+                value={rrGroupSize}
+                min={2}
+                max={12}
+                disabled={event.status !== 'setup'}
+                onCommit={(n) => setFormatConfig({ groupSize: n })}
+              />
+            </div>
+            <div className="setup-sub" style={{ marginTop: -4 }}>
+              Teams split into groups of this size; everyone plays everyone in
+              their group. The trailing group may be smaller.
+            </div>
+          </div>
+        )}
         <div className="setup-form">
           <div className="setup-field">
             <label>Event name</label>
@@ -323,32 +375,61 @@ export function SetupScreen() {
           >
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
-          <button
-            className="btn lg"
-            disabled={!canStartQualifier}
-            onClick={() => {
-              skipQualifierToSeeding();
-              setTimeout(() => navigate('/seeding'), 0);
-            }}
-            title="Skip qualifier, seed teams manually"
-          >
-            Skip qualifier
-          </button>
-          <button
-            className="btn full primary lg"
-            disabled={!canStartQualifier}
-            onClick={() => {
-              startQualifier();
-              setTimeout(() => navigate('/qualifier'), 0);
-            }}
-          >
-            {canStartQualifier
-              ? 'Start qualifier round →'
-              : teamDelta > 0
-                ? `Need ${teamDelta} more team(s)`
-                : `Remove ${-teamDelta} team(s)`}
-          </button>
+          {format.usesQualifier ? (
+            <>
+              <button
+                className="btn lg"
+                disabled={!canStartQualifier}
+                onClick={() => {
+                  skipQualifierToSeeding();
+                  setTimeout(() => navigate('/seeding'), 0);
+                }}
+                title="Skip qualifier, seed teams manually"
+              >
+                Skip qualifier
+              </button>
+              <button
+                className="btn full primary lg"
+                disabled={!canStartQualifier}
+                onClick={() => {
+                  startQualifier();
+                  setTimeout(() => navigate('/qualifier'), 0);
+                }}
+              >
+                {canStartQualifier
+                  ? 'Start qualifier round →'
+                  : teamDelta > 0
+                    ? `Need ${teamDelta} more team(s)`
+                    : `Remove ${-teamDelta} team(s)`}
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn full primary lg"
+              disabled={!canStartRoundRobin}
+              onClick={() => {
+                startTournament();
+                // If startTournament set a lastError it stayed on setup,
+                // so check status before navigating.
+                setTimeout(() => {
+                  const next = useEventStore.getState().event;
+                  if (next?.status === 'round-in-progress') {
+                    navigate('/display');
+                  }
+                }, 0);
+              }}
+            >
+              {canStartRoundRobin
+                ? 'Start tournament →'
+                : `Need ${Math.max(0, 2 - teams.length)} more team(s)`}
+            </button>
+          )}
         </div>
+        {lastError && event.status === 'setup' && (
+          <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 8 }}>
+            {lastError}
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
@@ -566,12 +647,14 @@ function NumberField({
   max,
   onCommit,
   className = 'setup-input',
+  disabled,
 }: {
   value: number;
   min: number;
   max: number;
   onCommit: (n: number) => void;
   className?: string;
+  disabled?: boolean;
 }) {
   const [text, setText] = useState(String(value));
   // Re-sync if external value changes while the field isn't focused
@@ -595,6 +678,7 @@ function NumberField({
       max={max}
       className={className}
       value={text}
+      disabled={disabled}
       onChange={(e) => setText(e.target.value)}
       onFocus={(e) => e.currentTarget.select()}
       onBlur={commit}

@@ -10,8 +10,10 @@ import type {
   PlayerAvatar,
   Team,
   EventSettings,
+  TournamentFormatId,
 } from '@/types/domain';
 import { DEFAULT_SETTINGS } from '@/types/domain';
+import { bergerRoundCount, splitTeamsIntoGroups } from '@/logic/formats/roundRobin';
 import { newId } from '@/logic/idGen';
 import { newSeed } from '@/logic/shuffle';
 import { buildQualifierRound, rankTeamsByQualifier, assignRankedTeamsToCourts } from '@/logic/seeding';
@@ -31,9 +33,12 @@ interface Actions {
   setHydrated: (v: boolean) => void;
   clearError: () => void;
 
-  createEvent: (name: string) => void;
+  createEvent: (name: string, format?: TournamentFormatId) => void;
   resetEvent: () => void;
   loadEvent: (event: EventState) => void;
+  setFormatConfig: (patch: Record<string, unknown>) => void;
+  /** Start a non-qualifier format (e.g. Round Robin) directly into round 1. */
+  startTournament: () => void;
 
   addTeam: (input: { name?: string; player1: string; player2: string }) => void;
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
@@ -134,7 +139,8 @@ export const useEventStore = create<EventStore>()(
       setHydrated: (v) => set({ hydrated: v }),
       clearError: () => set({ lastError: null }),
 
-      createEvent: (name) => {
+      createEvent: (name, format) => {
+        const fmt: TournamentFormatId = format ?? 'koc';
         const event: EventState = {
           id: newId(),
           name: name || 'KOC Night',
@@ -145,8 +151,23 @@ export const useEventStore = create<EventStore>()(
           courts: defaultCourts(),
           teams: [],
           rounds: [],
+          format: fmt,
+          // Round Robin gets a default group size so the setup picker
+          // has somewhere to land. Other formats start with no config.
+          formatConfig: fmt === 'round-robin' ? { groupSize: 4 } : {},
         };
         set({ event, lastError: null });
+      },
+
+      setFormatConfig: (patch) => {
+        const event = get().event;
+        if (!event) return;
+        set({
+          event: {
+            ...event,
+            formatConfig: { ...(event.formatConfig ?? {}), ...patch },
+          },
+        });
       },
 
       resetEvent: () => set({ event: null, lastError: null }),
@@ -537,6 +558,93 @@ export const useEventStore = create<EventStore>()(
           },
           lastError: null,
         });
+      },
+
+      /**
+       * Start a non-qualifier-style format (Round Robin today; Americano /
+       * Mexicano / Bracket later) directly from setup into round 1. Skips
+       * the qualifier + seeding flow entirely.
+       */
+      startTournament: () => {
+        const event = get().event;
+        if (!event) return;
+        if (event.status !== 'setup') {
+          set({ lastError: 'Tournament already started.' });
+          return;
+        }
+        const format = getFormat(event.format);
+        if (format.usesQualifier) {
+          set({
+            lastError:
+              'This format needs a qualifier — use Start qualifier round.',
+          });
+          return;
+        }
+        const activeTeams = event.teams.filter((t) => t.active);
+        if (activeTeams.length < 2) {
+          set({ lastError: 'Need at least 2 teams to start.' });
+          return;
+        }
+
+        // Round-Robin-specific: split teams into groups using the operator's
+        // chosen groupSize, then derive the total rounds from the largest
+        // group. Settings.roundsTotal gets overwritten so the DisplayScreen's
+        // "Round X of Y" reads correctly without further format-awareness.
+        let formatConfig = event.formatConfig ?? {};
+        let roundsTotal = event.settings.roundsTotal;
+        if (format.id === 'round-robin') {
+          const groupSize = Number(
+            (formatConfig as { groupSize?: number }).groupSize ?? 4,
+          );
+          if (groupSize < 2) {
+            set({ lastError: 'Group size must be at least 2.' });
+            return;
+          }
+          const groups = splitTeamsIntoGroups(
+            activeTeams.map((t) => t.id),
+            groupSize,
+          );
+          formatConfig = { groupSize, groups };
+          roundsTotal = Math.max(
+            1,
+            ...groups.map((g) => bergerRoundCount(g.length)),
+          );
+        }
+
+        try {
+          const assignments = format.buildFirstRound({
+            rankedTeamIds: activeTeams.map((t) => t.id),
+            teams: activeTeams,
+            courts: event.courts,
+            config: formatConfig,
+          });
+          const matches = buildMatchesFromAssignments(assignments, event.courts);
+          const round: MainRound = {
+            id: newId(),
+            index: 1,
+            matches,
+            durationMs: event.settings.defaultRoundDurationMs,
+            totalPausedMs: 0,
+          };
+          set({
+            event: {
+              ...event,
+              formatConfig,
+              settings: { ...event.settings, roundsTotal },
+              rounds: [round],
+              pendingAssignments: undefined,
+              status: 'round-in-progress',
+            },
+            lastError: null,
+          });
+        } catch (err) {
+          set({
+            lastError:
+              err instanceof Error
+                ? err.message
+                : 'Could not start tournament.',
+          });
+        }
       },
 
       startRoundTimer: () => {

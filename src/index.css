@@ -3748,6 +3748,71 @@ button {
   justify-content: center;
 }
 
+/* Format picker on the landing card (Stage 2.1) */
+.landing-modes {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  text-align: left;
+}
+.landing-modes-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  text-align: center;
+  margin-bottom: 2px;
+}
+.landing-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+  text-align: left;
+}
+.landing-mode:hover {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 8%, var(--bg-2));
+}
+.landing-mode-name {
+  font-family: var(--font-headline);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+.landing-mode-blurb {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+/* Format badge next to the Event heading (Stage 2.1) */
+.setup-format-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 /* Templates list on the landing card (Phase 5.1) */
 .landing-templates {
   width: 100%;
