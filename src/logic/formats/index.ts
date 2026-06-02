@@ -33,6 +33,7 @@ import type {
 } from '@/types/domain';
 import { americano } from './americano';
 import { koc } from './koc';
+import { mexicano } from './mexicano';
 import { roundRobin } from './roundRobin';
 
 export type TournamentFormatId =
@@ -85,7 +86,7 @@ const REGISTRY: Record<TournamentFormatId, TournamentFormat | undefined> = {
   koc,
   'round-robin': roundRobin,
   americano,
-  mexicano: undefined,
+  mexicano,
   bracket: undefined,
 };
 

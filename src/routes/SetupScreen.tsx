@@ -130,6 +130,16 @@ export function SetupScreen() {
                 different opponents as fit in the rounds you set.
               </span>
             </button>
+            <button
+              className="landing-mode"
+              onClick={() => createEvent('Mexicano', 'mexicano')}
+            >
+              <span className="landing-mode-name">Mexicano</span>
+              <span className="landing-mode-blurb">
+                Re-pairs every round from the live standings: top vs second,
+                third vs fourth, and so on. Tight games every round.
+              </span>
+            </button>
           </div>
           <div className="actions">
             <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
