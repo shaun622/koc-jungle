@@ -14,6 +14,11 @@ import type {
 } from '@/types/domain';
 import { DEFAULT_SETTINGS } from '@/types/domain';
 import { bergerRoundCount, splitTeamsIntoGroups } from '@/logic/formats/roundRobin';
+import {
+  bracketRoundCount,
+  buildBracketSlots,
+  nextPowerOf2,
+} from '@/logic/formats/bracket';
 import { newId } from '@/logic/idGen';
 import { newSeed } from '@/logic/shuffle';
 import { buildQualifierRound, rankTeamsByQualifier, assignRankedTeamsToCourts } from '@/logic/seeding';
@@ -619,6 +624,18 @@ export const useEventStore = create<EventStore>()(
           };
           // Keep the operator's chosen settings.roundsTotal — that's the
           // distinguishing feature of Americano/Mexicano vs. Round Robin.
+        } else if (format.id === 'bracket') {
+          // Bracket: size is the next power of 2 ≥ team count. Top seeds
+          // get byes if the count isn't a power of 2. Total rounds is
+          // log2(bracketSize); we overwrite settings.roundsTotal so the
+          // round counter reads "Round X of Y" correctly.
+          const bracketSize = nextPowerOf2(activeTeams.length);
+          const slots = buildBracketSlots(
+            activeTeams.map((t) => t.id),
+            bracketSize,
+          );
+          formatConfig = { bracketSize, slots };
+          roundsTotal = Math.max(1, bracketRoundCount(bracketSize));
         }
 
         try {

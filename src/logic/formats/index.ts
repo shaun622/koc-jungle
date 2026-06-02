@@ -32,6 +32,7 @@ import type {
   TieRule,
 } from '@/types/domain';
 import { americano } from './americano';
+import { bracket } from './bracket';
 import { koc } from './koc';
 import { mexicano } from './mexicano';
 import { roundRobin } from './roundRobin';
@@ -87,7 +88,7 @@ const REGISTRY: Record<TournamentFormatId, TournamentFormat | undefined> = {
   'round-robin': roundRobin,
   americano,
   mexicano,
-  bracket: undefined,
+  bracket,
 };
 
 /**

@@ -140,6 +140,16 @@ export function SetupScreen() {
                 third vs fourth, and so on. Tight games every round.
               </span>
             </button>
+            <button
+              className="landing-mode"
+              onClick={() => createEvent('Bracket', 'bracket')}
+            >
+              <span className="landing-mode-name">Bracket</span>
+              <span className="landing-mode-blurb">
+                Single elimination. Win to advance, lose to go home. Top seeds
+                bye if the field isn't a power of 2.
+              </span>
+            </button>
           </div>
           <div className="actions">
             <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
