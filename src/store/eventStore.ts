@@ -15,8 +15,9 @@ import { DEFAULT_SETTINGS } from '@/types/domain';
 import { newId } from '@/logic/idGen';
 import { newSeed } from '@/logic/shuffle';
 import { buildQualifierRound, rankTeamsByQualifier, assignRankedTeamsToCourts } from '@/logic/seeding';
-import { computeNextRoundAssignments, unresolvedTies } from '@/logic/rotation';
+import { unresolvedTies } from '@/logic/rotation';
 import { validateAssignments, validateQualifierScore } from '@/logic/validation';
+import { getFormat } from '@/logic/formats';
 
 export const STORAGE_KEY = 'koc-event-v1';
 
@@ -684,8 +685,13 @@ export const useEventStore = create<EventStore>()(
         }
         const completed: MainRound = { ...round, completedAt: Date.now() };
         const rounds = event.rounds.slice(0, -1).concat(completed);
-        const isFinalRound = round.index >= event.settings.roundsTotal;
-        if (isFinalRound) {
+        // Route through the format so other modes (Round Robin, Bracket,
+        // …) can plug in. KoC behaviour is identical to the pre-refactor
+        // codepath; getFormat falls back to KoC for legacy events with
+        // no `format` field.
+        const format = getFormat(event.format);
+        const formatConfig = event.formatConfig ?? {};
+        if (format.isComplete({ rounds, settings: event.settings, config: formatConfig })) {
           set({
             event: {
               ...event,
@@ -697,7 +703,13 @@ export const useEventStore = create<EventStore>()(
           });
           return;
         }
-        const assignments = computeNextRoundAssignments(round, event.courts, event.settings.tieRule);
+        const assignments = format.computeNextRound({
+          rounds,
+          teams: event.teams,
+          courts: event.courts,
+          tieRule: event.settings.tieRule,
+          config: formatConfig,
+        });
         set({
           event: {
             ...event,

@@ -93,6 +93,19 @@ export interface PendingAssignment {
   teamBId: ID;
 }
 
+/**
+ * Tournament format identifier. Free-form string so we don't pull the
+ * formats registry into the domain layer (avoids an import cycle); the
+ * lookup in `src/logic/formats/index.ts` falls back to KoC for any
+ * unknown / missing value, so legacy localStorage events keep working.
+ */
+export type TournamentFormatId =
+  | 'koc'
+  | 'round-robin'
+  | 'americano'
+  | 'mexicano'
+  | 'bracket';
+
 export interface EventState {
   id: ID;
   name: string;
@@ -105,6 +118,13 @@ export interface EventState {
   qualifier?: QualifierRound;
   rounds: MainRound[];
   pendingAssignments?: PendingAssignment[];
+  /**
+   * Tournament format. Optional + defaults to 'koc' so events created
+   * before Stage 2.1 keep working without a migration.
+   */
+  format?: TournamentFormatId;
+  /** Format-specific config (e.g. Round Robin group size). */
+  formatConfig?: Record<string, unknown>;
 }
 
 export const DEFAULT_SETTINGS: EventSettings = {
