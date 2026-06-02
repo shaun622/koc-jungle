@@ -21,6 +21,9 @@ import { buildDemoEvent } from '@/logic/demoData';
 import { getFormat } from '@/logic/formats';
 import { useAuth } from '@/hooks/useAuth';
 import { AuthModal } from '@/components/AuthModal';
+import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
+import { PaywallModal } from '@/components/PaywallModal';
+import type { TournamentFormatId } from '@/types/domain';
 import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
@@ -75,7 +78,22 @@ export function SetupScreen() {
   const rosterShareRef = useRef<HTMLDivElement>(null);
   const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
   const [authOpen, setAuthOpen] = useState(false);
+  const [paywall, setPaywall] = useState<{ reason: string } | null>(null);
   const auth = useAuth();
+  const pro = useEntitlementsStore((s) => s.pro);
+  const tickTrial = useEntitlementsStore((s) => s.tickTrial);
+  useEffect(() => {
+    tickTrial();
+  }, [tickTrial]);
+
+  // Wrapper around createEvent that paywalls non-free formats.
+  function tryCreate(name: string, format: TournamentFormatId, displayName: string) {
+    if (isFormatLocked(format)) {
+      setPaywall({ reason: `${displayName} needs Pro.` });
+      return;
+    }
+    createEvent(name, format);
+  }
 
   const refreshTemplates = () => setTemplates(listTemplates());
 
@@ -103,10 +121,12 @@ export function SetupScreen() {
             Set up an event and start the qualifier in under two minutes.
           </p>
           <div className="landing-modes">
-            <div className="landing-modes-title">Pick a format</div>
+            <div className="landing-modes-title">
+              Pick a format {pro && <span className="pro-chip">PRO</span>}
+            </div>
             <button
               className="landing-mode"
-              onClick={() => createEvent('KOC Night', 'koc')}
+              onClick={() => tryCreate('KOC Night', 'koc', 'King of the Court')}
             >
               <span className="landing-mode-name">King of the Court</span>
               <span className="landing-mode-blurb">
@@ -114,56 +134,52 @@ export function SetupScreen() {
                 King defends Centre Court.
               </span>
             </button>
-            <button
-              className="landing-mode"
-              onClick={() => createEvent('Round Robin', 'round-robin')}
-            >
-              <span className="landing-mode-name">Round Robin</span>
-              <span className="landing-mode-blurb">
-                Each team plays every other team in their group. Fair, complete,
-                top of the table wins.
-              </span>
-            </button>
-            <button
-              className="landing-mode"
-              onClick={() => createEvent('Americano', 'americano')}
-            >
-              <span className="landing-mode-name">Americano</span>
-              <span className="landing-mode-blurb">
-                Every team in one pool. Schedule rotates so you face as many
-                different opponents as fit in the rounds you set.
-              </span>
-            </button>
-            <button
-              className="landing-mode"
-              onClick={() => createEvent('Mexicano', 'mexicano')}
-            >
-              <span className="landing-mode-name">Mexicano</span>
-              <span className="landing-mode-blurb">
-                Re-pairs every round from the live standings: top vs second,
-                third vs fourth, and so on. Tight games every round.
-              </span>
-            </button>
-            <button
-              className="landing-mode"
-              onClick={() => createEvent('Bracket', 'bracket')}
-            >
-              <span className="landing-mode-name">Bracket</span>
-              <span className="landing-mode-blurb">
-                Single elimination. Win to advance, lose to go home. Top seeds
-                bye if the field isn't a power of 2.
-              </span>
-            </button>
+            <ModeButton
+              name="Round Robin"
+              blurb="Each team plays every other team in their group. Fair, complete, top of the table wins."
+              locked={isFormatLocked('round-robin')}
+              onPick={() => tryCreate('Round Robin', 'round-robin', 'Round Robin')}
+            />
+            <ModeButton
+              name="Americano"
+              blurb="Every team in one pool. Schedule rotates so you face as many different opponents as fit in the rounds you set."
+              locked={isFormatLocked('americano')}
+              onPick={() => tryCreate('Americano', 'americano', 'Americano')}
+            />
+            <ModeButton
+              name="Mexicano"
+              blurb="Re-pairs every round from the live standings: top vs second, third vs fourth, and so on. Tight games every round."
+              locked={isFormatLocked('mexicano')}
+              onPick={() => tryCreate('Mexicano', 'mexicano', 'Mexicano')}
+            />
+            <ModeButton
+              name="Bracket"
+              blurb="Single elimination. Win to advance, lose to go home. Top seeds bye if the field isn't a power of 2."
+              locked={isFormatLocked('bracket')}
+              onPick={() => tryCreate('Bracket', 'bracket', 'Bracket')}
+            />
           </div>
           <div className="actions">
             <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
               Load KoC demo (14 teams)
             </button>
             <ImportButton onLoad={loadEvent} onError={setImportError} />
+            <button
+              className={'btn lg ' + (pro ? '' : 'paywall-cta')}
+              onClick={() => setPaywall({ reason: pro ? '' : 'Unlock the full toolkit.' })}
+            >
+              {pro ? '👑 Manage Pro' : '👑 Get Pro'}
+            </button>
             {auth.cloudEnabled && (
               <button
                 className="btn lg"
-                onClick={() => setAuthOpen(true)}
+                onClick={() => {
+                  if (!auth.user && isFeatureLocked()) {
+                    setPaywall({ reason: 'Cloud sync needs Pro.' });
+                    return;
+                  }
+                  setAuthOpen(true);
+                }}
                 title={auth.user ? auth.user.email ?? 'Signed in' : 'Sync across devices'}
               >
                 {auth.user ? `Signed in: ${(auth.user.email ?? '').split('@')[0]}` : 'Sign in / Sync'}
@@ -171,6 +187,9 @@ export function SetupScreen() {
             )}
           </div>
           {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+          {paywall && (
+            <PaywallModal reason={paywall.reason} onClose={() => setPaywall(null)} />
+          )}
           {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
 
           {templates.length > 0 && (
@@ -509,6 +528,28 @@ export function SetupScreen() {
         onCancel={() => setConfirmRemoveTeamId(null)}
       />
     </div>
+  );
+}
+
+function ModeButton({
+  name,
+  blurb,
+  locked,
+  onPick,
+}: {
+  name: string;
+  blurb: string;
+  locked: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button className={'landing-mode ' + (locked ? 'locked' : '')} onClick={onPick}>
+      <span className="landing-mode-name">
+        {name}
+        {locked && <span className="lock-chip">🔒 Pro</span>}
+      </span>
+      <span className="landing-mode-blurb">{blurb}</span>
+    </button>
   );
 }
 
