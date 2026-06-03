@@ -148,7 +148,7 @@ export const useEventStore = create<EventStore>()(
         const fmt: TournamentFormatId = format ?? 'koc';
         const event: EventState = {
           id: newId(),
-          name: name || 'KOC Night',
+          name: name || 'Padel Night',
           venue: '',
           createdAt: Date.now(),
           status: 'setup',

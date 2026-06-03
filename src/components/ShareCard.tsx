@@ -53,8 +53,8 @@ function RosterCard({ event }: { event: EventState }) {
     <>
       <div className="share-card-header">
         <div className="share-card-brand">
-          <div className="brand-mark lg">K</div>
-          <span>KING OF THE COURT</span>
+          <div className="brand-mark lg">KoC</div>
+          <span>PADEL KOC</span>
         </div>
         <div className="share-card-meta">
           <div className="share-card-event-name">{event.name}</div>

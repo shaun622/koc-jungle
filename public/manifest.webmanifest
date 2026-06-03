@@ -1,7 +1,7 @@
 {
-  "name": "King of the Court",
-  "short_name": "KOC",
-  "description": "King of the Court padel tournament operator",
+  "name": "Padel KoC: Tournament Maker",
+  "short_name": "Padel KoC",
+  "description": "Run padel tournaments — King of the Court, Americano, Mexicano, Round Robin, Bracket. Timer, scoring, cloud sync.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

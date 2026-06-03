@@ -125,11 +125,12 @@ export function SetupScreen() {
           {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
         </button>
         <div className="landing-card">
-          <div className="brand-mark lg">K</div>
-          <h1>King of the Court</h1>
+          <div className="brand-mark lg">KoC</div>
+          <h1>Padel KoC</h1>
+          <div className="landing-tagline">Tournament Maker</div>
           <p>
-            Run your padel KOC night: timer, courts, score entry, auto-rotation, leaderboard.
-            Set up an event and start the qualifier in under two minutes.
+            Run your padel night: timer, courts, score entry, auto-rotation, leaderboard.
+            Five formats — King of the Court, Round Robin, Americano, Mexicano, Bracket.
           </p>
           <div className="landing-modes">
             <div className="landing-modes-title">
@@ -137,7 +138,7 @@ export function SetupScreen() {
             </div>
             <button
               className="landing-mode"
-              onClick={() => tryCreate('KOC Night', 'koc', 'King of the Court')}
+              onClick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
             >
               <span className="landing-mode-name">King of the Court</span>
               <span className="landing-mode-blurb">
@@ -441,7 +442,7 @@ export function SetupScreen() {
                 await captureAndShare(rosterShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
                   shareTitle: `${event.name} — lineup`,
-                  shareText: 'Tonight\'s King of the Court lineup 🎾',
+                  shareText: 'Tonight\'s Padel KoC lineup 🎾',
                 });
               } finally {
                 setSharingRoster(false);

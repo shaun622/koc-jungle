@@ -63,8 +63,8 @@ export function TopNav({ event }: Props) {
       <div className="op-top">
         <div className="op-top-left">
           <div className="chrome-brand">
-            <div className="brand-mark">K</div>
-            <span>KING OF THE COURT</span>
+            <div className="brand-mark">KoC</div>
+            <span>PADEL KOC</span>
           </div>
           <span className="op-top-meta">
             {event.name}
