@@ -32,6 +32,8 @@
   --red: oklch(67% 0.22 25);
   --amber: oklch(82% 0.16 75);
   --blue: oklch(72% 0.13 230);
+  /* Semantic alias used by paywall / lock chips / sync indicator etc. */
+  --accent: var(--lime);
 
   --shadow-glow:
     0 0 0 1px oklch(40% 0.05 245), 0 24px 64px -16px oklch(0% 0 0 / 0.6);
@@ -66,6 +68,7 @@
   --red: oklch(55% 0.22 25);
   --amber: oklch(68% 0.18 75);
   --blue: oklch(50% 0.16 230);
+  --accent: var(--lime);
 
   --shadow-glow:
     0 0 0 1px oklch(82% 0.02 245), 0 24px 64px -16px oklch(40% 0.02 245 / 0.18);
@@ -3782,6 +3785,42 @@ button {
   font-size: 28px;
   margin: 0;
   letter-spacing: 0.02em;
+}
+.landing-legal {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.landing-legal a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.landing-legal a:hover {
+  color: var(--text-0);
+  text-decoration: underline;
+}
+.settings-legal {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+}
+.settings-legal a {
+  color: var(--accent, var(--lime));
+  text-decoration: none;
+}
+.settings-legal a:hover {
+  text-decoration: underline;
 }
 .landing-tagline {
   font-family: var(--font-mono);

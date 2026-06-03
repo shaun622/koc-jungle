@@ -235,6 +235,13 @@ export function SetupScreen() {
               </div>
             </div>
           )}
+          <div className="landing-legal">
+            <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
+            <span aria-hidden>·</span>
+            <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
+            <span aria-hidden>·</span>
+            <a href="mailto:info@padelkoc.com">Contact</a>
+          </div>
         </div>
       </div>
     );

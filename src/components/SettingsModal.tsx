@@ -124,6 +124,21 @@ export function SettingsModal({ open, onClose }: Props) {
               ))}
             </div>
           </div>
+          <div className="settings-row settings-row--stack">
+            <div className="settings-row-label">
+              <span>About</span>
+              <span className="settings-row-hint">
+                Padel KoC: Tournament Maker · Elite Group Enterprises PTY LTD
+              </span>
+            </div>
+            <div className="settings-legal">
+              <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
+              <span aria-hidden>·</span>
+              <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
+              <span aria-hidden>·</span>
+              <a href="mailto:info@padelkoc.com">Contact</a>
+            </div>
+          </div>
         </div>
 
         <div className="modal-actions">
