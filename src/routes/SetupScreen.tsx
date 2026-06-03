@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AuthModal } from '@/components/AuthModal';
 import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
 import { PaywallModal } from '@/components/PaywallModal';
+import { useThemeStore } from '@/store/theme';
 import type { TournamentFormatId } from '@/types/domain';
 import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
@@ -82,6 +83,8 @@ export function SetupScreen() {
   const auth = useAuth();
   const pro = useEntitlementsStore((s) => s.pro);
   const tickTrial = useEntitlementsStore((s) => s.tickTrial);
+  const themePref = useThemeStore((s) => s.preference);
+  const cycleTheme = useThemeStore((s) => s.cyclePreference);
   useEffect(() => {
     tickTrial();
   }, [tickTrial]);
@@ -113,6 +116,14 @@ export function SetupScreen() {
   if (!event) {
     return (
       <div className="landing">
+        <button
+          className="btn ghost sm theme-toggle landing-theme-toggle"
+          onClick={cycleTheme}
+          title={`Theme: ${themePref}`}
+          aria-label="Toggle theme"
+        >
+          {themePref === 'dark' ? <Icons.Moon className="icon" /> : themePref === 'light' ? <Icons.Sun className="icon" /> : <Icons.Auto className="icon" />}
+        </button>
         <div className="landing-card">
           <div className="brand-mark lg">K</div>
           <h1>King of the Court</h1>

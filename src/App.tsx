@@ -20,6 +20,7 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { useAuth } from '@/hooks/useAuth';
+import { useApplyTheme } from '@/hooks/useApplyTheme';
 import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
 import type { EventStatus } from '@/types/domain';
 
@@ -92,6 +93,7 @@ function CloudSyncGate() {
 export function App() {
   const hydrated = useEventStore((s) => s.hydrated);
   useStorageBroadcast();
+  useApplyTheme();
 
   useEffect(() => {
     if (useEventStore.persist) {

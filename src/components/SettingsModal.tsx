@@ -5,6 +5,7 @@ import { formatMs, parseDurationInput } from '@/utils/time';
 import { useVoices } from '@/hooks/useVoices';
 import { SAMPLE_PHRASE, speakPhrase } from '@/hooks/useAnnouncements';
 import { formatVoiceLabel, isEnglishVoice, pickDefaultVoice } from '@/utils/voices';
+import { useThemeStore, type ThemePreference } from '@/store/theme';
 import { Icons } from './Icons';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
@@ -22,6 +23,8 @@ interface Props {
 export function SettingsModal({ open, onClose }: Props) {
   const event = useEventStore((s) => s.event);
   const updateSettings = useEventStore((s) => s.updateSettings);
+  const themePref = useThemeStore((st) => st.preference);
+  const setThemePref = useThemeStore((st) => st.setPreference);
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +103,27 @@ export function SettingsModal({ open, onClose }: Props) {
               onCommit={(uri) => updateSettings({ announcementVoiceURI: uri })}
             />
           )}
+          <div className="settings-row settings-row--stack">
+            <div className="settings-row-label">
+              <span>Theme</span>
+              <span className="settings-row-hint">
+                Auto follows your device's system preference.
+              </span>
+            </div>
+            <div className="theme-picker">
+              {(['auto', 'light', 'dark'] as ThemePreference[]).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  className={'theme-picker-btn ' + (themePref === opt ? 'on' : '')}
+                  onClick={() => setThemePref(opt)}
+                >
+                  {opt === 'auto' ? <Icons.Auto className="icon" /> : opt === 'light' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
+                  <span>{opt}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="modal-actions">

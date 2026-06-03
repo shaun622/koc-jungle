@@ -25,7 +25,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <div className="modal auth-modal">
-          <h2>Sync across devices</h2>
+          <h2 className="auth-title">SYNC ACROSS DEVICES</h2>
           <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
             Cloud sync isn't configured for this build. Your events are
             saved locally on this device and stay safe — but they won't
@@ -48,7 +48,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <div className="modal auth-modal">
-          <h2>Signed in</h2>
+          <h2 className="auth-title">SIGNED IN</h2>
           <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
             {auth.user.email ?? auth.user.id}
           </p>
@@ -110,12 +110,12 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="modal auth-modal">
-        <h2>
-          {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+        <h2 className="auth-title">
+          {mode === 'sign-in' ? 'SIGN IN' : 'CREATE ACCOUNT'}
         </h2>
-        <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 12 }}>
-          Sync your events across every device you sign in on. Local-only is
-          still the default and stays working without an account.
+        <p className="auth-sub">
+          Sync events across every device you sign in on. Local-only stays the
+          default — no account needed.
         </p>
 
         <button
@@ -123,18 +123,18 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           onClick={clickApple}
           disabled={busy}
         >
-           Continue with Apple
+          Continue with Apple
         </button>
 
         <div className="auth-divider">
-          <span>or</span>
+          <span>or with email</span>
         </div>
 
-        <div className="setup-form">
+        <div className="auth-form">
           <div className="setup-field">
             <label>Email</label>
             <input
-              className="setup-input"
+              className="setup-input auth-input"
               type="email"
               autoComplete="email"
               value={email}
@@ -145,7 +145,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           <div className="setup-field">
             <label>Password</label>
             <input
-              className="setup-input"
+              className="setup-input auth-input"
               type="password"
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
               value={password}

@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
 import { useAuth } from '@/hooks/useAuth';
+import { useThemeStore } from '@/store/theme';
+import { Icons } from './Icons';
 import { AuthModal } from './AuthModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { EventState, EventStatus } from '@/types/domain';
@@ -36,6 +38,14 @@ export function TopNav({ event }: Props) {
   const [importError, setImportError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const auth = useAuth();
+  const themePref = useThemeStore((s) => s.preference);
+  const cycleTheme = useThemeStore((s) => s.cyclePreference);
+  const ThemeIcon =
+    themePref === 'dark' ? Icons.Moon : themePref === 'light' ? Icons.Sun : Icons.Auto;
+  const themeTitle =
+    themePref === 'dark' ? 'Dark theme — tap for light' :
+    themePref === 'light' ? 'Light theme — tap for auto' :
+    'Auto theme (system) — tap for dark';
 
   const currentRound = event.rounds[event.rounds.length - 1];
   const roundIndex =
@@ -76,6 +86,14 @@ export function TopNav({ event }: Props) {
           ))}
         </div>
         <div className="op-top-right">
+          <button
+            className="btn ghost sm theme-toggle"
+            onClick={cycleTheme}
+            title={themeTitle}
+            aria-label={themeTitle}
+          >
+            <ThemeIcon className="icon" />
+          </button>
           {auth.cloudEnabled && (
             <button
               className={'btn ghost sm ' + (auth.user ? 'sync-on' : '')}

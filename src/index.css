@@ -7,16 +7,24 @@
    Design tokens (oklch) + screen-level styles ported from design handoff.
    ========================================================================== */
 
-:root {
+:root,
+:root[data-theme='dark'] {
+  /* Backgrounds (darkest -> lightest) */
   --bg-0: oklch(15% 0.025 245);
   --bg-1: oklch(19% 0.03 245);
   --bg-2: oklch(24% 0.035 245);
   --bg-3: oklch(30% 0.04 245);
+
+  /* Borders / dividers */
   --line: oklch(36% 0.04 245);
   --line-soft: oklch(28% 0.035 245);
+
+  /* Text (brightest -> dimmest) */
   --text-0: oklch(98% 0.005 245);
   --text-1: oklch(78% 0.015 245);
   --text-2: oklch(58% 0.02 245);
+
+  /* Accents — same identity but tuned per theme for contrast */
   --lime: oklch(88% 0.20 130);
   --lime-deep: oklch(72% 0.20 130);
   --gold: oklch(82% 0.16 85);
@@ -24,12 +32,45 @@
   --red: oklch(67% 0.22 25);
   --amber: oklch(82% 0.16 75);
   --blue: oklch(72% 0.13 230);
-  --shadow-glow: 0 0 0 1px oklch(40% 0.05 245), 0 24px 64px -16px oklch(0% 0 0 / 0.6);
+
+  --shadow-glow:
+    0 0 0 1px oklch(40% 0.05 245), 0 24px 64px -16px oklch(0% 0 0 / 0.6);
+
   --font-display: 'Archivo Black', 'Arial Black', sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   color-scheme: dark;
+}
+
+/* Light theme — full inverse palette. Backgrounds + text swap; accents
+ * darken slightly so they keep WCAG-passable contrast on the lighter
+ * surface. Gold + lime keep their identity (brand colours). */
+:root[data-theme='light'] {
+  --bg-0: oklch(99% 0.005 245);
+  --bg-1: oklch(97% 0.008 245);
+  --bg-2: oklch(94% 0.012 245);
+  --bg-3: oklch(89% 0.018 245);
+
+  --line: oklch(80% 0.022 245);
+  --line-soft: oklch(88% 0.015 245);
+
+  --text-0: oklch(18% 0.025 245);
+  --text-1: oklch(38% 0.025 245);
+  --text-2: oklch(58% 0.025 245);
+
+  --lime: oklch(62% 0.22 130);
+  --lime-deep: oklch(50% 0.22 130);
+  --gold: oklch(70% 0.18 80);
+  --gold-deep: oklch(55% 0.20 75);
+  --red: oklch(55% 0.22 25);
+  --amber: oklch(68% 0.18 75);
+  --blue: oklch(50% 0.16 230);
+
+  --shadow-glow:
+    0 0 0 1px oklch(82% 0.02 245), 0 24px 64px -16px oklch(40% 0.02 245 / 0.18);
+
+  color-scheme: light;
 }
 
 html,
@@ -3797,6 +3838,93 @@ button {
   line-height: 1.45;
 }
 
+/* Theme toggle (sun/moon/auto) */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+}
+.theme-toggle .icon {
+  width: 16px;
+  height: 16px;
+}
+.landing-theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+}
+
+.theme-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.theme-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 12px;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.theme-picker-btn:hover {
+  background: var(--bg-3);
+}
+.theme-picker-btn.on {
+  background: color-mix(in oklch, var(--lime) 18%, var(--bg-2));
+  border-color: var(--lime);
+  color: var(--text-0);
+}
+.theme-picker-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Light-theme overrides for surfaces that hard-coded dark colours.
+ * The bulk of the UI uses CSS variables and flips automatically; these
+ * blocks patch the places that don't.  */
+:root[data-theme='light'] .auth-apple {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+:root[data-theme='light'] .auth-apple:hover {
+  background: #1a1a1a;
+}
+:root[data-theme='light'] .btn {
+  background: var(--bg-1);
+  color: var(--text-0);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .btn:hover {
+  background: var(--bg-2);
+}
+:root[data-theme='light'] .btn.primary {
+  background: var(--lime);
+  color: oklch(15% 0.02 130);
+  border-color: var(--lime-deep);
+}
+:root[data-theme='light'] .btn.primary:hover {
+  background: var(--lime-deep);
+  color: oklch(98% 0.02 130);
+}
+:root[data-theme='light'] .brand-mark {
+  color: oklch(15% 0.02 130);
+}
+
 /* Paywall (Stage 2.5 — subscription) */
 .paywall-modal {
   max-width: 28rem;
@@ -3904,7 +4032,32 @@ button {
 
 /* Auth modal (Stage 2.4 — cloud sync) */
 .auth-modal {
-  max-width: 24rem;
+  max-width: 22rem;
+  gap: 10px;
+}
+.auth-title {
+  font-family: var(--font-headline, var(--font-display));
+  letter-spacing: 0.06em;
+  font-size: 16px;
+  margin: 0;
+}
+.auth-sub {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+.auth-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+  padding: 10px 12px;
 }
 .auth-apple {
   background: #000;
@@ -3918,12 +4071,12 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 10px;
   font-family: var(--font-mono);
   color: var(--text-2);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  margin: 8px 0;
+  margin: 4px 0;
 }
 .auth-divider::before,
 .auth-divider::after {
