@@ -119,10 +119,10 @@ export function SetupScreen() {
         <button
           className="btn ghost sm theme-toggle landing-theme-toggle"
           onClick={cycleTheme}
-          title={`Theme: ${themePref}`}
+          title={themePref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           aria-label="Toggle theme"
         >
-          {themePref === 'dark' ? <Icons.Moon className="icon" /> : themePref === 'light' ? <Icons.Sun className="icon" /> : <Icons.Auto className="icon" />}
+          {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
         </button>
         <div className="landing-card">
           <div className="brand-mark lg">K</div>

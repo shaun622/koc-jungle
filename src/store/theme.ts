@@ -1,10 +1,10 @@
 /**
  * Theme preference store.
  *
- *  - 'auto'  — follow the OS via prefers-color-scheme (re-resolves on change).
- *  - 'light' / 'dark' — force the theme regardless of OS.
+ * Two options only: 'dark' (default) and 'light'. No auto / system-follow
+ * mode — keeps the brand consistent regardless of OS setting.
  *
- * The resolved theme ends up as a `data-theme` attribute on
+ * The preference ends up as a `data-theme` attribute on
  * `document.documentElement`; every CSS variable cascades from
  * `:root[data-theme='...']`. See `useApplyTheme` for the apply side.
  */
@@ -12,49 +12,38 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-export type ThemePreference = 'auto' | 'light' | 'dark';
-export type ResolvedTheme = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark';
 
 interface ThemeState {
   preference: ThemePreference;
   setPreference: (p: ThemePreference) => void;
-  /** Cycle through dark -> light -> auto (used by the TopNav quick toggle). */
+  /** Flip between dark and light (TopNav quick toggle). */
   cyclePreference: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      // Default to dark — that's the established brand and what every
-      // existing PWA user has been seeing.
+      // Default to dark — established brand for existing users.
       preference: 'dark',
       setPreference: (preference) => set({ preference }),
       cyclePreference: () => {
-        const order: ThemePreference[] = ['dark', 'light', 'auto'];
-        const i = order.indexOf(get().preference);
-        set({ preference: order[(i + 1) % order.length] });
+        set({ preference: get().preference === 'dark' ? 'light' : 'dark' });
       },
     }),
     {
       name: 'koc-theme-v1',
       storage: createJSONStorage(() => localStorage),
+      // Migrate users whose persisted value is the now-removed 'auto'.
+      migrate: (persisted: unknown): ThemeState => {
+        const state = (persisted as Partial<ThemeState>) ?? {};
+        const pref = state.preference;
+        return {
+          ...(state as ThemeState),
+          preference: pref === 'light' ? 'light' : 'dark',
+        };
+      },
+      version: 2,
     },
   ),
 );
-
-/**
- * Resolve the user's preference into the actual theme to apply.
- * Reads the OS preference via matchMedia when in 'auto' mode.
- */
-export function resolveTheme(preference: ThemePreference): ResolvedTheme {
-  if (preference === 'auto') {
-    if (
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    ) {
-      return 'dark';
-    }
-    return 'light';
-  }
-  return preference;
-}

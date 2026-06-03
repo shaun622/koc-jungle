@@ -40,12 +40,9 @@ export function TopNav({ event }: Props) {
   const auth = useAuth();
   const themePref = useThemeStore((s) => s.preference);
   const cycleTheme = useThemeStore((s) => s.cyclePreference);
-  const ThemeIcon =
-    themePref === 'dark' ? Icons.Moon : themePref === 'light' ? Icons.Sun : Icons.Auto;
+  const ThemeIcon = themePref === 'dark' ? Icons.Sun : Icons.Moon;
   const themeTitle =
-    themePref === 'dark' ? 'Dark theme — tap for light' :
-    themePref === 'light' ? 'Light theme — tap for auto' :
-    'Auto theme (system) — tap for dark';
+    themePref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
 
   const currentRound = event.rounds[event.rounds.length - 1];
   const roundIndex =

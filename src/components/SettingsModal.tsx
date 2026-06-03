@@ -107,18 +107,18 @@ export function SettingsModal({ open, onClose }: Props) {
             <div className="settings-row-label">
               <span>Theme</span>
               <span className="settings-row-hint">
-                Auto follows your device's system preference.
+                Switch between dark and light.
               </span>
             </div>
             <div className="theme-picker">
-              {(['auto', 'light', 'dark'] as ThemePreference[]).map((opt) => (
+              {(['dark', 'light'] as ThemePreference[]).map((opt) => (
                 <button
                   key={opt}
                   type="button"
                   className={'theme-picker-btn ' + (themePref === opt ? 'on' : '')}
                   onClick={() => setThemePref(opt)}
                 >
-                  {opt === 'auto' ? <Icons.Auto className="icon" /> : opt === 'light' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
+                  {opt === 'light' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
                   <span>{opt}</span>
                 </button>
               ))}
