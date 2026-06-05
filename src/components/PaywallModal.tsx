@@ -8,6 +8,8 @@
  */
 
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
+import { isIAPAvailable, purchasePlan, restorePurchases } from '@/lib/iap';
+import { useState } from 'react';
 
 // Prices are shown in the user's local currency at the App Store /
 // Play Store purchase step (Apple + Google auto-convert from the base
@@ -36,6 +38,26 @@ export function PaywallModal({
 }) {
   const { pro, trialUsed, startTrial } = useEntitlementsStore();
   const trialDays = trialDaysRemaining();
+  const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+
+  async function handlePurchase(plan: 'monthly' | 'annual') {
+    setBusy(plan);
+    setPurchaseError(null);
+    const result = await purchasePlan(plan);
+    setBusy(null);
+    if (result.ok) onClose();
+    else if (result.error) setPurchaseError(result.error);
+  }
+
+  async function handleRestore() {
+    setBusy('restore');
+    setPurchaseError(null);
+    const result = await restorePurchases();
+    setBusy(null);
+    if (result.ok) onClose();
+    else if (result.error) setPurchaseError(result.error);
+  }
 
   if (pro) {
     return (
@@ -97,25 +119,42 @@ export function PaywallModal({
         <div className="paywall-plans">
           <button
             className="btn full lg paywall-plan"
-            onClick={() => beginPurchase('monthly')}
+            disabled={busy !== null}
+            onClick={() => handlePurchase('monthly')}
           >
             <span className="paywall-plan-name">Monthly</span>
-            <span className="paywall-plan-price">{PROD_MONTHLY_PRICE}</span>
+            <span className="paywall-plan-price">
+              {busy === 'monthly' ? 'Connecting…' : PROD_MONTHLY_PRICE}
+            </span>
           </button>
           <button
             className="btn full lg paywall-plan"
-            onClick={() => beginPurchase('annual')}
+            disabled={busy !== null}
+            onClick={() => handlePurchase('annual')}
           >
             <span className="paywall-plan-name">
               Annual <span className="paywall-plan-badge">save 33%</span>
             </span>
-            <span className="paywall-plan-price">{PROD_ANNUAL_PRICE}</span>
+            <span className="paywall-plan-price">
+              {busy === 'annual' ? 'Connecting…' : PROD_ANNUAL_PRICE}
+            </span>
           </button>
         </div>
 
+        {purchaseError && (
+          <div style={{ color: 'var(--red)', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+            {purchaseError}
+          </div>
+        )}
+        {!isIAPAvailable() && (
+          <div style={{ color: 'var(--text-2)', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+            Subscribe in the iOS or Android app to unlock.
+          </div>
+        )}
+
         <div className="modal-actions">
-          <button className="btn" onClick={() => onRestore()}>
-            Restore purchases
+          <button className="btn" disabled={busy !== null} onClick={handleRestore}>
+            {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
           </button>
           <button className="btn" onClick={onClose}>
             Not now
@@ -131,17 +170,3 @@ export function PaywallModal({
   );
 }
 
-/** Hook for the platform layer (RevenueCat) to take over the purchase flow. */
-function beginPurchase(plan: 'monthly' | 'annual'): void {
-  // Stage 2.5 ships the UI; the native binding (Stage 2.2) wires the
-  // actual RevenueCat purchase call. On the PWA today this is a no-op.
-  console.info('[paywall] purchase requested:', plan);
-  alert(
-    `Subscribe to the ${plan} plan: this will open the App Store / Play Store purchase flow in the native build.`,
-  );
-}
-
-function onRestore(): void {
-  console.info('[paywall] restore purchases requested');
-  alert('Restore Purchases: will call the platform billing layer in the native build.');
-}

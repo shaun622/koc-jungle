@@ -1,0 +1,162 @@
+/**
+ * In-App Purchase wrapper for native Capacitor builds.
+ *
+ * Two layers:
+ *  - Web (PWA, including koc-jungle.pages.dev): IAP is a no-op. The
+ *    7-day trial runs in local state; subscribe buttons show a "Open
+ *    the iOS or Android app to subscribe" message.
+ *  - Native (Capacitor iOS / Android): wires through RevenueCat which
+ *    talks to StoreKit / Google Billing.
+ *
+ * Architecture detail: the platform-specific imports are dynamic so
+ * the @revenuecat/purchases-capacitor module doesn't get bundled into
+ * the web build. On native, Capacitor's runtime injects the plugin.
+ *
+ * Env vars (Cloudflare Pages + Xcode .xcconfig):
+ *   VITE_REVENUECAT_PUBLIC_API_KEY_IOS     — RevenueCat dashboard, iOS app, public SDK key
+ *   VITE_REVENUECAT_PUBLIC_API_KEY_ANDROID — Same for Android
+ */
+
+import { Capacitor } from '@capacitor/core';
+import { useEntitlementsStore } from '@/store/entitlements';
+
+/** Whether the runtime can perform real in-app purchases. */
+export function isIAPAvailable(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+/** Identifier matching App Store Connect + Google Play product setup. */
+export const PRODUCT_IDS = {
+  monthly: 'padel_tm_pro_monthly',
+  annual: 'padel_tm_pro_annual',
+} as const;
+
+interface RevenueCatOffering {
+  monthly?: RevenueCatPackage;
+  annual?: RevenueCatPackage;
+}
+interface RevenueCatPackage {
+  identifier: string;
+  packageType: string;
+  product: {
+    identifier: string;
+    priceString: string;
+    title: string;
+  };
+}
+
+let cachedOfferings: RevenueCatOffering | null = null;
+
+/**
+ * Configure the SDK + subscribe to customer-info updates so the
+ * entitlements store reflects whatever RevenueCat says is active.
+ * Call once at app boot from main.tsx (after the Zustand store is
+ * ready). No-op on web.
+ */
+export async function initIAP(): Promise<void> {
+  if (!isIAPAvailable()) return;
+  const { Purchases, LOG_LEVEL } = await import('@revenuecat/purchases-capacitor');
+  const platform = Capacitor.getPlatform();
+  const apiKey =
+    platform === 'ios'
+      ? import.meta.env.VITE_REVENUECAT_PUBLIC_API_KEY_IOS
+      : import.meta.env.VITE_REVENUECAT_PUBLIC_API_KEY_ANDROID;
+  if (!apiKey) {
+    console.warn('[iap] no RevenueCat API key configured for', platform);
+    return;
+  }
+  await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
+  await Purchases.configure({ apiKey });
+
+  // First read of customer info to seed the entitlements store.
+  const { customerInfo } = await Purchases.getCustomerInfo();
+  applyCustomerInfo(customerInfo);
+
+  // Live updates whenever RevenueCat hears about a purchase / renewal /
+  // cancellation. Note the listener is async-fire-and-forget.
+  Purchases.addCustomerInfoUpdateListener((customerInfo) => {
+    applyCustomerInfo(customerInfo);
+  });
+}
+
+/** Pre-fetch the offerings so the paywall shows live prices. Safe to call multiple times. */
+export async function fetchOfferings(): Promise<RevenueCatOffering | null> {
+  if (!isIAPAvailable()) return null;
+  if (cachedOfferings) return cachedOfferings;
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  const result = await Purchases.getOfferings();
+  const current = result.current;
+  if (!current) return null;
+  cachedOfferings = {
+    monthly: current.monthly ?? undefined,
+    annual: current.annual ?? undefined,
+  };
+  return cachedOfferings;
+}
+
+/** Purchase a plan. Returns true on success (entitlement applied via listener). */
+export async function purchasePlan(plan: 'monthly' | 'annual'): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  if (!isIAPAvailable()) {
+    return {
+      ok: false,
+      error: 'Open the Padel Tournament Maker app on iOS or Android to subscribe.',
+    };
+  }
+  const offerings = await fetchOfferings();
+  const pkg = plan === 'monthly' ? offerings?.monthly : offerings?.annual;
+  if (!pkg) {
+    return { ok: false, error: `Couldn't find the ${plan} subscription. Try again in a moment.` };
+  }
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  try {
+    // RevenueCat's PurchasesPackage type has additional internal fields
+    // we don't care about; cast through unknown to satisfy TS.
+    const { customerInfo } = await Purchases.purchasePackage({
+      aPackage: pkg as unknown as Parameters<typeof Purchases.purchasePackage>[0]['aPackage'],
+    });
+    applyCustomerInfo(customerInfo);
+    return { ok: true };
+  } catch (err) {
+    const e = err as { code?: string; message?: string; userCancelled?: boolean };
+    if (e.userCancelled || e.code === '1') {
+      return { ok: false, error: 'Purchase cancelled.' };
+    }
+    return { ok: false, error: e.message ?? 'Purchase failed.' };
+  }
+}
+
+/** Restore previous purchases for the signed-in Apple / Google account. */
+export async function restorePurchases(): Promise<{ ok: boolean; error?: string }> {
+  if (!isIAPAvailable()) {
+    return { ok: false, error: 'Restore Purchases works inside the iOS / Android app.' };
+  }
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  try {
+    const { customerInfo } = await Purchases.restorePurchases();
+    applyCustomerInfo(customerInfo);
+    return { ok: true };
+  } catch (err) {
+    const e = err as { message?: string };
+    return { ok: false, error: e.message ?? 'Restore failed.' };
+  }
+}
+
+/**
+ * Translate RevenueCat's customerInfo into the entitlements store.
+ * The 'pro' entitlement must match the identifier you created in the
+ * RevenueCat dashboard.
+ */
+function applyCustomerInfo(customerInfo: unknown): void {
+  const info = customerInfo as {
+    entitlements?: {
+      active?: Record<string, { isActive: boolean; expirationDate?: string | null }>;
+    };
+  };
+  const proActive = !!info.entitlements?.active?.['pro']?.isActive;
+  const exp = info.entitlements?.active?.['pro']?.expirationDate;
+  const trialEndsAt = exp ? new Date(exp).getTime() : undefined;
+  useEntitlementsStore.getState().setPro(proActive, trialEndsAt);
+}
