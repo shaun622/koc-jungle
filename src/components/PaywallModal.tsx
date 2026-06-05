@@ -9,8 +9,13 @@
 
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
 
-const PROD_MONTHLY_PRICE = '£4.99 / month';
-const PROD_ANNUAL_PRICE = '£39.99 / year';
+// Prices are shown in the user's local currency at the App Store /
+// Play Store purchase step (Apple + Google auto-convert from the base
+// tier we set in the store dashboards). The PWA can't read those tiers
+// directly, so it shows a deferred label until the native build wires
+// in live RevenueCat pricing.
+const PROD_MONTHLY_PRICE = 'See your local price';
+const PROD_ANNUAL_PRICE = 'See your local price';
 
 const FEATURES = [
   'Round Robin — group stage round-robins',
