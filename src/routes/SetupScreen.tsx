@@ -142,7 +142,7 @@ export function SetupScreen() {
             <ModeButton
               name="King of the Court"
               blurb="Qualifier seeds teams onto courts. Winners climb, losers drop, King defends Centre Court."
-              locked={false}
+              locked={isFormatLocked('koc')}
               onPick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
               onShowRules={() => setRulesForFormat('koc')}
             />

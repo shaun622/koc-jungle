@@ -18,12 +18,12 @@ const PROD_MONTHLY_PRICE = 'See your local price';
 const PROD_ANNUAL_PRICE = 'See your local price';
 
 const FEATURES = [
-  'Round Robin — group stage round-robins',
+  'King of the Court — winners climb, losers drop',
   'Americano — rotating partners pool',
   'Mexicano — dynamic re-pairing each round',
+  'Round Robin — group stage all-play-all',
   'Single-elimination bracket — knockout tournaments',
   'Cloud sync — events across all your devices',
-  'No ads on the podium / share card',
 ];
 
 export function PaywallModal({

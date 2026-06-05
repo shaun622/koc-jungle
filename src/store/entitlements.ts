@@ -87,8 +87,9 @@ export function isFeatureLocked(): boolean {
   return !useEntitlementsStore.getState().pro;
 }
 
-/** Free formats are accessible without Pro. */
-export const FREE_FORMATS = new Set(['koc']);
+/** No format is free under the current pricing model. Users get a 7-day
+ *  trial to evaluate everything; after that they need an active sub. */
+export const FREE_FORMATS = new Set<string>();
 
 export function isFormatLocked(formatId: string): boolean {
   if (FREE_FORMATS.has(formatId)) return false;
