@@ -30,6 +30,8 @@ import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
+import { BrandPaddle } from '@/components/BrandPaddle';
+import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ShareCard } from '@/components/ShareCard';
 import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
@@ -80,6 +82,7 @@ export function SetupScreen() {
   const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
   const [authOpen, setAuthOpen] = useState(false);
   const [paywall, setPaywall] = useState<{ reason: string } | null>(null);
+  const [rulesForFormat, setRulesForFormat] = useState<TournamentFormatId | null>(null);
   const auth = useAuth();
   const pro = useEntitlementsStore((s) => s.pro);
   const tickTrial = useEntitlementsStore((s) => s.tickTrial);
@@ -125,50 +128,51 @@ export function SetupScreen() {
           {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
         </button>
         <div className="landing-card">
-          <div className="brand-mark lg">KoC</div>
-          <h1>Padel KoC</h1>
-          <div className="landing-tagline">Tournament Maker</div>
+          <div className="brand-mark lg"><BrandPaddle /></div>
+          <h1>Padel Tournament Maker</h1>
+          <div className="landing-tagline">King of the Court · Americano · &amp; more</div>
           <p>
             Run your padel night: timer, courts, score entry, auto-rotation, leaderboard.
-            Five formats — King of the Court, Round Robin, Americano, Mexicano, Bracket.
+            Five formats — King of the Court, Americano, Mexicano, Round Robin, Bracket.
           </p>
           <div className="landing-modes">
             <div className="landing-modes-title">
               Pick a format {pro && <span className="pro-chip">PRO</span>}
             </div>
-            <button
-              className="landing-mode"
-              onClick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
-            >
-              <span className="landing-mode-name">King of the Court</span>
-              <span className="landing-mode-blurb">
-                Qualifier seeds teams onto courts. Winners climb, losers drop,
-                King defends Centre Court.
-              </span>
-            </button>
             <ModeButton
-              name="Round Robin"
-              blurb="Each team plays every other team in their group. Fair, complete, top of the table wins."
-              locked={isFormatLocked('round-robin')}
-              onPick={() => tryCreate('Round Robin', 'round-robin', 'Round Robin')}
+              name="King of the Court"
+              blurb="Qualifier seeds teams onto courts. Winners climb, losers drop, King defends Centre Court."
+              locked={false}
+              onPick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
+              onShowRules={() => setRulesForFormat('koc')}
             />
             <ModeButton
               name="Americano"
               blurb="Every team in one pool. Schedule rotates so you face as many different opponents as fit in the rounds you set."
               locked={isFormatLocked('americano')}
               onPick={() => tryCreate('Americano', 'americano', 'Americano')}
+              onShowRules={() => setRulesForFormat('americano')}
             />
             <ModeButton
               name="Mexicano"
               blurb="Re-pairs every round from the live standings: top vs second, third vs fourth, and so on. Tight games every round."
               locked={isFormatLocked('mexicano')}
               onPick={() => tryCreate('Mexicano', 'mexicano', 'Mexicano')}
+              onShowRules={() => setRulesForFormat('mexicano')}
+            />
+            <ModeButton
+              name="Round Robin"
+              blurb="Each team plays every other team in their group. Fair, complete, top of the table wins."
+              locked={isFormatLocked('round-robin')}
+              onPick={() => tryCreate('Round Robin', 'round-robin', 'Round Robin')}
+              onShowRules={() => setRulesForFormat('round-robin')}
             />
             <ModeButton
               name="Bracket"
               blurb="Single elimination. Win to advance, lose to go home. Top seeds bye if the field isn't a power of 2."
               locked={isFormatLocked('bracket')}
               onPick={() => tryCreate('Bracket', 'bracket', 'Bracket')}
+              onShowRules={() => setRulesForFormat('bracket')}
             />
           </div>
           <div className="actions">
@@ -201,6 +205,12 @@ export function SetupScreen() {
           {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
           {paywall && (
             <PaywallModal reason={paywall.reason} onClose={() => setPaywall(null)} />
+          )}
+          {rulesForFormat && (
+            <FormatRulesModal
+              formatId={rulesForFormat}
+              onClose={() => setRulesForFormat(null)}
+            />
           )}
           {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
 
@@ -236,6 +246,14 @@ export function SetupScreen() {
             </div>
           )}
           <div className="landing-legal">
+            <button
+              type="button"
+              className="landing-legal-link"
+              onClick={() => navigate('/help')}
+            >
+              Format guide
+            </button>
+            <span aria-hidden>·</span>
             <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
             <span aria-hidden>·</span>
             <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
@@ -449,7 +467,7 @@ export function SetupScreen() {
                 await captureAndShare(rosterShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
                   shareTitle: `${event.name} — lineup`,
-                  shareText: 'Tonight\'s Padel KoC lineup 🎾',
+                  shareText: 'Tonight\'s padel lineup 🎾',
                 });
               } finally {
                 setSharingRoster(false);
@@ -555,20 +573,38 @@ function ModeButton({
   blurb,
   locked,
   onPick,
+  onShowRules,
 }: {
   name: string;
   blurb: string;
   locked: boolean;
   onPick: () => void;
+  onShowRules?: () => void;
 }) {
   return (
-    <button className={'landing-mode ' + (locked ? 'locked' : '')} onClick={onPick}>
-      <span className="landing-mode-name">
-        {name}
-        {locked && <span className="lock-chip">🔒 Pro</span>}
-      </span>
-      <span className="landing-mode-blurb">{blurb}</span>
-    </button>
+    <div className={'landing-mode-wrap ' + (locked ? 'locked' : '')}>
+      <button className="landing-mode" onClick={onPick}>
+        <span className="landing-mode-name">
+          {name}
+          {locked && <span className="lock-chip">🔒 Pro</span>}
+        </span>
+        <span className="landing-mode-blurb">{blurb}</span>
+      </button>
+      {onShowRules && (
+        <button
+          type="button"
+          className="landing-mode-info"
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowRules();
+          }}
+          aria-label={`Show rules for ${name}`}
+          title={`Show rules for ${name}`}
+        >
+          Rules
+        </button>
+      )}
+    </div>
   );
 }
 

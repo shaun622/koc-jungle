@@ -132,6 +132,8 @@ export function SettingsModal({ open, onClose }: Props) {
               </span>
             </div>
             <div className="settings-legal">
+              <a href="#/help">Format guide</a>
+              <span aria-hidden>·</span>
               <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
               <span aria-hidden>·</span>
               <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>

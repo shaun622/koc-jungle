@@ -33,7 +33,7 @@ export function Timer({
   const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
     if (soundEnabled) buzz();
     try {
-      document.title = '🔔 Time! — Padel KoC';
+      document.title = '🔔 Time! — Padel TM';
     } catch {
       // ignore
     }
@@ -50,7 +50,7 @@ export function Timer({
 
   useEffect(() => {
     if (remainingMs > 0) {
-      document.title = `${formatMs(remainingMs)} — Padel KoC`;
+      document.title = `${formatMs(remainingMs)} — Padel TM`;
     }
   }, [remainingMs]);
 

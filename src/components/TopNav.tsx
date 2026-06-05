@@ -5,6 +5,7 @@ import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportI
 import { useAuth } from '@/hooks/useAuth';
 import { useThemeStore } from '@/store/theme';
 import { Icons } from './Icons';
+import { BrandPaddle } from './BrandPaddle';
 import { AuthModal } from './AuthModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { EventState, EventStatus } from '@/types/domain';
@@ -63,8 +64,8 @@ export function TopNav({ event }: Props) {
       <div className="op-top">
         <div className="op-top-left">
           <div className="chrome-brand">
-            <div className="brand-mark">KoC</div>
-            <span>PADEL KOC</span>
+            <div className="brand-mark"><BrandPaddle /></div>
+            <span>PADEL TOURNAMENT MAKER</span>
           </div>
           <span className="op-top-meta">
             {event.name}

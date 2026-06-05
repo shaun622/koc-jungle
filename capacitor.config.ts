@@ -26,7 +26,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.koc.padel',
-  appName: 'Padel KoC: Tournament Maker',
+  appName: 'Padel Tournament Maker',
   webDir: 'dist',
   bundledWebRuntime: false,
 

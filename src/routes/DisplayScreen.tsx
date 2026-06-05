@@ -289,7 +289,7 @@ export function DisplayScreen() {
                 await captureAndShare(podiumShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
                   shareTitle: `${event.name} — results`,
-                  shareText: 'Tonight\'s Padel KoC results 🏆',
+                  shareText: 'Tonight\'s padel results 🏆',
                 });
               } finally {
                 setSharing(false);

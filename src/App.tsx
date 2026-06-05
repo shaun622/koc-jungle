@@ -14,6 +14,7 @@ import { QualifierScreen } from '@/routes/QualifierScreen';
 import { SeedingScreen } from '@/routes/SeedingScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
+import { HelpScreen } from '@/routes/HelpScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { ErrorBanner } from '@/components/ErrorBanner';
@@ -43,7 +44,7 @@ function routeForStatus(status: EventStatus): string {
   }
 }
 
-const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete']);
+const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete', '/help']);
 
 function RouteGate() {
   const event = useEventStore((s) => s.event);
@@ -128,6 +129,7 @@ export function App() {
               canvas. Redirect any stale /complete link there. */}
           <Route path="/complete" element={<Navigate to="/display" replace />} />
           <Route path="/leaderboard" element={<LeaderboardScreen />} />
+          <Route path="/help" element={<HelpScreen />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

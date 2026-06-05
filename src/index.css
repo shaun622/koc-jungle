@@ -217,28 +217,29 @@ button {
 }
 
 .brand-mark {
-  /* Sized for the 3-char "KoC" lettermark. Pill shape with horizontal
-   * padding so the letterform reads as a single lockup, not three loose
-   * characters. */
-  min-width: 22px;
-  height: 22px;
+  /* Hosts the <BrandPaddle> SVG. Squareish gold pill that scales to its
+   * container; SVG inside uses currentColor so it picks up the inverse
+   * (--bg-0) for the dark paddle on a lime background. */
+  width: 26px;
+  height: 26px;
   background: var(--lime);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--bg-0);
-  border-radius: 5px;
-  padding: 0 7px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: -0.01em;
-  line-height: 1;
+  border-radius: 6px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+.brand-mark > svg {
+  width: 100%;
+  height: 100%;
 }
 .brand-mark.lg {
-  height: 40px;
-  font-size: 22px;
-  border-radius: 10px;
-  padding: 0 14px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  padding: 7px;
   box-shadow: 0 0 0 1px var(--bg-0), 0 0 32px -8px var(--lime);
 }
 
@@ -3409,10 +3410,10 @@ button {
   letter-spacing: 0.04em;
 }
 .share-card-brand .brand-mark {
-  height: 56px;
-  font-size: 28px;
-  border-radius: 14px;
-  padding: 0 18px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  padding: 10px;
 }
 .share-card-meta {
   text-align: right;
@@ -3860,25 +3861,67 @@ button {
   text-align: center;
   margin-bottom: 2px;
 }
+.landing-mode-wrap {
+  position: relative;
+  display: block;
+}
 .landing-mode {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
   padding: 14px 16px;
+  padding-right: 76px; /* room for the corner Rules button */
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg-2);
-  color: var(--text);
+  color: var(--text-0);
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease;
   text-align: left;
+  width: 100%;
+  box-sizing: border-box;
 }
 .landing-mode:hover {
   border-color: var(--accent);
   background: color-mix(in oklch, var(--accent) 8%, var(--bg-2));
+}
+.landing-mode-info {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-1);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.landing-mode-info:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 10%, var(--bg-1));
+}
+.landing-legal-link {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.landing-legal-link:hover {
+  color: var(--text-0);
+  text-decoration: underline;
 }
 .landing-mode-name {
   font-family: var(--font-headline);
@@ -3976,6 +4019,145 @@ button {
 }
 :root[data-theme='light'] .brand-mark {
   color: oklch(15% 0.02 130);
+}
+
+/* Help / Rules screen */
+.help {
+  position: absolute;
+  inset: 64px 0 0 0;
+  overflow-y: auto;
+  padding: 20px max(20px, env(safe-area-inset-left)) 40px max(20px, env(safe-area-inset-right));
+  background: var(--bg-0);
+}
+.help-head {
+  max-width: 1000px;
+  margin: 0 auto 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.help-head h2 {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  font-size: 24px;
+  margin: 0;
+}
+.help-sub {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 56ch;
+}
+.help-grid {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.help-card {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.help-card-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  margin: 0;
+  color: var(--accent);
+}
+.help-card-tagline {
+  margin: -8px 0 0;
+  font-size: 14px;
+  color: var(--text-1);
+  font-style: italic;
+}
+.help-card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.help-card-section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-0);
+}
+.help-card-section ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-0);
+}
+.help-card-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* Format rules popover (triggered from landing-card mode buttons) */
+.format-rules-modal {
+  max-width: 30rem;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+.format-rules-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin: -4px 0 4px;
+}
+.format-rules-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  margin: 0 0 4px;
+  color: var(--accent);
+}
+.format-rules-tagline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-1);
+  font-style: italic;
+}
+.format-rules-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.format-rules-section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.format-rules-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.format-rules-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* Paywall (Stage 2.5 — subscription) */

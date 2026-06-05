@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import type { EventState, Team } from '@/types/domain';
 import { TvCompleteView } from './TvCompleteView';
+import { BrandPaddle } from './BrandPaddle';
 
 /**
  * Off-screen render of a share card. Two variants:
@@ -53,8 +54,8 @@ function RosterCard({ event }: { event: EventState }) {
     <>
       <div className="share-card-header">
         <div className="share-card-brand">
-          <div className="brand-mark lg">KoC</div>
-          <span>PADEL KOC</span>
+          <div className="brand-mark lg"><BrandPaddle /></div>
+          <span>PADEL TOURNAMENT MAKER</span>
         </div>
         <div className="share-card-meta">
           <div className="share-card-event-name">{event.name}</div>
