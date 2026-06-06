@@ -146,17 +146,25 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
 
 /**
  * Translate RevenueCat's customerInfo into the entitlements store.
- * The 'pro' entitlement must match the identifier you created in the
- * RevenueCat dashboard.
+ *
+ * We treat ANY active entitlement as Pro rather than matching a specific
+ * identifier string. The project has a single entitlement ("Padel
+ * Tournament Maker Pro"), so "any active entitlement" == Pro, and this
+ * avoids breaking if the dashboard identifier is ever renamed.
  */
 function applyCustomerInfo(customerInfo: unknown): void {
   const info = customerInfo as {
     entitlements?: {
-      active?: Record<string, { isActive: boolean; expirationDate?: string | null }>;
+      active?: Record<string, { isActive?: boolean; expirationDate?: string | null }>;
     };
   };
-  const proActive = !!info.entitlements?.active?.['pro']?.isActive;
-  const exp = info.entitlements?.active?.['pro']?.expirationDate;
-  const trialEndsAt = exp ? new Date(exp).getTime() : undefined;
+  const active = info.entitlements?.active ?? {};
+  const entries = Object.values(active).filter((e) => e?.isActive !== false);
+  const proActive = entries.length > 0;
+  // Use the soonest expiration among active entitlements for the trial clock.
+  const exps = entries
+    .map((e) => (e.expirationDate ? new Date(e.expirationDate).getTime() : undefined))
+    .filter((n): n is number => typeof n === 'number');
+  const trialEndsAt = exps.length ? Math.min(...exps) : undefined;
   useEntitlementsStore.getState().setPro(proActive, trialEndsAt);
 }
