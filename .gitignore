@@ -44,3 +44,11 @@ android/local.properties
 # Capacitor generates these inside the native projects on every sync.
 ios/App/App/public/
 android/app/src/main/assets/public/
+
+# Local scratch artifacts from generator scripts (not part of the app)
+screenshots/
+logo-concepts/
+review-paywall-placeholder.png
+
+# Apple keys — never commit private keys
+*.p8

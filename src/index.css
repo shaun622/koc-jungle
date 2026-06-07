@@ -38,8 +38,9 @@
   --shadow-glow:
     0 0 0 1px oklch(40% 0.05 245), 0 24px 64px -16px oklch(0% 0 0 / 0.6);
 
-  --font-display: 'Archivo Black', 'Arial Black', sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
+  --font-headline: 'Montserrat', system-ui, sans-serif;
+  --font-body: 'Lato', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   color-scheme: dark;
@@ -248,6 +249,7 @@ button {
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
+  font-weight: 800;
   letter-spacing: 0.02em;
   font-size: 14px;
   white-space: nowrap;
@@ -366,6 +368,7 @@ button {
 }
 .op-timer-round {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.04em;
   color: var(--text-1);
@@ -403,6 +406,7 @@ button {
 }
 .op-timer-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 76px;
   line-height: 0.9;
   color: var(--lime);
@@ -462,6 +466,7 @@ button {
 }
 .op-mini-lb-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -550,6 +555,7 @@ button {
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.02em;
 }
@@ -597,6 +603,7 @@ button {
 }
 .op-team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 13px;
   line-height: 1.1;
 }
@@ -615,6 +622,7 @@ button {
 }
 .op-score {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 36px;
   line-height: 1;
   text-align: center;
@@ -693,6 +701,7 @@ button {
 .op-end-summary strong {
   color: var(--text-0);
   font-family: var(--font-display);
+  font-weight: 800;
   letter-spacing: 0.02em;
 }
 
@@ -719,6 +728,7 @@ button {
 }
 .setup-h {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.02em;
   margin: 0 0 4px 0;
@@ -795,6 +805,7 @@ button {
 }
 .setup-court-pos {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   color: var(--text-1);
 }
@@ -826,6 +837,7 @@ button {
 .setup-mid-event-banner strong {
   color: var(--amber);
   font-family: var(--font-display);
+  font-weight: 800;
   letter-spacing: 0.02em;
   margin-right: 4px;
 }
@@ -905,6 +917,7 @@ button {
 }
 .qual-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   letter-spacing: 0.02em;
 }
@@ -957,6 +970,7 @@ button {
 }
 .qual-row .name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
 }
 .qual-row input {
@@ -1058,6 +1072,7 @@ button {
   border-bottom: 1px solid var(--line-soft);
   margin-bottom: 2px;
   font-family: var(--font-display);
+  font-weight: 800;
 }
 .seed-pair--centre .seed-pair-header {
   color: var(--gold);
@@ -1300,6 +1315,7 @@ button {
 }
 .randomise-stepper-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   min-width: 32px;
   text-align: center;
@@ -1364,6 +1380,7 @@ button {
 }
 .seed-team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   min-width: 0;
   overflow: hidden;
@@ -1440,6 +1457,7 @@ button {
 }
 .between-card-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.02em;
   display: flex;
@@ -1461,6 +1479,7 @@ button {
 }
 .between-team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 13px;
 }
 .between-team-from {
@@ -1606,11 +1625,13 @@ button {
 }
 .team-history-row .round-tag {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   color: var(--text-1);
 }
 .team-history-row .court-tag {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 13px;
   display: flex;
   flex-direction: column;
@@ -1625,6 +1646,7 @@ button {
 }
 .team-history-row .score {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -1647,6 +1669,7 @@ button {
 }
 .team-history-row .earned {
   font-family: var(--font-display);
+  font-weight: 800;
   color: var(--lime);
   font-size: 14px;
   min-width: 28px;
@@ -1658,6 +1681,7 @@ button {
 }
 .lbfull-rank {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--text-1);
 }
@@ -1666,6 +1690,7 @@ button {
 }
 .lbfull-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   display: flex;
   align-items: center;
@@ -1689,6 +1714,7 @@ button {
 }
 .lbfull-pts {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   color: var(--lime);
   text-align: right;
@@ -1702,6 +1728,7 @@ button {
   width: 72px;
   padding: 6px 8px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   text-align: right;
   color: var(--lime);
@@ -1770,6 +1797,7 @@ button {
 }
 .mobile-display-event {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1785,6 +1813,7 @@ button {
 }
 .mobile-display-timer {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 28px;
   font-variant-numeric: tabular-nums;
   color: var(--lime);
@@ -1829,6 +1858,7 @@ button {
 }
 .mobile-court-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   display: inline-flex;
   align-items: center;
@@ -1898,6 +1928,7 @@ button {
 }
 .mobile-score-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 26px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -2052,6 +2083,7 @@ button {
 }
 .mobile-standings-row .pts {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   color: var(--lime);
 }
@@ -2077,6 +2109,7 @@ button {
 }
 .mobile-podium-row .place {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--text-2);
 }
@@ -2119,6 +2152,7 @@ button {
 }
 .mobile-podium-row .pts {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   color: var(--lime);
 }
@@ -2171,6 +2205,7 @@ button {
 }
 .mobile-stat-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   color: var(--text-0);
 }
@@ -2362,6 +2397,7 @@ button {
   padding: 6px 12px;
   border-radius: 8px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
   letter-spacing: 0.08em;
   background: var(--bg-2);
@@ -2515,6 +2551,7 @@ button {
   align-items: center;
   gap: 12px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   letter-spacing: 0.02em;
 }
@@ -2602,6 +2639,7 @@ button {
 }
 .tv-lb-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -2666,6 +2704,7 @@ button {
 }
 .tv-lb-row .pts {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   text-align: right;
   color: var(--lime);
@@ -2727,6 +2766,7 @@ button {
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2734,6 +2774,7 @@ button {
 }
 .tv-centre-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 28px;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -2764,6 +2805,7 @@ button {
 }
 .tv-centre-team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 28px;
   line-height: 1.05;
   word-break: break-word;
@@ -2786,6 +2828,7 @@ button {
 }
 .tv-centre-score {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 96px;
   line-height: 0.85;
   color: var(--text-0);
@@ -2797,6 +2840,7 @@ button {
 }
 .tv-centre-vs {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 24px;
   color: color-mix(in oklch, var(--gold) 70%, var(--text-2));
   letter-spacing: 0.1em;
@@ -2836,6 +2880,7 @@ button {
 }
 .tv-court-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -2879,6 +2924,7 @@ button {
 }
 .tv-court-team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   line-height: 1.05;
   white-space: nowrap;
@@ -2895,6 +2941,7 @@ button {
 }
 .tv-court-score {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 44px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2938,6 +2985,7 @@ button {
 }
 .tv-timer-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 0.85;
   letter-spacing: -0.04em;
@@ -2974,6 +3022,7 @@ button {
 }
 .tv-timer-round {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 36px;
   letter-spacing: 0.02em;
   color: var(--text-1);
@@ -3025,6 +3074,7 @@ button {
 }
 .tv-timer-stat-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--text-0);
 }
@@ -3069,6 +3119,7 @@ button {
 }
 .tv-complete-headline {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 80px;
   letter-spacing: 0.02em;
   margin: 8px 0 0 0;
@@ -3138,6 +3189,7 @@ button {
 }
 .tv-podium-team .team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 40px;
   line-height: 1.05;
   word-break: break-word;
@@ -3163,6 +3215,7 @@ button {
 }
 .tv-podium-team .team-points .pts-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 36px;
   color: var(--lime);
   letter-spacing: 0.01em;
@@ -3198,6 +3251,7 @@ button {
   display: grid;
   place-items: center;
   font-family: var(--font-display);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--bg-0);
   position: relative;
@@ -3349,6 +3403,7 @@ button {
 }
 .nightly-stat-value {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--gold);
   line-height: 1.1;
@@ -3406,6 +3461,7 @@ button {
   align-items: center;
   gap: 16px;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 28px;
   letter-spacing: 0.04em;
 }
@@ -3420,6 +3476,7 @@ button {
 }
 .share-card-event-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 32px;
   color: var(--text-0);
 }
@@ -3433,6 +3490,7 @@ button {
 }
 .share-card-headline {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 88px;
   text-align: center;
   color: var(--gold);
@@ -3458,6 +3516,7 @@ button {
 .share-card-podium-team {
   text-align: center;
   font-family: var(--font-display);
+  font-weight: 800;
 }
 .share-card-podium-team--first .team-name {
   color: var(--gold);
@@ -3477,6 +3536,7 @@ button {
 }
 .share-card-podium-team .team-points span {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 24px;
   color: var(--lime);
   margin-right: 4px;
@@ -3496,6 +3556,7 @@ button {
   display: grid;
   place-items: center;
   font-family: var(--font-display);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--bg-0);
   position: relative;
@@ -3557,9 +3618,11 @@ button {
 }
 .share-card-rest-row .name {
   font-family: var(--font-display);
+  font-weight: 800;
 }
 .share-card-rest-row .pts {
   font-family: var(--font-display);
+  font-weight: 800;
   color: var(--lime);
   font-size: 22px;
   text-align: right;
@@ -3602,6 +3665,7 @@ button {
 }
 .share-card-roster-row .name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
 }
 .share-card-roster-meta {
@@ -3621,6 +3685,7 @@ button {
 .share-card-roster-meta strong {
   color: var(--lime);
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   letter-spacing: 0;
   margin-right: 4px;
@@ -3659,6 +3724,7 @@ button {
 }
 .pwa-toast-body strong {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 13px;
   color: var(--text-0);
 }
@@ -3709,6 +3775,7 @@ button {
 }
 .modal h2 {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   margin: 0;
 }
@@ -3757,6 +3824,7 @@ button {
   width: 72px;
   text-align: center;
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 16px;
 }
 
@@ -3783,6 +3851,7 @@ button {
 }
 .landing-card h1 {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 28px;
   margin: 0;
   letter-spacing: 0.02em;
@@ -4038,6 +4107,7 @@ button {
 }
 .help-head h2 {
   font-family: var(--font-display);
+  font-weight: 800;
   letter-spacing: 0.06em;
   font-size: 24px;
   margin: 0;
@@ -4066,6 +4136,7 @@ button {
 }
 .help-card-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.04em;
   margin: 0;
@@ -4121,6 +4192,7 @@ button {
 }
 .format-rules-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.06em;
   margin: 0 0 4px;
@@ -4470,6 +4542,7 @@ button {
   background-repeat: no-repeat;
   color: var(--bg-0);
   font-family: var(--font-display);
+  font-weight: 800;
   letter-spacing: 0.02em;
   flex-shrink: 0;
   user-select: none;
@@ -4673,6 +4746,7 @@ button {
 }
 .podium-head-title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 44px;
   letter-spacing: 0.02em;
   margin: 6px 0 0 0;
@@ -4748,6 +4822,7 @@ button {
 }
 .podium-team .team-name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 22px;
   line-height: 1.05;
   word-break: break-word;
@@ -4769,6 +4844,7 @@ button {
 }
 .podium-team .team-points span {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--lime);
   margin-right: 2px;
@@ -4798,6 +4874,7 @@ button {
   display: grid;
   place-items: center;
   font-family: var(--font-display);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--bg-0);
   position: relative;
@@ -4907,6 +4984,7 @@ button {
 }
 .podium-rest-row .name {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 15px;
 }
 .podium-rest-row .wl {
@@ -4917,6 +4995,7 @@ button {
 }
 .podium-rest-row .points {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 18px;
   color: var(--lime);
 }
