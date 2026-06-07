@@ -17,6 +17,7 @@ import { DisplayScreen } from '@/routes/DisplayScreen';
 import { HelpScreen } from '@/routes/HelpScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
+import { MobileTabBar } from '@/components/MobileTabBar';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
@@ -74,6 +75,7 @@ function OperatorShell() {
     <div className="op">
       {event && <TopNav event={event} />}
       <Outlet />
+      {event && <MobileTabBar event={event} />}
     </div>
   );
 }

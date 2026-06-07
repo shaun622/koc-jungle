@@ -324,6 +324,164 @@ button {
   border-color: var(--line);
 }
 
+/* ==========================================================================
+   AppMenu (unified gear menu + slide-over)
+   ========================================================================== */
+.app-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.app-menu-toggle:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+.app-menu-toggle .icon {
+  width: 20px;
+  height: 20px;
+}
+.app-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: oklch(0% 0 0 / 0.5);
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  animation: app-menu-fade 0.15s ease;
+}
+@keyframes app-menu-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.app-menu-panel {
+  width: min(360px, 86vw);
+  height: 100%;
+  background: var(--bg-1);
+  border-left: 1px solid var(--line);
+  box-shadow: -16px 0 48px -16px oklch(0% 0 0 / 0.6);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  overflow-y: auto;
+  animation: app-menu-slide 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes app-menu-slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.app-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.app-menu-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-2);
+}
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-0);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.app-menu-item:hover {
+  background: var(--bg-2);
+}
+.app-menu-item .icon {
+  width: 19px;
+  height: 19px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.app-menu-item-label {
+  flex: 1;
+}
+.app-menu-item-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.app-menu-item-meta.sync-on {
+  color: var(--accent);
+}
+.app-menu-divider {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 8px 4px;
+}
+.app-menu-foot {
+  margin-top: auto;
+  padding: 12px 8px 0;
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.app-menu-foot a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.app-menu-foot a:hover {
+  color: var(--text-0);
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Mobile bottom tab bar (phones only; hidden on iPad / desktop)
+   ========================================================================== */
+.mobile-tabbar {
+  display: none;
+}
+.mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  padding: 8px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.mobile-tab .icon {
+  width: 22px;
+  height: 22px;
+}
+.mobile-tab.active {
+  color: var(--accent);
+}
+
 .op-body {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -5183,15 +5341,16 @@ button {
     overflow: visible;
   }
 
-  /* Top nav: row 1 = brand + actions, row 2 = scrollable tabs */
+  /* Top nav: single row (brand + gear). Primary tabs move to the
+     bottom tab bar on phones. */
   .op-top {
     position: sticky;
     top: 0;
     z-index: 30;
     display: grid;
     grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 8px 8px;
+    grid-template-rows: auto;
+    gap: 8px;
     padding-top: calc(10px + env(safe-area-inset-top, 0px));
     padding-right: calc(12px + env(safe-area-inset-right, 0px));
     padding-bottom: 8px;
@@ -5229,20 +5388,31 @@ button {
     flex-wrap: nowrap;
     gap: 4px;
   }
+  /* Primary nav lives in the bottom tab bar on phones. */
   .op-top-center {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .op-top-center::-webkit-scrollbar {
     display: none;
   }
-  .chrome-brand span {
+  .chrome-brand-name {
     display: none;
+  }
+
+  /* Bottom tab bar — fixed, thumb-reachable */
+  .mobile-tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: oklch(from var(--bg-0) l c h / 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line-soft);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Reserve space so content isn't hidden behind the fixed tab bar. */
+  .op {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
   .op-top-meta {
     font-size: 11px;
