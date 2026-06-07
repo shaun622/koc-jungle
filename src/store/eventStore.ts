@@ -25,6 +25,7 @@ import { buildQualifierRound, rankTeamsByQualifier, assignRankedTeamsToCourts } 
 import { unresolvedTies } from '@/logic/rotation';
 import { validateAssignments, validateQualifierScore } from '@/logic/validation';
 import { getFormat } from '@/logic/formats';
+import { hapticTick } from '@/lib/haptics';
 
 export const STORAGE_KEY = 'koc-event-v1';
 
@@ -803,6 +804,7 @@ export const useEventStore = create<EventStore>()(
         const next = { ...round, matches };
         const rounds = event.rounds.slice(0, -1).concat(next);
         set({ event: { ...event, rounds } });
+        hapticTick();
       },
 
       nominateTieWinner: (matchId, winnerId) => {

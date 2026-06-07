@@ -907,7 +907,11 @@ function CentreScore({
   onIncrement: (delta: number) => void;
 }) {
   if (!showControls) {
-    return <div className={'tv-centre-score ' + (isWinner ? 'winner' : '')}>{value}</div>;
+    return (
+      <div key={value} className={'tv-centre-score score-pop ' + (isWinner ? 'winner' : '')}>
+        {value}
+      </div>
+    );
   }
   return (
     <div className="tv-centre-score-group">
@@ -918,7 +922,9 @@ function CentreScore({
       >
         <Icons.Minus className="icon" />
       </button>
-      <div className={'tv-centre-score ' + (isWinner ? 'winner' : '')}>{value}</div>
+      <div key={value} className={'tv-centre-score score-pop ' + (isWinner ? 'winner' : '')}>
+        {value}
+      </div>
       <button
         className="tv-score-btn tv-score-btn--plus"
         aria-label="Increase"
@@ -1089,7 +1095,7 @@ function ScoreCell({
 }) {
   if (!showControls) {
     return (
-      <div className={'tv-court-score ' + (winner ? 'winner' : tied ? 'tied' : '')}>
+      <div key={value} className={'tv-court-score score-pop ' + (winner ? 'winner' : tied ? 'tied' : '')}>
         {value}
       </div>
     );
@@ -1103,7 +1109,7 @@ function ScoreCell({
       >
         <Icons.Minus className="icon" />
       </button>
-      <div className={'tv-court-score ' + (winner ? 'winner' : tied ? 'tied' : '')}>
+      <div key={value} className={'tv-court-score score-pop ' + (winner ? 'winner' : tied ? 'tied' : '')}>
         {value}
       </div>
       <button

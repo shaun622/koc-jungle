@@ -3,6 +3,7 @@ import { useTimer } from '@/hooks/useTimer';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { usePresentationMode } from '@/hooks/usePresentationMode';
 import { formatMs } from '@/utils/time';
+import { hapticBuzz } from '@/lib/haptics';
 import type { TimerState } from '@/types/domain';
 import { Icons } from './Icons';
 
@@ -32,6 +33,7 @@ export function Timer({
 
   const { remainingMs, isRunning, isPaused, hasStarted } = useTimer(state, () => {
     if (soundEnabled) buzz();
+    hapticBuzz();
     try {
       document.title = '🔔 Time! · Padel TM';
     } catch {
