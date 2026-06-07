@@ -30,7 +30,7 @@ import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
-import { BrandPaddle } from '@/components/BrandPaddle';
+import { BrandLogo } from '@/components/BrandLogo';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ShareCard } from '@/components/ShareCard';
 import { Avatar } from '@/components/Avatar';
@@ -128,7 +128,7 @@ export function SetupScreen() {
           {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
         </button>
         <div className="landing-card">
-          <div className="brand-mark lg"><BrandPaddle /></div>
+          <div className="brand-mark lg"><BrandLogo /></div>
           <h1>Padel Tournament Maker</h1>
           <div className="landing-tagline">King of the Court · Americano · &amp; more</div>
           <p>

@@ -218,30 +218,27 @@ button {
 }
 
 .brand-mark {
-  /* Hosts the <BrandPaddle> SVG. Squareish gold pill that scales to its
-   * container; SVG inside uses currentColor so it picks up the inverse
-   * (--bg-0) for the dark paddle on a lime background. */
-  width: 26px;
-  height: 26px;
-  background: var(--lime);
+  /* Hosts the crowned-ball <BrandLogo> image, clipped to a rounded tile.
+   * The logo art already includes its own navy background + gold frame,
+   * so no pill background here. */
+  width: 30px;
+  height: 30px;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bg-0);
-  border-radius: 6px;
-  padding: 4px;
-  box-sizing: border-box;
+  border-radius: 7px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.brand-mark > svg {
+.brand-mark > img {
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .brand-mark.lg {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  padding: 7px;
-  box-shadow: 0 0 0 1px var(--bg-0), 0 0 32px -8px var(--lime);
+  width: 56px;
+  height: 56px;
+  border-radius: 13px;
+  box-shadow: 0 0 0 1px oklch(from var(--bg-0) l c h / 0.6), 0 8px 28px -10px oklch(0% 0 0 / 0.7);
 }
 
 .chrome-brand {
@@ -3466,10 +3463,9 @@ button {
   letter-spacing: 0.04em;
 }
 .share-card-brand .brand-mark {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   border-radius: 16px;
-  padding: 10px;
 }
 .share-card-meta {
   text-align: right;

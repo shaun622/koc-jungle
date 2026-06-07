@@ -39,10 +39,13 @@ const BASE = process.env.BASE_URL || 'https://koc-jungle.pages.dev';
 // ─── Devices ──────────────────────────────────────────────────────────
 const DEVICES = [
   {
-    folder: 'iphone-6.7',
-    viewport: { width: 430, height: 932 },
+    folder: 'iphone-6.5',
+    viewport: { width: 428, height: 926 },
     deviceScaleFactor: 3,
-    // → 1290x2796 physical pixels (Apple's iPhone 6.7" target)
+    // → 1284x2778 physical pixels.
+    // App Store Connect's iPhone 6.5"/6.7" slot accepts this exact size,
+    // and a single 1284x2778 fits BOTH device size classes — so we
+    // don't have to produce a separate 1290x2796 set.
     isMobile: true,
     isLandscape: false,
   },
@@ -50,11 +53,16 @@ const DEVICES = [
     folder: 'ipad-13',
     viewport: { width: 1376, height: 1032 },
     deviceScaleFactor: 2,
-    // → 2752x2064 physical pixels (Apple's iPad Pro 13" landscape target)
+    // → 2752x2064 physical pixels (iPad Pro 13" landscape).
     isMobile: false,
     isLandscape: true,
   },
 ];
+
+// Skip iPad in subsequent re-runs by setting ONLY_IPHONE=1
+const filteredDevices = process.env.ONLY_IPHONE
+  ? DEVICES.filter((d) => d.folder.startsWith('iphone'))
+  : DEVICES;
 
 // ─── Fixture data ─────────────────────────────────────────────────────
 // A 6-team event with 3 completed rounds + standings, all built so the
@@ -240,7 +248,7 @@ async function captureFrame(context, label, opts) {
 
 const browser = await chromium.launch();
 
-for (const device of DEVICES) {
+for (const device of filteredDevices) {
   const folder = resolve(outRoot, device.folder);
   mkdirSync(folder, { recursive: true });
   console.log(`\n${device.folder}  (${device.viewport.width * device.deviceScaleFactor}x${device.viewport.height * device.deviceScaleFactor})`);
