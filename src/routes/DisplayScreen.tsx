@@ -15,6 +15,7 @@ import { formatMs, parseDurationInput } from '@/utils/time';
 import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
 import { BrandLogo } from '@/components/BrandLogo';
+import { AppMenu } from '@/components/AppMenu';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
@@ -119,6 +120,10 @@ export function DisplayScreen() {
 
   return (
     <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
+      {/* The same gear menu as every other screen, always top-right. */}
+      <div className="display-menu-fixed">
+        <AppMenu event={event} />
+      </div>
       {isMobile ? (
         <MobileDisplay event={event} />
       ) : (

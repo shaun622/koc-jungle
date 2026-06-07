@@ -121,6 +121,18 @@ export function AppMenu({ event }: { event: EventState | null }) {
               </button>
             )}
 
+            {/* Home / dashboard */}
+            <button
+              className="app-menu-item"
+              onClick={() => {
+                close();
+                navigate('/home');
+              }}
+            >
+              <Icons.Home className="icon" />
+              <span className="app-menu-item-label">Home / dashboard</span>
+            </button>
+
             {/* Club branding */}
             <button
               className="app-menu-item"

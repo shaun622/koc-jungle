@@ -15,6 +15,7 @@ import { SeedingScreen } from '@/routes/SeedingScreen';
 import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
 import { HelpScreen } from '@/routes/HelpScreen';
+import { HomeScreen } from '@/routes/HomeScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { MobileTabBar } from '@/components/MobileTabBar';
@@ -45,7 +46,7 @@ function routeForStatus(status: EventStatus): string {
   }
 }
 
-const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete', '/help']);
+const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete', '/help', '/home']);
 
 function RouteGate() {
   const event = useEventStore((s) => s.event);
@@ -54,8 +55,9 @@ function RouteGate() {
 
   useEffect(() => {
     if (!event) {
-      if (location.pathname !== '/setup' && location.pathname !== '/display') {
-        navigate('/setup', { replace: true });
+      // No event: the home screen is the launch pad.
+      if (location.pathname !== '/home' && location.pathname !== '/display') {
+        navigate('/home', { replace: true });
       }
       return;
     }
@@ -122,8 +124,9 @@ export function App() {
       <RouteGate />
       <Routes>
         <Route path="/display" element={<DisplayScreen />} />
+        <Route path="/home" element={<HomeScreen />} />
         <Route element={<OperatorShell />}>
-          <Route index element={<Navigate to="/setup" replace />} />
+          <Route index element={<Navigate to="/home" replace />} />
           <Route path="/setup" element={<SetupScreen />} />
           <Route path="/qualifier" element={<QualifierScreen />} />
           <Route path="/seeding" element={<SeedingScreen />} />

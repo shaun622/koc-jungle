@@ -17,31 +17,15 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
-import { buildDemoEvent } from '@/logic/demoData';
 import { getFormat } from '@/logic/formats';
-import { useAuth } from '@/hooks/useAuth';
-import { AuthModal } from '@/components/AuthModal';
-import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
-import { PaywallModal } from '@/components/PaywallModal';
-import { useThemeStore } from '@/store/theme';
-import type { TournamentFormatId } from '@/types/domain';
 import { isCentreCourt, type Court, type Player, type QualifierUnit, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
-import { parseImportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
-import { BrandLogo } from '@/components/BrandLogo';
-import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ShareCard } from '@/components/ShareCard';
 import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
 import { cropImageFileToAvatar } from '@/utils/avatar';
-import {
-  deleteTemplate,
-  listTemplates,
-  templateToEventState,
-  type Template,
-} from '@/store/templates';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -52,8 +36,6 @@ const TIE_RULE_LABELS: Record<TieRule, string> = {
 
 export function SetupScreen() {
   const event = useEventStore((s) => s.event);
-  const createEvent = useEventStore((s) => s.createEvent);
-  const loadEvent = useEventStore((s) => s.loadEvent);
   const resetEvent = useEventStore((s) => s.resetEvent);
   const addTeam = useEventStore((s) => s.addTeam);
   const updateTeam = useEventStore((s) => s.updateTeam);
@@ -76,32 +58,8 @@ export function SetupScreen() {
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
   const [sharingRoster, setSharingRoster] = useState(false);
   const rosterShareRef = useRef<HTMLDivElement>(null);
-  const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
-  const [authOpen, setAuthOpen] = useState(false);
-  const [paywall, setPaywall] = useState<{ reason: string } | null>(null);
-  const [rulesForFormat, setRulesForFormat] = useState<TournamentFormatId | null>(null);
-  const auth = useAuth();
-  const pro = useEntitlementsStore((s) => s.pro);
-  const tickTrial = useEntitlementsStore((s) => s.tickTrial);
-  const themePref = useThemeStore((s) => s.preference);
-  const cycleTheme = useThemeStore((s) => s.cyclePreference);
-  useEffect(() => {
-    tickTrial();
-  }, [tickTrial]);
-
-  // Wrapper around createEvent that paywalls non-free formats.
-  function tryCreate(name: string, format: TournamentFormatId, displayName: string) {
-    if (isFormatLocked(format)) {
-      setPaywall({ reason: `${displayName} needs Pro.` });
-      return;
-    }
-    createEvent(name, format);
-  }
-
-  const refreshTemplates = () => setTemplates(listTemplates());
 
   const requestRemoveTeam = (id: string) => {
     // Hard-delete during setup is non-destructive. Otherwise confirm.
@@ -116,154 +74,9 @@ export function SetupScreen() {
       ? event.teams.find((t) => t.id === confirmRemoveTeamId)
       : null;
 
-  if (!event) {
-    return (
-      <div className="landing">
-        <button
-          className="btn ghost sm theme-toggle landing-theme-toggle"
-          onClick={cycleTheme}
-          title={themePref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          aria-label="Toggle theme"
-        >
-          {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
-        </button>
-        <div className="landing-card">
-          <div className="brand-mark lg"><BrandLogo /></div>
-          <h1>Padel Tournament Maker</h1>
-          <div className="landing-tagline">King of the Court · Americano · &amp; more</div>
-          <p>
-            Run your padel night: timer, courts, score entry, auto-rotation, leaderboard.
-            Five formats: King of the Court, Americano, Mexicano, Round Robin, Bracket.
-          </p>
-          <div className="landing-modes">
-            <div className="landing-modes-title">
-              Pick a format {pro && <span className="pro-chip">PRO</span>}
-            </div>
-            <ModeButton
-              name="King of the Court"
-              blurb="Qualifier seeds teams onto courts. Winners climb, losers drop, King defends Centre Court."
-              locked={isFormatLocked('koc')}
-              onPick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
-              onShowRules={() => setRulesForFormat('koc')}
-            />
-            <ModeButton
-              name="Americano"
-              blurb="Every team in one pool. Schedule rotates so you face as many different opponents as fit in the rounds you set."
-              locked={isFormatLocked('americano')}
-              onPick={() => tryCreate('Americano', 'americano', 'Americano')}
-              onShowRules={() => setRulesForFormat('americano')}
-            />
-            <ModeButton
-              name="Mexicano"
-              blurb="Re-pairs every round from the live standings: top vs second, third vs fourth, and so on. Tight games every round."
-              locked={isFormatLocked('mexicano')}
-              onPick={() => tryCreate('Mexicano', 'mexicano', 'Mexicano')}
-              onShowRules={() => setRulesForFormat('mexicano')}
-            />
-            <ModeButton
-              name="Round Robin"
-              blurb="Each team plays every other team in their group. Fair, complete, top of the table wins."
-              locked={isFormatLocked('round-robin')}
-              onPick={() => tryCreate('Round Robin', 'round-robin', 'Round Robin')}
-              onShowRules={() => setRulesForFormat('round-robin')}
-            />
-            <ModeButton
-              name="Bracket"
-              blurb="Single elimination. Win to advance, lose to go home. Top seeds bye if the field isn't a power of 2."
-              locked={isFormatLocked('bracket')}
-              onPick={() => tryCreate('Bracket', 'bracket', 'Bracket')}
-              onShowRules={() => setRulesForFormat('bracket')}
-            />
-          </div>
-          <div className="actions">
-            <button className="btn lg" onClick={() => loadEvent(buildDemoEvent())}>
-              Load KoC demo (14 teams)
-            </button>
-            <ImportButton onLoad={loadEvent} onError={setImportError} />
-            <button
-              className={'btn lg ' + (pro ? '' : 'paywall-cta')}
-              onClick={() => setPaywall({ reason: pro ? '' : 'Unlock the full toolkit.' })}
-            >
-              {pro ? '👑 Manage Pro' : '👑 Get Pro'}
-            </button>
-            {auth.cloudEnabled && (
-              <button
-                className="btn lg"
-                onClick={() => {
-                  if (!auth.user && isFeatureLocked()) {
-                    setPaywall({ reason: 'Cloud sync needs Pro.' });
-                    return;
-                  }
-                  setAuthOpen(true);
-                }}
-                title={auth.user ? auth.user.email ?? 'Signed in' : 'Sync across devices'}
-              >
-                {auth.user ? `Signed in: ${(auth.user.email ?? '').split('@')[0]}` : 'Sign in / Sync'}
-              </button>
-            )}
-          </div>
-          {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-          {paywall && (
-            <PaywallModal reason={paywall.reason} onClose={() => setPaywall(null)} />
-          )}
-          {rulesForFormat && (
-            <FormatRulesModal
-              formatId={rulesForFormat}
-              onClose={() => setRulesForFormat(null)}
-            />
-          )}
-          {importError && <p style={{ color: 'var(--red)' }}>{importError}</p>}
-
-          {templates.length > 0 && (
-            <div className="landing-templates">
-              <div className="landing-templates-title">Saved templates</div>
-              <div className="landing-templates-list">
-                {templates.map((t) => (
-                  <div key={t.id} className="landing-template-row">
-                    <button
-                      className="btn ghost"
-                      style={{ flex: 1, justifyContent: 'flex-start' }}
-                      onClick={() => loadEvent(templateToEventState(t))}
-                    >
-                      <span style={{ fontWeight: 700 }}>{t.name}</span>
-                      <span style={{ color: 'var(--text-2)', marginLeft: 8, fontSize: 12 }}>
-                        {t.teams.length} teams · {t.courts.length} courts
-                      </span>
-                    </button>
-                    <button
-                      className="op-score-btn"
-                      onClick={() => {
-                        deleteTemplate(t.id);
-                        refreshTemplates();
-                      }}
-                      aria-label="Delete template"
-                    >
-                      <Icons.Minus className="icon" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="landing-legal">
-            <button
-              type="button"
-              className="landing-legal-link"
-              onClick={() => navigate('/help')}
-            >
-              Format guide
-            </button>
-            <span aria-hidden>·</span>
-            <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
-            <span aria-hidden>·</span>
-            <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
-            <span aria-hidden>·</span>
-            <a href="mailto:info@padelkoc.com">Contact</a>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // No event: the dedicated /home screen owns the launch experience.
+  // RouteGate redirects here, this is just a guard.
+  if (!event) return null;
 
   const teams = activeTeams(event);
   const format = getFormat(event.format);
@@ -605,46 +418,6 @@ export function SetupScreen() {
         }}
         onCancel={() => setConfirmRemoveTeamId(null)}
       />
-    </div>
-  );
-}
-
-function ModeButton({
-  name,
-  blurb,
-  locked,
-  onPick,
-  onShowRules,
-}: {
-  name: string;
-  blurb: string;
-  locked: boolean;
-  onPick: () => void;
-  onShowRules?: () => void;
-}) {
-  return (
-    <div className={'landing-mode-wrap ' + (locked ? 'locked' : '')}>
-      <button className="landing-mode" onClick={onPick}>
-        <span className="landing-mode-name">
-          {name}
-          {locked && <span className="lock-chip">🔒 Pro</span>}
-        </span>
-        <span className="landing-mode-blurb">{blurb}</span>
-      </button>
-      {onShowRules && (
-        <button
-          type="button"
-          className="landing-mode-info"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowRules();
-          }}
-          aria-label={`Show rules for ${name}`}
-          title={`Show rules for ${name}`}
-        >
-          Rules
-        </button>
-      )}
     </div>
   );
 }
@@ -1012,34 +785,3 @@ function SortableCourtRow({
   );
 }
 
-function ImportButton({
-  onLoad,
-  onError,
-}: {
-  onLoad: (event: ReturnType<typeof buildDemoEvent>) => void;
-  onError: (message: string) => void;
-}) {
-  return (
-    <label className="btn lg" style={{ cursor: 'pointer' }}>
-      Import JSON
-      <input
-        type="file"
-        accept="application/json,.json"
-        style={{ display: 'none' }}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          try {
-            const text = await file.text();
-            const parsed = parseImportJson(text);
-            onLoad(parsed);
-            onError('');
-          } catch (err) {
-            onError(err instanceof Error ? err.message : 'Could not parse file.');
-          }
-          e.target.value = '';
-        }}
-      />
-    </label>
-  );
-}

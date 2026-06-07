@@ -46,14 +46,19 @@ export function TopNav({ event }: Props) {
   return (
     <div className="op-top">
       <div className="op-top-left">
-        <div className="chrome-brand">
+        <button
+          className="chrome-brand"
+          onClick={() => navigate('/home')}
+          title="Home"
+          aria-label="Home"
+        >
           <div className="brand-mark">
             {clubLogo ? <img src={clubLogo} alt={clubName || 'Club logo'} /> : <BrandLogo />}
           </div>
           <span className="chrome-brand-name">
             {clubName ? clubName : 'PADEL TOURNAMENT MAKER'}
           </span>
-        </div>
+        </button>
         <span className="op-top-meta">
           {event.name}
           {roundIndex > 0 && ` • R${roundIndex}/${event.settings.roundsTotal}`}

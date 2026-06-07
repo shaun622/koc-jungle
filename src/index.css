@@ -250,6 +250,16 @@ button {
   letter-spacing: 0.02em;
   font-size: 14px;
   white-space: nowrap;
+  /* It's a button (navigates home) — strip the default chrome. */
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.chrome-brand:hover {
+  opacity: 0.85;
 }
 
 /* ==========================================================================
@@ -500,6 +510,14 @@ button {
 .app-menu-foot a:hover {
   color: var(--text-0);
   text-decoration: underline;
+}
+
+/* Gear menu fixed top-right on the /display canvas (always reachable). */
+.display-menu-fixed {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  z-index: 45;
 }
 
 /* ==========================================================================
@@ -4041,6 +4059,142 @@ button {
   place-items: center;
   padding: 24px;
 }
+
+/* ==========================================================================
+   Home / dashboard screen
+   ========================================================================== */
+.home {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background:
+    radial-gradient(120% 60% at 50% 0%, color-mix(in oklch, var(--lime) 6%, transparent), transparent 60%),
+    var(--bg-0);
+}
+.home-top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right))
+    12px max(16px, env(safe-area-inset-left));
+  background: oklch(from var(--bg-0) l c h / 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.home-top-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+}
+.home-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.home-hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+.home-hero-logo {
+  width: 84px !important;
+  height: 84px !important;
+  border-radius: 20px !important;
+  margin-bottom: 4px;
+}
+.home-hero h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+.home-hero-sub {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.home-resume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--lime-deep);
+  background: color-mix(in oklch, var(--lime) 8%, var(--bg-1));
+}
+.home-resume-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lime-deep);
+}
+.home-resume-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  margin-top: 2px;
+}
+.home-resume-status {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.home-resume-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.home-section-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
 .landing-card {
   max-width: 32rem;
   background: var(--bg-1);
@@ -4695,6 +4849,20 @@ button {
 /* Settings modal (Phase 5.2) */
 .settings-modal {
   width: 100%;
+  /* Cap height so a long settings list (voice picker, theme, about)
+     scrolls inside the modal instead of overflowing the viewport. */
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+/* The grid is the scroll area; header + Done button stay put. */
+.settings-modal .settings-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* room for the scrollbar so content isn't clipped at the right edge */
+  padding: 4px 4px 8px 0;
 }
 .settings-grid {
   display: flex;
