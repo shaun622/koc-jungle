@@ -60,7 +60,7 @@ export function TvCompleteView({ event }: { event: EventState }) {
   const teamFor = (id?: string) => (id ? event.teams.find((t) => t.id === id) : undefined);
   const teamLabel = (id?: string) => {
     const t = teamFor(id);
-    return t ? teamLabelShort(t) : '—';
+    return t ? teamLabelShort(t) : 'TBD';
   };
 
   const completedRounds = event.rounds.filter((r) => r.completedAt).length;
@@ -221,7 +221,7 @@ function TvPodiumColumn({
             <Avatar player={team.players[1]} size="lg" />
           </div>
         )}
-        <div className="team-name">{team ? teamLabelShort(team) : '—'}</div>
+        <div className="team-name">{team ? teamLabelShort(team) : 'TBD'}</div>
         {team && team.name && (
           <div className="team-players">
             {team.players[0].name} · {team.players[1].name}

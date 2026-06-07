@@ -35,7 +35,7 @@ export function LeaderboardScreen() {
           <div className="qual-title">Standings</div>
           <div className="qual-sub">
             {editMode
-              ? 'Editing — type the corrected total for any team. Standings re-sort as you go.'
+              ? 'Editing. Type the corrected total for any team. Standings re-sort as you go.'
               : 'Live nightly totals. Tap a team to see their round-by-round history.'}
           </div>
         </div>
@@ -236,7 +236,7 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
                 </span>
                 <span className="opponent">vs {h.opponentName}</span>
                 <span className="earned">
-                  {h.won ? `+${h.pointsEarned}` : h.tied ? '—' : '0'}
+                  {h.won ? `+${h.pointsEarned}` : h.tied ? '·' : '0'}
                 </span>
               </div>
             ))}

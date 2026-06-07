@@ -1,5 +1,5 @@
 /**
- * AuthModal — sign in / sign up / sign in with Apple.
+ * AuthModal: sign in / sign up / sign in with Apple.
  *
  * Surfaces only when `cloudEnabled` (env vars present at build time).
  * Sign-in with Apple is required by Apple's App Review whenever any
@@ -28,7 +28,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           <h2 className="auth-title">SYNC ACROSS DEVICES</h2>
           <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
             Cloud sync isn't configured for this build. Your events are
-            saved locally on this device and stay safe — but they won't
+            saved locally on this device and stay safe, but they won't
             sync to your phone or tablet.
           </p>
           <div className="modal-actions">
@@ -115,7 +115,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         </h2>
         <p className="auth-sub">
           Sync events across every device you sign in on. Local-only stays the
-          default — no account needed.
+          default. No account needed.
         </p>
 
         <button

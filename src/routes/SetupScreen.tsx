@@ -133,7 +133,7 @@ export function SetupScreen() {
           <div className="landing-tagline">King of the Court · Americano · &amp; more</div>
           <p>
             Run your padel night: timer, courts, score entry, auto-rotation, leaderboard.
-            Five formats — King of the Court, Americano, Mexicano, Round Robin, Bracket.
+            Five formats: King of the Court, Americano, Mexicano, Round Robin, Bracket.
           </p>
           <div className="landing-modes">
             <div className="landing-modes-title">
@@ -409,7 +409,7 @@ export function SetupScreen() {
         </div>
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
-            <strong>Mid-event edits.</strong> Editing a player name is a safe substitution — the
+            <strong>Mid-event edits.</strong> Editing a player name is a safe substitution. The
             team's points and standings stay attached to the team, not the individual player.
             Adding or removing a team won't change the current round; removed teams stay in the
             history but are skipped in future rotations, and added teams need to be dragged into a
@@ -466,7 +466,7 @@ export function SetupScreen() {
               try {
                 await captureAndShare(rosterShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
-                  shareTitle: `${event.name} — lineup`,
+                  shareTitle: `${event.name} lineup`,
                   shareText: 'Tonight\'s padel lineup 🎾',
                 });
               } finally {
@@ -553,7 +553,7 @@ export function SetupScreen() {
         title="Remove this team mid-event?"
         message={
           confirmedTeam
-            ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be marked inactive — kept for history but skipped in future rotations. Their existing scores stay in the standings. The current round is unaffected; you'll need to drop in a replacement team via the rotation preview before starting the next round.`
+            ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be marked inactive, kept for history but skipped in future rotations. Their existing scores stay in the standings. The current round is unaffected; you'll need to drop in a replacement team via the rotation preview before starting the next round.`
             : ''
         }
         confirmLabel="Yes, remove"

@@ -35,7 +35,7 @@ export function UpdatePrompt() {
       <div className="pwa-toast pwa-toast--update" role="status">
         <div className="pwa-toast-body">
           <strong>New version available.</strong>
-          <span>Refresh to pick it up — your event state stays.</span>
+          <span>Refresh to pick it up. Your event state stays.</span>
         </div>
         <button
           className="btn primary sm"

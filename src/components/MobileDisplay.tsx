@@ -219,7 +219,7 @@ function MobileTeamRow({
     <div className="mobile-court-row">
       {team && <TeamAvatars players={team.players} size="sm" />}
       <span className="mobile-court-team-name">
-        {team ? teamLabelShort(team) : '—'}
+        {team ? teamLabelShort(team) : 'TBD'}
       </span>
       <div className="mobile-score-group">
         <button
@@ -335,7 +335,7 @@ function MobileBetween({ event }: { event: EventState }) {
         <div className="mobile-display-header-left">
           <div className="mobile-display-event">{event.name}</div>
           <div className="mobile-display-meta">
-            Round {lastRound?.index ?? '—'} complete · rotation preview
+            Round {lastRound?.index ?? '·'} complete · rotation preview
           </div>
         </div>
         <div className="mobile-display-timer warn">
@@ -393,7 +393,7 @@ function MobilePreviewRow({
     <div className="mobile-court-row">
       {team && <TeamAvatars players={team.players} size="sm" />}
       <span className="mobile-court-team-name">
-        {team ? teamLabelShort(team) : '—'}
+        {team ? teamLabelShort(team) : 'TBD'}
       </span>
       <MobileMovementChip arrow={arrow ?? 'stay'} />
     </div>

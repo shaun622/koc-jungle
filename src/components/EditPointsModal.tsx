@@ -53,7 +53,7 @@ export function EditPointsModal({ onClose }: { onClose: () => void }) {
           <div>
             <h2>Edit points</h2>
             <p style={{ fontSize: 13, color: 'var(--text-1)', margin: '4px 0 0' }}>
-              Correct any team's total — the podium and standings re-sort
+              Correct any team's total and the podium and standings re-sort
               automatically.
             </p>
           </div>

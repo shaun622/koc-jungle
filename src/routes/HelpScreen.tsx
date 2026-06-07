@@ -1,5 +1,5 @@
 /**
- * Help / Rules screen — one card per tournament format with rules,
+ * Help / Rules screen: one card per tournament format with rules,
  * scoring, and 'best for' breakdown. Reachable from Settings and from
  * the landing card.
  */
@@ -17,7 +17,7 @@ export function HelpScreen() {
         </button>
         <h2>FORMAT GUIDE</h2>
         <div className="help-sub">
-          Five tournament formats — pick the one that fits your night. Tap a
+          Five tournament formats, one per card. Pick the one that fits your night. Tap a
           card to expand the rules and scoring.
         </div>
       </div>

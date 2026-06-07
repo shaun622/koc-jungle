@@ -323,7 +323,7 @@ function VoiceRow({
   );
   const autoPick = useMemo(() => pickDefaultVoice(voices), [voices]);
   const autoLabel = autoPick
-    ? `Auto — ${formatVoiceLabel(autoPick)}`
+    ? `Auto (${formatVoiceLabel(autoPick)})`
     : 'Auto (browser default)';
 
   return (

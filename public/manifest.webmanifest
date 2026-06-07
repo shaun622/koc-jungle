@@ -1,7 +1,7 @@
 {
   "name": "Padel Tournament Maker",
   "short_name": "Padel TM",
-  "description": "Run padel tournaments — King of the Court, Americano, Mexicano, Round Robin, Bracket. Timer, scoring, cloud sync.",
+  "description": "Run padel tournaments: King of the Court, Americano, Mexicano, Round Robin, Bracket. Timer, scoring, cloud sync.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

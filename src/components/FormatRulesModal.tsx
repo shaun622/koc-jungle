@@ -1,5 +1,5 @@
 /**
- * FormatRulesModal — popover showing the rules for one tournament format.
+ * FormatRulesModal: popover showing the rules for one tournament format.
  * Triggered from the 'Show rules' link on each landing-card mode button
  * and from the Help screen.
  */

@@ -217,7 +217,7 @@ export function SeedingScreen() {
                   <div className="seed-pair-header">
                     <span className="seed-pair-court-name">
                       {isCentre && <Icons.Crown className="icon" style={{ marginRight: 6 }} />}
-                      {court?.name ?? '—'}
+                      {court?.name ?? 'TBD'}
                     </span>
                     <span className="seed-pair-court-pts">{court?.pointValue ?? 0} pts</span>
                   </div>
@@ -255,7 +255,7 @@ export function SeedingScreen() {
                   )}
                   {!bId && (
                     <div className="seed-row seed-row--empty" aria-hidden="true">
-                      <span className="seed-rank">—</span>
+                      <span className="seed-rank">·</span>
                       <span className="seed-team-name" style={{ color: 'var(--text-2)' }}>
                         Slot open
                       </span>
@@ -274,8 +274,8 @@ export function SeedingScreen() {
         <div className="qual-bottom-info">
           {tieGroupCount > 0 ? (
             <>
-              <span style={{ color: 'var(--amber)' }}>Tied qualifier scores</span>{' '}
-              — drag to choose seeding order.
+              <span style={{ color: 'var(--amber)' }}>Tied qualifier scores.</span>{' '}
+              Drag to choose seeding order.
             </>
           ) : (
             <>Ready to lock seeding and start Round 1.</>

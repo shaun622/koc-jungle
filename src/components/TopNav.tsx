@@ -127,7 +127,7 @@ export function TopNav({ event }: Props) {
       <ConfirmDialog
         open={confirmNew}
         title="Start a new event?"
-        message="This clears the current event — teams, scores, rounds, podium. Export first if you want to keep them."
+        message="This clears the current event: teams, scores, rounds, podium. Export first if you want to keep them."
         confirmLabel="Yes, start fresh"
         destructive
         onConfirm={() => {

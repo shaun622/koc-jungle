@@ -1,5 +1,5 @@
 /**
- * PaywallModal — pitches Pro and starts the 7-day trial or initiates
+ * PaywallModal: pitches Pro and starts the 7-day trial or initiates
  * a subscription purchase.
  *
  * Prices shown here are placeholders for the PWA build. Native builds
@@ -20,12 +20,12 @@ const PROD_MONTHLY_PRICE = 'See your local price';
 const PROD_ANNUAL_PRICE = 'See your local price';
 
 const FEATURES = [
-  'King of the Court — winners climb, losers drop',
-  'Americano — rotating partners pool',
-  'Mexicano — dynamic re-pairing each round',
-  'Round Robin — group stage all-play-all',
-  'Single-elimination bracket — knockout tournaments',
-  'Cloud sync — events across all your devices',
+  'King of the Court: winners climb, losers drop',
+  'Americano: rotating partners pool',
+  'Mexicano: dynamic re-pairing each round',
+  'Round Robin: group stage all-play-all',
+  'Single-elimination bracket: knockout tournaments',
+  'Cloud sync: events across all your devices',
 ];
 
 export function PaywallModal({
@@ -66,7 +66,7 @@ export function PaywallModal({
           <h2>You're Pro 👑</h2>
           {trialDays > 0 && (
             <p>
-              You're on the free trial — {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.
+              You're on the free trial, {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.
             </p>
           )}
           <p style={{ color: 'var(--text-2)', fontSize: 13 }}>

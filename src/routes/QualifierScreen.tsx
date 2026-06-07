@@ -43,7 +43,7 @@ export function QualifierScreen() {
           <div className="qual-title">Qualifier round</div>
           <div className="qual-sub">
             {event.teams.filter((t) => t.active).length} teams paired randomly across {total} courts.
-            Each match is best of {QUALIFIER_TOTAL} — every serve played. Enter one team's score and the
+            Each match is best of {QUALIFIER_TOTAL}, every serve played. Enter one team's score and the
             other auto-fills to keep the sum at {QUALIFIER_TOTAL}.
           </div>
         </div>
@@ -80,14 +80,14 @@ export function QualifierScreen() {
                 <span className="qual-match-court">{court?.name ?? ''}</span>
               </div>
               <div className="qual-row">
-                <div className="name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+                <div className="name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
                 <QualifierScoreInput
                   value={m.scoreA}
                   onCommit={(n) => setQualifierScore(m.id, n, QUALIFIER_TOTAL - n)}
                 />
               </div>
               <div className="qual-row">
-                <div className="name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+                <div className="name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
                 <QualifierScoreInput
                   value={m.scoreB}
                   onCommit={(n) => setQualifierScore(m.id, QUALIFIER_TOTAL - n, n)}
@@ -104,7 +104,7 @@ export function QualifierScreen() {
 
       <div className="qual-bottom">
         <div className="qual-bottom-info">
-          <strong>Best of {QUALIFIER_TOTAL} format</strong> — every serve is played. Draws ({Math.floor(QUALIFIER_TOTAL / 2)}-{Math.floor(QUALIFIER_TOTAL / 2)}) allowed.
+          <strong>Best of {QUALIFIER_TOTAL} format.</strong> Every serve is played. Draws ({Math.floor(QUALIFIER_TOTAL / 2)}-{Math.floor(QUALIFIER_TOTAL / 2)}) allowed.
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => navigate('/setup')}>

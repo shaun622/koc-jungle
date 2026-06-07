@@ -188,7 +188,7 @@ export function DisplayScreen() {
         <div className="display-toolbar display-toolbar--between">
           <div className="display-toolbar-summary" style={{ justifyContent: 'flex-start' }}>
             <span style={{ color: 'var(--text-1)' }}>
-              Round {event.rounds.at(-1)?.index ?? '—'} complete · rotation preview
+              Round {event.rounds.at(-1)?.index ?? '·'} complete · rotation preview
             </span>
           </div>
           <NextRoundDurationField
@@ -288,7 +288,7 @@ export function DisplayScreen() {
               try {
                 await captureAndShare(podiumShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
-                  shareTitle: `${event.name} — results`,
+                  shareTitle: `${event.name} results`,
                   shareText: 'Tonight\'s padel results 🏆',
                 });
               } finally {
@@ -331,7 +331,7 @@ export function DisplayScreen() {
         message={
           isFinalRound
             ? 'This is the final scheduled round. Scores will be locked and the podium will be revealed.'
-            : `Scores lock and the courts rotate — winners up, losers down. Round ${(round?.index ?? 0) + 1} starts straight away.`
+            : `Scores lock and the courts rotate: winners up, losers down. Round ${(round?.index ?? 0) + 1} starts straight away.`
         }
         confirmLabel={
           isFinalRound ? 'End event' : `Start Round ${(round?.index ?? 0) + 1} →`
@@ -351,7 +351,7 @@ export function DisplayScreen() {
       <ConfirmDialog
         open={confirmNew}
         title="Start a new event?"
-        message="This clears the current event — teams, scores, rounds, podium. Export first if you want to keep them."
+        message="This clears the current event: teams, scores, rounds, podium. Export first if you want to keep them."
         confirmLabel="Yes, start fresh"
         destructive
         onConfirm={() => {
@@ -683,7 +683,7 @@ function TvLiveCanvas({
   const king = lb[0];
   const kingLabel = king
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
-    : '—';
+    : 'TBD';
 
   return (
     <div className="tv-display">
@@ -761,14 +761,14 @@ function TvLiveCanvas({
               <div className="tv-centre-crown">
                 <Icons.Crown className="icon lg" /> King's Court
               </div>
-              <div className="tv-centre-name">{centre?.name ?? '—'}</div>
+              <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>
               <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
             </div>
             <div className="tv-centre-team">
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
-                {centreA ? teamLabelShort(centreA) : '—'}
+                {centreA ? teamLabelShort(centreA) : 'TBD'}
               </div>
             </div>
             <div className="tv-centre-scores">
@@ -804,7 +804,7 @@ function TvLiveCanvas({
               {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
-                {centreB ? teamLabelShort(centreB) : '—'}
+                {centreB ? teamLabelShort(centreB) : 'TBD'}
               </div>
             </div>
             <div />
@@ -838,7 +838,7 @@ function TvLiveCanvas({
             <div className="tv-timer-block">
               <div className="tv-timer-label">Time Remaining</div>
               <div className={'tv-timer-value size-xl ' + timerCls}>
-                {round ? formatMs(timerView.remainingMs) : '—'}
+                {round ? formatMs(timerView.remainingMs) : '·'}
               </div>
               <div className="tv-timer-progress">
                 <div className="tv-timer-progress-bar" style={{ width: `${progress}%` }} />
@@ -945,7 +945,7 @@ function CentreTieRow({
   if (!tied) return null;
   return (
     <div className="tv-centre-tie">
-      <span className="label">Tied — pick winner:</span>
+      <span className="label">Tied. Pick winner:</span>
       <button
         className={
           'tv-tie-btn ' + (match.tieBreakWinnerId === teamA.id ? 'active' : '')
@@ -1022,7 +1022,7 @@ function TvCourtCard({
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
           </div>
         </div>
         <ScoreCell
@@ -1038,7 +1038,7 @@ function TvCourtCard({
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
           </div>
         </div>
         <ScoreCell
@@ -1051,7 +1051,7 @@ function TvCourtCard({
       </div>
       {showControls && tied && teamA && teamB && (
         <div className="tv-court-tie">
-          <span className="label">Tied —</span>
+          <span className="label">Tied:</span>
           <button
             className={
               'tv-tie-btn ' + (match.tieBreakWinnerId === teamA.id ? 'active' : '')
@@ -1189,7 +1189,7 @@ function TvBetweenCanvas({
   const king = lb[0];
   const kingLabel = king
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
-    : '—';
+    : 'TBD';
 
   return (
     <div className="tv-display tv-display--between">
@@ -1276,14 +1276,14 @@ function TvBetweenCanvas({
               <div className="tv-centre-crown">
                 <Icons.Crown className="icon lg" /> King's Court
               </div>
-              <div className="tv-centre-name">{centre?.name ?? '—'}</div>
+              <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>
               <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
             </div>
             <div className="tv-centre-team">
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
-                {centreA ? teamLabelShort(centreA) : '—'}
+                {centreA ? teamLabelShort(centreA) : 'TBD'}
               </div>
               {centreA && (
                 <MovementChip
@@ -1299,7 +1299,7 @@ function TvBetweenCanvas({
               {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
-                {centreB ? teamLabelShort(centreB) : '—'}
+                {centreB ? teamLabelShort(centreB) : 'TBD'}
               </div>
               {centreB && (
                 <MovementChip
@@ -1412,7 +1412,7 @@ function TvBetweenCourtCard({
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : '—'}</div>
+            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
           </div>
         </div>
         {teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
@@ -1422,7 +1422,7 @@ function TvBetweenCourtCard({
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : '—'}</div>
+            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
           </div>
         </div>
         {teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}

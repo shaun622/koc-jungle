@@ -49,7 +49,7 @@ const americano: FormatRuleGuide = {
   bestFor:
     'Open nights with a fixed time window where you want to mix it up and face as many different opponents as possible. Set the round count to fit the time you have.',
   rules: [
-    'All teams form one shared pool — no groups.',
+    'All teams form one shared pool, with no groups.',
     'The schedule rotates each round (Berger tables) so each team faces as many different opponents as the rounds allow.',
     'The operator picks the total number of rounds; the format truncates the full schedule at that count.',
     'If the operator sets more rounds than the full schedule has, it wraps and repeats from the start.',
@@ -66,7 +66,7 @@ const mexicano: FormatRuleGuide = {
   bestFor:
     'Competitive nights where you want close, balanced matchups every round. Top teams meet at the end on Centre Court.',
   rules: [
-    'Round 1 pairs consecutive teams in the stored order — drag the team list on Setup to control the opening pairings.',
+    'Round 1 pairs consecutive teams in the stored order. Drag the team list on Setup to control the opening pairings.',
     'After every round, teams are re-ranked by accumulated points.',
     'Round 2 onwards: adjacent-ranked teams play each other (1st vs 2nd, 3rd vs 4th, …).',
     'The top match is scheduled on the highest court so leaders meet on the showpiece court each round.',
@@ -86,9 +86,9 @@ const roundRobin: FormatRuleGuide = {
   rules: [
     'Teams are split into groups (operator picks the group size, default 4).',
     'Each team plays every other team in their group exactly once.',
-    'Schedule is generated using Berger tables — the standard chess-pairing algorithm.',
+    'Schedule is generated using Berger tables, the standard chess-pairing algorithm.',
     'Total rounds per group = group size − 1 (even sizes) or group size (odd sizes, with one team on bye per round).',
-    'Mixed group sizes are supported — smaller groups finish their rounds early and sit out the trailing rounds.',
+    'Mixed group sizes are supported. Smaller groups finish their rounds early and sit out the trailing rounds.',
     'All groups play simultaneously across the available courts.',
   ],
   scoring:
@@ -103,13 +103,13 @@ const bracket: FormatRuleGuide = {
     'High-stakes nights or end-of-tournament finals. One clear winner. Quick to run once the field is set.',
   rules: [
     'Bracket size is the next power of 2 above the team count (e.g. 5 teams → 8-bracket).',
-    'Top seeds get byes in Round 1 when the field isn\'t already a power of 2 — they auto-advance to Round 2.',
+    'Top seeds get byes in Round 1 when the field isn\'t already a power of 2, auto-advancing to Round 2.',
     'Each round halves the field. Winners advance, losers are eliminated.',
     'Seeding follows the balanced format: #1 only meets #2 in the final, #1 meets #3 in the semi at the earliest.',
     'Total rounds = log₂(bracket size). 4 teams → 2 rounds. 8 → 3. 16 → 4.',
   ],
   scoring:
-    'Win to advance. The team that wins the final round is the tournament champion. No points tally — bracket position is the result.',
+    'Win to advance. The team that wins the final round is the tournament champion. No points tally; bracket position is the result.',
 };
 
 export const FORMAT_RULES: Record<TournamentFormatId, FormatRuleGuide> = {
