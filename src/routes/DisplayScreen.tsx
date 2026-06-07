@@ -14,6 +14,7 @@ import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
+import { BrandLogo } from '@/components/BrandLogo';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
 import { ShareCard } from '@/components/ShareCard';
@@ -689,7 +690,7 @@ function TvLiveCanvas({
     <div className="tv-display">
       <div className="tv-header">
         <div className="tv-header-brand">
-          <div className="brand-mark lg">K</div>
+          <div className="brand-mark lg"><BrandLogo /></div>
           <div className="tv-header-event">
             <div className="tv-header-event-name">{event.name}</div>
             <div className="tv-header-event-meta">
@@ -1201,7 +1202,7 @@ function TvBetweenCanvas({
     <div className="tv-display tv-display--between">
       <div className="tv-header">
         <div className="tv-header-brand">
-          <div className="brand-mark lg">K</div>
+          <div className="brand-mark lg"><BrandLogo /></div>
           <div className="tv-header-event">
             <div className="tv-header-event-name">{event.name}</div>
             <div className="tv-header-event-meta">
