@@ -23,6 +23,7 @@ import { useThemeStore } from '@/store/theme';
 import { Icons } from './Icons';
 import { AuthModal } from './AuthModal';
 import { SettingsModal } from './SettingsModal';
+import { ClubBrandingModal } from './ClubBrandingModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { EventState } from '@/types/domain';
 
@@ -32,6 +33,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clubOpen, setClubOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -118,6 +120,18 @@ export function AppMenu({ event }: { event: EventState | null }) {
                 <span className="app-menu-item-label">Event settings</span>
               </button>
             )}
+
+            {/* Club branding */}
+            <button
+              className="app-menu-item"
+              onClick={() => {
+                close();
+                setClubOpen(true);
+              }}
+            >
+              <Icons.Crown className="icon" />
+              <span className="app-menu-item-label">Club branding</span>
+            </button>
 
             {/* Format guide */}
             <button
@@ -240,6 +254,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
       )}
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {clubOpen && <ClubBrandingModal onClose={() => setClubOpen(false)} />}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );

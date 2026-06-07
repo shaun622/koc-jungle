@@ -58,6 +58,31 @@ export async function cropImageFileToAvatar(file: File): Promise<string> {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Fit an image File inside a 256×256 transparent PNG (contain, not crop)
+ * so a club's whole logo is preserved (wide or tall). Returns a data URL
+ * for localStorage. Throws if the file isn't an image.
+ */
+export async function fitImageFileToLogo(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Selected file is not an image.');
+  }
+  const dataUrl = await readFileAsDataUrl(file);
+  const img = await loadImage(dataUrl);
+  const SIZE = 256;
+  const scale = Math.min(SIZE / img.width, SIZE / img.height);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D canvas unavailable.');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+  return canvas.toDataURL('image/png');
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrandLogo } from './BrandLogo';
 import { AppMenu } from './AppMenu';
+import { useClubBrandingStore } from '@/store/clubBranding';
 import type { EventState, EventStatus } from '@/types/domain';
 
 interface TabDef {
@@ -25,6 +26,8 @@ interface Props {
 export function TopNav({ event }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
+  const clubName = useClubBrandingStore((s) => s.name);
+  const clubLogo = useClubBrandingStore((s) => s.logoDataUrl);
 
   const currentRound = event.rounds[event.rounds.length - 1];
   const roundIndex =
@@ -44,8 +47,12 @@ export function TopNav({ event }: Props) {
     <div className="op-top">
       <div className="op-top-left">
         <div className="chrome-brand">
-          <div className="brand-mark"><BrandLogo /></div>
-          <span className="chrome-brand-name">PADEL TOURNAMENT MAKER</span>
+          <div className="brand-mark">
+            {clubLogo ? <img src={clubLogo} alt={clubName || 'Club logo'} /> : <BrandLogo />}
+          </div>
+          <span className="chrome-brand-name">
+            {clubName ? clubName : 'PADEL TOURNAMENT MAKER'}
+          </span>
         </div>
         <span className="op-top-meta">
           {event.name}

@@ -4437,6 +4437,46 @@ button {
   line-height: 1.5;
 }
 
+/* Club branding modal */
+.club-modal {
+  max-width: 24rem;
+  gap: 10px;
+}
+.club-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 6px 0;
+}
+.club-logo-preview {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.club-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.club-logo-empty {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.club-logo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* Paywall (Stage 2.5 — subscription) */
 .paywall-modal {
   max-width: 28rem;
