@@ -5557,10 +5557,52 @@ button {
     inset: auto;
     padding: 12px;
     overflow: visible;
+    gap: 10px;
+    /* KEY: without an explicit column the implicit `auto` track sizes to
+       the widest child (the timer), forcing every row wider than the
+       phone. Constrain to the container width. */
+    grid-template-columns: minmax(0, 1fr);
   }
   .qual-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     overflow: visible;
+    gap: 10px;
+  }
+  /* Stack the clock: value on top, controls in a tidy row below, all
+     within the viewport (the portrait "doesn't fit" fix). */
+  .qual-timer-row > .op-timer {
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .qual-timer-row .op-timer-value {
+    font-size: 44px;
+  }
+  .qual-timer-row .op-timer-controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  .qual-timer-row .op-timer-controls .btn {
+    padding: 9px 4px;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .qual-timer-row .op-timer-play {
+    flex: none;
+  }
+  /* Bigger, easier-to-tap score inputs on phones. */
+  .qual-row {
+    grid-template-columns: minmax(0, 1fr) 68px;
+  }
+  .qual-row input {
+    width: 68px;
+    font-size: 19px;
+    padding: 11px 8px;
   }
   .qual-bottom {
     flex-direction: column;

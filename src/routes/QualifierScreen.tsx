@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
-import { QUALIFIER_TOTAL } from '@/logic/seeding';
 import { validateQualifierScore } from '@/logic/validation';
 import { Timer } from '@/components/Timer';
 
@@ -20,11 +19,17 @@ export function QualifierScreen() {
     return null;
   }
 
+  const unit = event.settings.qualifierUnit ?? 'points';
+  const target = event.settings.qualifierTarget ?? 16;
+  const rule = { unit, target };
+  const isTimed = unit === 'time';
+  const noun = unit === 'games' ? 'games' : unit === 'time' ? 'points' : 'points';
+
   const allValid = event.qualifier.matches.every(
-    (m) => !validateQualifierScore(m.scoreA, m.scoreB),
+    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule),
   );
   const validCount = event.qualifier.matches.filter(
-    (m) => !validateQualifierScore(m.scoreA, m.scoreB),
+    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule),
   ).length;
   const total = event.qualifier.matches.length;
 
@@ -36,16 +41,16 @@ export function QualifierScreen() {
       return pb - pa;
     });
 
+  const headSub = isTimed
+    ? `${event.teams.filter((t) => t.active).length} teams paired randomly across ${total} courts. Each match runs ${target} minutes. Enter each team's final score.`
+    : `${event.teams.filter((t) => t.active).length} teams paired randomly across ${total} courts. Each match plays to ${target} ${noun}, every serve played. Enter one team's score and the other auto-fills.`;
+
   return (
     <div className="qual">
       <div className="qual-head">
         <div>
           <div className="qual-title">Qualifier round</div>
-          <div className="qual-sub">
-            {event.teams.filter((t) => t.active).length} teams paired randomly across {total} courts.
-            Each match is best of {QUALIFIER_TOTAL}, every serve played. Enter one team's score and the
-            other auto-fills to keep the sum at {QUALIFIER_TOTAL}.
-          </div>
+          <div className="qual-sub">{headSub}</div>
         </div>
         <div className="qual-meta">
           {validCount} / {total} matches valid
@@ -71,8 +76,8 @@ export function QualifierScreen() {
           const teamA = event.teams.find((t) => t.id === m.teamAId);
           const teamB = event.teams.find((t) => t.id === m.teamBId);
           const sum = m.scoreA + m.scoreB;
-          const valid = sum === QUALIFIER_TOTAL;
-          const tooMuch = sum > QUALIFIER_TOTAL;
+          const valid = isTimed ? true : sum === target;
+          const tooMuch = sum > target;
           return (
             <div key={m.id} className="qual-match">
               <div className="qual-match-head">
@@ -83,20 +88,34 @@ export function QualifierScreen() {
                 <div className="name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
                 <QualifierScoreInput
                   value={m.scoreA}
-                  onCommit={(n) => setQualifierScore(m.id, n, QUALIFIER_TOTAL - n)}
+                  max={isTimed ? 99 : target}
+                  onCommit={(n) =>
+                    isTimed
+                      ? setQualifierScore(m.id, n, m.scoreB)
+                      : setQualifierScore(m.id, n, target - n)
+                  }
                 />
               </div>
               <div className="qual-row">
                 <div className="name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
                 <QualifierScoreInput
                   value={m.scoreB}
-                  onCommit={(n) => setQualifierScore(m.id, QUALIFIER_TOTAL - n, n)}
+                  max={isTimed ? 99 : target}
+                  onCommit={(n) =>
+                    isTimed
+                      ? setQualifierScore(m.id, m.scoreA, n)
+                      : setQualifierScore(m.id, target - n, n)
+                  }
                 />
               </div>
-              <div className={'qual-sum ' + (valid ? 'ok' : sum > 0 || !valid ? 'bad' : '')}>
-                SUM {sum} / {QUALIFIER_TOTAL}{' '}
-                {valid ? '✓' : tooMuch ? '× over' : '× short'}
-              </div>
+              {isTimed ? (
+                <div className="qual-sum ok">FINAL {m.scoreA}–{m.scoreB}</div>
+              ) : (
+                <div className={'qual-sum ' + (valid ? 'ok' : sum > 0 || !valid ? 'bad' : '')}>
+                  SUM {sum} / {target}{' '}
+                  {valid ? '✓' : tooMuch ? '× over' : '× short'}
+                </div>
+              )}
             </div>
           );
         })}
@@ -104,7 +123,16 @@ export function QualifierScreen() {
 
       <div className="qual-bottom">
         <div className="qual-bottom-info">
-          <strong>Best of {QUALIFIER_TOTAL} format.</strong> Every serve is played. Draws ({Math.floor(QUALIFIER_TOTAL / 2)}-{Math.floor(QUALIFIER_TOTAL / 2)}) allowed.
+          {isTimed ? (
+            <>
+              <strong>Timed format ({target} min).</strong> Enter each team's final score.
+            </>
+          ) : (
+            <>
+              <strong>Play to {target} {noun}.</strong> Every {noun.slice(0, -1)} is played. Draws (
+              {Math.floor(target / 2)}-{Math.floor(target / 2)}) allowed.
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => navigate('/setup')}>
@@ -128,9 +156,11 @@ export function QualifierScreen() {
 
 function QualifierScoreInput({
   value,
+  max,
   onCommit,
 }: {
   value: number;
+  max: number;
   onCommit: (n: number) => void;
 }) {
   const [text, setText] = useState(String(value));
@@ -141,7 +171,7 @@ function QualifierScoreInput({
   const commit = () => {
     setFocused(false);
     const n = parseInt(text, 10);
-    if (!Number.isNaN(n) && n >= 0 && n <= QUALIFIER_TOTAL) {
+    if (!Number.isNaN(n) && n >= 0 && n <= max) {
       onCommit(n);
       setText(String(n));
     } else {
@@ -152,8 +182,7 @@ function QualifierScoreInput({
     <input
       // type="text" + inputMode + pattern is the reliable iOS recipe for the
       // plain numeric keypad. type="number" on iOS can still surface the full
-      // keyboard. Score is 0–16 so digits only, max 2 chars; the commit()
-      // handler clamps to 0..QUALIFIER_TOTAL.
+      // keyboard. The commit() handler clamps to 0..max.
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"

@@ -377,11 +377,17 @@ export const useEventStore = create<EventStore>()(
           return;
         }
         const seed = newSeed();
+        // When the qualifier is timed, the target is in minutes and drives
+        // the qualifier clock; otherwise fall back to the default round length.
+        const qualifierDurationMs =
+          event.settings.qualifierUnit === 'time'
+            ? Math.max(1, event.settings.qualifierTarget ?? 10) * 60_000
+            : event.settings.defaultRoundDurationMs;
         const qualifier = buildQualifierRound(
           event.teams,
           event.courts,
           seed,
-          event.settings.defaultRoundDurationMs,
+          qualifierDurationMs,
         );
         set({
           event: { ...event, qualifier, status: 'qualifier' },
@@ -478,8 +484,12 @@ export const useEventStore = create<EventStore>()(
       confirmQualifierResults: () => {
         const event = get().event;
         if (!event?.qualifier) return;
+        const rule = {
+          unit: event.settings.qualifierUnit ?? 'points',
+          target: event.settings.qualifierTarget ?? 16,
+        };
         for (const m of event.qualifier.matches) {
-          const issue = validateQualifierScore(m.scoreA, m.scoreB);
+          const issue = validateQualifierScore(m.scoreA, m.scoreB, rule);
           if (issue) {
             set({ lastError: issue.message });
             return;

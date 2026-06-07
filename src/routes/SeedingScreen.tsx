@@ -180,20 +180,40 @@ export function SeedingScreen() {
     reorderSeeding(next);
   };
 
+  // Skip-qualifier case: no scores to rank by, so the operator either drags
+  // teams into order or shuffles the whole field with one tap.
+  const skippedQualifier = !event.qualifier;
+  const randomiseAll = () => {
+    const next = order.slice();
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j], next[i]];
+    }
+    setOrder(next);
+    reorderSeeding(next);
+  };
+
   return (
     <div className="seed">
       <div className="qual-head">
         <div>
           <div className="qual-title">Seeding preview</div>
           <div className="qual-sub">
-            Teams ranked by qualifier score. Drag to reorder tied teams. Top two take Centre Court;
-            bottom two take Court 1.
+            {skippedQualifier
+              ? 'Drag teams into your seeding order, or shuffle the whole field. Top two take Centre Court; bottom two take Court 1.'
+              : 'Teams ranked by qualifier score. Drag to reorder tied teams. Top two take Centre Court; bottom two take Court 1.'}
           </div>
         </div>
         <div className="qual-meta">
-          {tieGroupCount > 0
-            ? `${tieGroupCount} tie${tieGroupCount === 1 ? '' : 's'}`
-            : 'No ties to resolve'}
+          {skippedQualifier ? (
+            <button className="btn sm" onClick={randomiseAll} title="Shuffle all teams">
+              🎲 Randomise all
+            </button>
+          ) : tieGroupCount > 0 ? (
+            `${tieGroupCount} tie${tieGroupCount === 1 ? '' : 's'}`
+          ) : (
+            'No ties to resolve'
+          )}
         </div>
       </div>
 

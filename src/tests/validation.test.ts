@@ -79,4 +79,23 @@ describe('validateQualifierScore', () => {
   it('rejects negatives', () => {
     expect(validateQualifierScore(-1, 17)).not.toBeNull();
   });
+
+  it('honours a custom points target', () => {
+    expect(validateQualifierScore(11, 10, { unit: 'points', target: 21 })).toBeNull();
+    expect(validateQualifierScore(11, 9, { unit: 'points', target: 21 })).not.toBeNull();
+  });
+
+  it('treats games like points (sum to target)', () => {
+    expect(validateQualifierScore(4, 2, { unit: 'games', target: 6 })).toBeNull();
+    expect(validateQualifierScore(4, 4, { unit: 'games', target: 6 })).not.toBeNull();
+  });
+
+  it('time unit accepts any non-negative scores (no sum constraint)', () => {
+    expect(validateQualifierScore(7, 3, { unit: 'time', target: 10 })).toBeNull();
+    expect(validateQualifierScore(0, 0, { unit: 'time', target: 10 })).toBeNull();
+    expect(validateQualifierScore(30, 12, { unit: 'time', target: 10 })).toBeNull();
+    // still rejects negatives / non-integers
+    expect(validateQualifierScore(-1, 5, { unit: 'time', target: 10 })).not.toBeNull();
+    expect(validateQualifierScore(5.5, 4, { unit: 'time', target: 10 })).not.toBeNull();
+  });
 });

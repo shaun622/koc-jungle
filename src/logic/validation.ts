@@ -1,4 +1,4 @@
-import type { Court, PendingAssignment, Team } from '@/types/domain';
+import type { Court, PendingAssignment, QualifierUnit, Team } from '@/types/domain';
 
 export interface ValidationIssue {
   message: string;
@@ -43,15 +43,41 @@ export function validateAssignments(
 
 export const QUALIFIER_SUM = 16;
 
-export function validateQualifierScore(scoreA: number, scoreB: number): ValidationIssue | null {
+export interface QualifierScoreRule {
+  unit: QualifierUnit;
+  target: number;
+}
+
+/**
+ * Validate one qualifier match's scores.
+ *  - points / games: scores must sum to the target (every point/game played).
+ *  - time: each team scores independently, so any non-negative integers are
+ *    valid (no sum constraint). A 0-0 is still allowed (not yet played reads
+ *    as 0-0 which the caller treats as "not entered" via its own UI state).
+ *
+ * Back-compat: called with no rule it defaults to points / 16.
+ */
+export function validateQualifierScore(
+  scoreA: number,
+  scoreB: number,
+  rule?: QualifierScoreRule,
+): ValidationIssue | null {
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB)) {
     return { message: 'Scores must be whole numbers.' };
   }
   if (scoreA < 0 || scoreB < 0) {
     return { message: 'Scores cannot be negative.' };
   }
-  if (scoreA + scoreB !== QUALIFIER_SUM) {
-    return { message: `Qualifier scores must sum to ${QUALIFIER_SUM} (got ${scoreA + scoreB}).` };
+  const unit = rule?.unit ?? 'points';
+  const target = rule?.target ?? QUALIFIER_SUM;
+  if (unit === 'points' || unit === 'games') {
+    if (scoreA + scoreB !== target) {
+      const noun = unit === 'games' ? 'games' : 'points';
+      return {
+        message: `Qualifier ${noun} must sum to ${target} (got ${scoreA + scoreB}).`,
+      };
+    }
   }
+  // 'time': no sum constraint.
   return null;
 }

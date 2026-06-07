@@ -75,6 +75,14 @@ export interface MainRound extends TimerState {
   completedAt?: number;
 }
 
+/**
+ * How a qualifier match is scored / won:
+ *  - 'points': best of N points, scores sum to the target (e.g. 16).
+ *  - 'games':  best of N games, scores sum to the target (e.g. 6).
+ *  - 'time':   timed match, each team enters its own score, no fixed sum.
+ */
+export type QualifierUnit = 'points' | 'games' | 'time';
+
 export interface EventSettings {
   defaultRoundDurationMs: number;
   tieRule: TieRule;
@@ -85,6 +93,14 @@ export interface EventSettings {
   announceRoundStart: boolean;
   /** Optional Web Speech voiceURI; undefined means auto-pick a sensible voice. */
   announcementVoiceURI?: string;
+  /** Whether the KoC qualifier round is used. When false the operator
+   *  goes straight to seeding (manual or random). Default true. */
+  qualifierEnabled?: boolean;
+  /** What the qualifier is scored in. Default 'points'. */
+  qualifierUnit?: QualifierUnit;
+  /** Target number: points/games to play to, or minutes when unit is
+   *  'time'. Default 16 (points). */
+  qualifierTarget?: number;
 }
 
 export interface PendingAssignment {
@@ -134,6 +150,9 @@ export const DEFAULT_SETTINGS: EventSettings = {
   warningAtMs: 60 * 1000,
   roundsTotal: 6,
   announceRoundStart: false,
+  qualifierEnabled: true,
+  qualifierUnit: 'points',
+  qualifierTarget: 16,
 };
 
 export function isCentreCourt(court: Court, courts: Court[]): boolean {

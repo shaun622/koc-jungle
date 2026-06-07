@@ -25,7 +25,7 @@ import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/e
 import { PaywallModal } from '@/components/PaywallModal';
 import { useThemeStore } from '@/store/theme';
 import type { TournamentFormatId } from '@/types/domain';
-import { isCentreCourt, type Court, type Player, type TieRule } from '@/types/domain';
+import { isCentreCourt, type Court, type Player, type QualifierUnit, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { parseImportJson } from '@/utils/exportImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -268,6 +268,8 @@ export function SetupScreen() {
   const teams = activeTeams(event);
   const format = getFormat(event.format);
   const expectedTeams = event.courts.length * 2;
+  const qualifierEnabled = event.settings.qualifierEnabled !== false;
+  const qualifierUnit = event.settings.qualifierUnit ?? 'points';
   const canStartQualifier =
     format.usesQualifier && event.status === 'setup' && teams.length === expectedTeams;
   const teamDelta = expectedTeams - teams.length;
@@ -376,6 +378,51 @@ export function SetupScreen() {
               onChange={(v) => updateSettings({ announceRoundStart: v })}
             />
           </div>
+
+          {format.usesQualifier && (
+            <>
+              <div className="setup-field">
+                <label>Use qualifier round</label>
+                <ToggleField
+                  value={qualifierEnabled}
+                  onChange={(v) => updateSettings({ qualifierEnabled: v })}
+                />
+              </div>
+              {qualifierEnabled && (
+                <>
+                  <div className="setup-field">
+                    <label>Qualifier scored in</label>
+                    <select
+                      className="setup-input"
+                      value={qualifierUnit}
+                      onChange={(e) =>
+                        updateSettings({ qualifierUnit: e.target.value as QualifierUnit })
+                      }
+                    >
+                      <option value="points">Points</option>
+                      <option value="games">Games</option>
+                      <option value="time">Time</option>
+                    </select>
+                  </div>
+                  <div className="setup-field">
+                    <label>
+                      {qualifierUnit === 'time'
+                        ? 'Minutes per match'
+                        : qualifierUnit === 'games'
+                          ? 'Games to'
+                          : 'Points to'}
+                    </label>
+                    <NumberField
+                      value={event.settings.qualifierTarget ?? 16}
+                      min={1}
+                      max={qualifierUnit === 'time' ? 60 : 99}
+                      onCommit={(n) => updateSettings({ qualifierTarget: n })}
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </div>
 
         <h2 className="setup-h" style={{ marginTop: 12 }}>
@@ -477,33 +524,27 @@ export function SetupScreen() {
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
           {format.usesQualifier ? (
-            <>
-              <button
-                className="btn lg"
-                disabled={!canStartQualifier}
-                onClick={() => {
-                  skipQualifierToSeeding();
-                  setTimeout(() => navigate('/seeding'), 0);
-                }}
-                title="Skip qualifier, seed teams manually"
-              >
-                Skip qualifier
-              </button>
-              <button
-                className="btn full primary lg"
-                disabled={!canStartQualifier}
-                onClick={() => {
+            <button
+              className="btn full primary lg"
+              disabled={!canStartQualifier}
+              onClick={() => {
+                if (qualifierEnabled) {
                   startQualifier();
                   setTimeout(() => navigate('/qualifier'), 0);
-                }}
-              >
-                {canStartQualifier
+                } else {
+                  skipQualifierToSeeding();
+                  setTimeout(() => navigate('/seeding'), 0);
+                }
+              }}
+            >
+              {canStartQualifier
+                ? qualifierEnabled
                   ? 'Start qualifier round →'
-                  : teamDelta > 0
-                    ? `Need ${teamDelta} more team(s)`
-                    : `Remove ${-teamDelta} team(s)`}
-              </button>
-            </>
+                  : 'Continue to seeding →'
+                : teamDelta > 0
+                  ? `Need ${teamDelta} more team(s)`
+                  : `Remove ${-teamDelta} team(s)`}
+            </button>
           ) : (
             <button
               className="btn full primary lg"
