@@ -366,7 +366,13 @@ button {
 .lbfull,
 .help,
 .landing-card {
-  animation: screen-in 0.22s ease both;
+  /* 'backwards' (not 'both') on purpose: 'both'/'forwards' would leave a
+     transform: translateY(0) applied after the animation, and a
+     transformed ancestor becomes the containing block for position:fixed
+     children — which pins centered modals to this scrolled container
+     instead of the viewport. 'backwards' avoids the start flash without
+     leaving a lingering transform. */
+  animation: screen-in 0.22s ease backwards;
 }
 .score-pop {
   animation: score-pop 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -3979,11 +3985,13 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: oklch(0% 0 0 / 0.7);
+  background: oklch(0% 0 0 / 0.78);
+  backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   z-index: 50;
   padding: 16px;
+  animation: app-menu-fade 0.15s ease;
 }
 .modal {
   width: 100%;
@@ -3995,6 +4003,24 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow: 0 24px 64px -16px oklch(0% 0 0 / 0.7);
+  animation: modal-pop 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal {
+    animation: none;
+  }
 }
 .modal h2 {
   font-family: var(--font-display);

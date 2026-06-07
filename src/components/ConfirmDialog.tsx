@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Props {
   open: boolean;
@@ -32,7 +33,9 @@ export function ConfirmDialog({
 
   if (!open) return null;
 
-  return (
+  // Portal to <body> so the fixed backdrop is never trapped by a
+  // transformed/animated ancestor (which would pin it mid-page).
+  return createPortal(
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
@@ -46,6 +49,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
