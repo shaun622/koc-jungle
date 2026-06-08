@@ -203,7 +203,16 @@ export function nightlyStats(event: EventState | null): NightlyStat[] {
     }
   }
 
+  const lb = leaderboard(event);
+
   const stats: NightlyStat[] = [];
+  if (biggestMargin > 0) {
+    stats.push({
+      label: 'Biggest margin',
+      value: `+${biggestMargin}`,
+      detail: biggestMarginText,
+    });
+  }
   if (topCentreWinner && topCentreCount > 0) {
     stats.push({
       label: 'Centre Court king',
@@ -218,11 +227,24 @@ export function nightlyStats(event: EventState | null): NightlyStat[] {
       detail: `${bestStreak} wins in a row`,
     });
   }
-  if (biggestMargin > 0) {
+  // Sharpshooter: most games / points won across the night.
+  if (lb.length) {
+    const sharp = lb.slice().sort((a, b) => b.gamesFor - a.gamesFor)[0];
+    if (sharp && sharp.gamesFor > 0) {
+      stats.push({
+        label: 'Sharpshooter',
+        value: teamNameFor(event, sharp.teamId),
+        detail: `${sharp.gamesFor} games won all night`,
+      });
+    }
+  }
+  // Wooden spoon: bottom of the final table (needs a real field to be fun).
+  if (lb.length >= 3) {
+    const last = lb[lb.length - 1];
     stats.push({
-      label: 'Biggest margin',
-      value: `+${biggestMargin}`,
-      detail: biggestMarginText,
+      label: 'Wooden spoon 🥄',
+      value: teamNameFor(event, last.teamId),
+      detail: `${last.wins} win${last.wins === 1 ? '' : 's'} · ${last.total} pts — there's always next week`,
     });
   }
   return stats;

@@ -17,7 +17,7 @@ import { Icons } from '@/components/Icons';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { downloadJsonFile, toExportJson } from '@/utils/exportImport';
+import { NightlyStatsModal } from '@/components/NightlyStatsModal';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
 import { EditPointsModal } from '@/components/EditPointsModal';
@@ -65,6 +65,7 @@ export function DisplayScreen() {
   const [sharing, setSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEditPoints, setShowEditPoints] = useState(false);
+  const [showStats, setShowStats] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind
@@ -176,13 +177,6 @@ export function DisplayScreen() {
             setMenuOpen(false);
             setConfirmFinish(true);
           }}
-          onExport={() => {
-            const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
-              .toISOString()
-              .slice(0, 10)}.json`;
-            downloadJsonFile(filename, toExportJson(event));
-            setMenuOpen(false);
-          }}
           onNewEvent={() => {
             setMenuOpen(false);
             setConfirmNew(true);
@@ -253,18 +247,6 @@ export function DisplayScreen() {
                   </button>
                   <div className="display-menu-divider" />
                   <button
-                    className="display-menu-item"
-                    onClick={() => {
-                      const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
-                        .toISOString()
-                        .slice(0, 10)}.json`;
-                      downloadJsonFile(filename, toExportJson(event));
-                      setMenuOpen(false);
-                    }}
-                  >
-                    Export JSON
-                  </button>
-                  <button
                     className="display-menu-item display-menu-danger"
                     onClick={() => {
                       setMenuOpen(false);
@@ -282,8 +264,8 @@ export function DisplayScreen() {
 
       {showCompleteCanvas && (
         <div className="display-toolbar display-toolbar--complete">
-          <button className="btn primary lg" onClick={() => setConfirmNew(true)}>
-            Start new event →
+          <button className="btn primary lg" onClick={() => setShowStats(true)}>
+            🏆 Nightly stats
           </button>
           <button
             className="btn"
@@ -293,7 +275,7 @@ export function DisplayScreen() {
               setSharing(true);
               try {
                 await captureAndShare(podiumShareRef.current, {
-                  filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
+                  filename: `padel-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
                   shareTitle: `${event.name} results`,
                   shareText: 'Tonight\'s padel results 🏆',
                 });
@@ -306,15 +288,6 @@ export function DisplayScreen() {
           </button>
           <button className="btn" onClick={() => setShowEditPoints(true)}>
             Edit points
-          </button>
-          <button
-            className="btn"
-            onClick={() => {
-              const filename = `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-final.json`;
-              downloadJsonFile(filename, toExportJson(event));
-            }}
-          >
-            Export JSON
           </button>
           <button className="btn ghost" onClick={() => navigate('/leaderboard')}>
             Full standings
@@ -385,6 +358,10 @@ export function DisplayScreen() {
       {showEditPoints && (
         <EditPointsModal onClose={() => setShowEditPoints(false)} />
       )}
+
+      {showStats && (
+        <NightlyStatsModal event={event} onClose={() => setShowStats(false)} />
+      )}
     </div>
   );
 }
@@ -409,7 +386,6 @@ interface DisplayToolbarProps {
   onNavigate: (path: string) => void;
   onSettings: () => void;
   onFinishEvent: () => void;
-  onExport: () => void;
   onNewEvent: () => void;
 }
 
@@ -479,7 +455,6 @@ function DisplayToolbar({
   onNavigate,
   onSettings,
   onFinishEvent,
-  onExport,
   onNewEvent,
 }: DisplayToolbarProps) {
   const round = currentRound(event);
@@ -613,9 +588,6 @@ function DisplayToolbar({
                 Finish event → podium
               </button>
               <div className="display-menu-divider" />
-              <button className="display-menu-item" onClick={onExport}>
-                Export JSON
-              </button>
               <button
                 className="display-menu-item display-menu-danger"
                 onClick={onNewEvent}
