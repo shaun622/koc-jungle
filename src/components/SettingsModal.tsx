@@ -7,6 +7,7 @@ import { SAMPLE_PHRASE, speakPhrase } from '@/hooks/useAnnouncements';
 import { formatVoiceLabel, isEnglishVoice, pickDefaultVoice } from '@/utils/voices';
 import { useThemeStore, type ThemePreference } from '@/store/theme';
 import { Icons } from './Icons';
+import { Portal } from './Portal';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -39,6 +40,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const s = event.settings;
 
   return (
+    <Portal>
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal settings-modal"
@@ -150,6 +152,7 @@ export function SettingsModal({ open, onClose }: Props) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 

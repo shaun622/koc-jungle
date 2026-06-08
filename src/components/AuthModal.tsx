@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { Portal } from './Portal';
 
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const auth = useAuth();
@@ -20,6 +21,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
 
   if (!auth.cloudEnabled) {
     return (
+      <Portal>
       <div
         className="modal-backdrop"
         onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -38,11 +40,13 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
+      </Portal>
     );
   }
 
   if (auth.user) {
     return (
+      <Portal>
       <div
         className="modal-backdrop"
         onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -75,6 +79,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
+      </Portal>
     );
   }
 
@@ -105,6 +110,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <Portal>
     <div
       className="modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -191,5 +197,6 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

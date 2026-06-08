@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEventStore } from '@/store/eventStore';
 import { leaderboard, teamLabelShort } from '@/store/selectors';
 import { Icons } from './Icons';
+import { Portal } from './Portal';
 
 /**
  * Post-event manual points correction. Reachable from the podium toolbar
@@ -43,6 +44,7 @@ export function EditPointsModal({ onClose }: { onClose: () => void }) {
   const teamFor = (id: string) => event.teams.find((t) => t.id === id);
 
   return (
+    <Portal>
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal"
@@ -91,6 +93,7 @@ export function EditPointsModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 

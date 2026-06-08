@@ -7,6 +7,7 @@
 import { FORMAT_RULES } from '@/content/formatRules';
 import type { TournamentFormatId } from '@/types/domain';
 import { Icons } from './Icons';
+import { Portal } from './Portal';
 
 export function FormatRulesModal({
   formatId,
@@ -19,6 +20,7 @@ export function FormatRulesModal({
   if (!guide) return null;
 
   return (
+    <Portal>
     <div
       className="modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -65,5 +67,6 @@ export function FormatRulesModal({
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

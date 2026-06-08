@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useClubBrandingStore } from '@/store/clubBranding';
 import { fitImageFileToLogo } from '@/utils/avatar';
 import { Icons } from './Icons';
+import { Portal } from './Portal';
 
 export function ClubBrandingModal({ onClose }: { onClose: () => void }) {
   const { name, logoDataUrl, setName, setLogo, clear } = useClubBrandingStore();
@@ -19,6 +20,7 @@ export function ClubBrandingModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <Portal>
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal club-modal">
         <div className="app-menu-head">
@@ -104,5 +106,6 @@ export function ClubBrandingModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

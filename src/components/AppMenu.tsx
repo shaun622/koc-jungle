@@ -25,6 +25,7 @@ import { AuthModal } from './AuthModal';
 import { SettingsModal } from './SettingsModal';
 import { ClubBrandingModal } from './ClubBrandingModal';
 import { ConfirmDialog } from './ConfirmDialog';
+import { Portal } from './Portal';
 import type { EventState } from '@/types/domain';
 
 export function AppMenu({ event }: { event: EventState | null }) {
@@ -72,6 +73,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
       </button>
 
       {open && (
+        <Portal>
         <div className="app-menu-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="app-menu-panel" role="dialog" aria-label="Menu">
             <div className="app-menu-head">
@@ -224,6 +226,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       <ConfirmDialog

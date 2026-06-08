@@ -10,6 +10,7 @@
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
 import { isIAPAvailable, purchasePlan, restorePurchases } from '@/lib/iap';
 import { useState } from 'react';
+import { Portal } from './Portal';
 
 // Prices are shown in the user's local currency at the App Store /
 // Play Store purchase step (Apple + Google auto-convert from the base
@@ -61,6 +62,7 @@ export function PaywallModal({
 
   if (pro) {
     return (
+      <Portal>
       <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
         <div className="modal paywall-modal">
           <h2>You're Pro 👑</h2>
@@ -79,10 +81,12 @@ export function PaywallModal({
           </div>
         </div>
       </div>
+      </Portal>
     );
   }
 
   return (
+    <Portal>
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal paywall-modal">
         <h2>Unlock everything with Pro</h2>
@@ -167,6 +171,7 @@ export function PaywallModal({
         </p>
       </div>
     </div>
+    </Portal>
   );
 }
 

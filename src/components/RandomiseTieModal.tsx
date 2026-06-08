@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
 import { Icons } from './Icons';
+import { Portal } from './Portal';
 
 export interface TieGroup {
   /** Qualifier score shared by all teams in the group. */
@@ -155,6 +156,7 @@ export function RandomiseTieModal({ open, group, onClose, onApply }: Props) {
   const canIncrement = winnersCount < teams.length - 1;
 
   return (
+    <Portal>
     <div className="modal-backdrop" onClick={phase === 'rolling' ? undefined : onClose}>
       <div
         className="modal randomise-modal"
@@ -292,5 +294,6 @@ export function RandomiseTieModal({ open, group, onClose, onApply }: Props) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
