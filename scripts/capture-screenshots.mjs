@@ -39,13 +39,12 @@ const BASE = process.env.BASE_URL || 'https://koc-jungle.pages.dev';
 // ─── Devices ──────────────────────────────────────────────────────────
 const DEVICES = [
   {
-    folder: 'iphone-6.5',
-    viewport: { width: 428, height: 926 },
+    folder: 'iphone-6.7',
+    viewport: { width: 430, height: 932 },
     deviceScaleFactor: 3,
-    // → 1284x2778 physical pixels.
-    // App Store Connect's iPhone 6.5"/6.7" slot accepts this exact size,
-    // and a single 1284x2778 fits BOTH device size classes — so we
-    // don't have to produce a separate 1290x2796 set.
+    // → 1290x2796 physical pixels (iPhone 6.7"/6.9" display).
+    // This is the canonical size for App Store Connect's required iPhone
+    // slot, so the folder name matches what you select when uploading.
     isMobile: true,
     isLandscape: false,
   },
