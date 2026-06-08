@@ -168,4 +168,12 @@ export const Icons = {
       <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
     </svg>
   ),
+  Rotate: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      {/* phone tilting + curved rotate arrow */}
+      <rect x="7" y="2.5" width="10" height="19" rx="2.5" transform="rotate(20 12 12)" />
+      <path d="M4.5 8.5a8 8 0 0 1 14-3" />
+      <path d="M18.5 3v3h-3" />
+    </svg>
+  ),
 };

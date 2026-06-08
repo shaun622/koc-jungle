@@ -18,6 +18,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NightlyStatsModal } from '@/components/NightlyStatsModal';
+import { RotateHint } from '@/components/RotateHint';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
 import { EditPointsModal } from '@/components/EditPointsModal';
@@ -119,12 +120,19 @@ export function DisplayScreen() {
   const scored = round ? round.matches.length - unscored : 0;
   const isFinalRound = round ? round.index >= event.settings.roundsTotal : false;
 
+  // On phone portrait the bottom toolbar already carries a menu while a
+  // round / preview is on screen, so the floating top-right gear would just
+  // sit over the scoreboard. Keep it for the podium + all larger screens.
+  const showFixedMenu = !(isMobile && (showOperatorRound || showBetweenRounds));
+
   return (
     <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
-      {/* The same gear menu as every other screen, always top-right. */}
-      <div className="display-menu-fixed">
-        <AppMenu event={event} />
-      </div>
+      {showFixedMenu && (
+        <div className="display-menu-fixed">
+          <AppMenu event={event} />
+        </div>
+      )}
+      {isMobile && showOperatorRound && round?.index === 1 && <RotateHint />}
       {isMobile ? (
         <MobileDisplay event={event} />
       ) : (
