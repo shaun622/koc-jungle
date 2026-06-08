@@ -83,46 +83,6 @@ export function AppMenu({ event }: { event: EventState | null }) {
               </button>
             </div>
 
-            {/* Account / sync */}
-            {auth.cloudEnabled && (
-              <button
-                className="app-menu-item"
-                onClick={() => {
-                  close();
-                  setAuthOpen(true);
-                }}
-              >
-                <Icons.Account className="icon" />
-                <span className="app-menu-item-label">
-                  {auth.user ? 'Account & sync' : 'Sign in to sync'}
-                </span>
-                <span className={'app-menu-item-meta ' + (auth.user ? 'sync-on' : '')}>
-                  {auth.user ? '☁ Synced' : ''}
-                </span>
-              </button>
-            )}
-
-            {/* Appearance */}
-            <button className="app-menu-item" onClick={cycleTheme}>
-              {themePref === 'dark' ? <Icons.Moon className="icon" /> : <Icons.Sun className="icon" />}
-              <span className="app-menu-item-label">Appearance</span>
-              <span className="app-menu-item-meta" style={{ textTransform: 'capitalize' }}>{themePref}</span>
-            </button>
-
-            {/* Settings */}
-            {event && (
-              <button
-                className="app-menu-item"
-                onClick={() => {
-                  close();
-                  setSettingsOpen(true);
-                }}
-              >
-                <Icons.Gear className="icon" />
-                <span className="app-menu-item-label">Event settings</span>
-              </button>
-            )}
-
             {/* Home / dashboard */}
             <button
               className="app-menu-item"
@@ -158,6 +118,46 @@ export function AppMenu({ event }: { event: EventState | null }) {
               <Icons.Book className="icon" />
               <span className="app-menu-item-label">Format guide</span>
             </button>
+
+            {/* Event settings (only mid-event) */}
+            {event && (
+              <button
+                className="app-menu-item"
+                onClick={() => {
+                  close();
+                  setSettingsOpen(true);
+                }}
+              >
+                <Icons.Gear className="icon" />
+                <span className="app-menu-item-label">Event settings</span>
+              </button>
+            )}
+
+            {/* Appearance */}
+            <button className="app-menu-item" onClick={cycleTheme}>
+              {themePref === 'dark' ? <Icons.Moon className="icon" /> : <Icons.Sun className="icon" />}
+              <span className="app-menu-item-label">Appearance</span>
+              <span className="app-menu-item-meta" style={{ textTransform: 'capitalize' }}>{themePref}</span>
+            </button>
+
+            {/* Account / sync */}
+            {auth.cloudEnabled && (
+              <button
+                className="app-menu-item"
+                onClick={() => {
+                  close();
+                  setAuthOpen(true);
+                }}
+              >
+                <Icons.Account className="icon" />
+                <span className="app-menu-item-label">
+                  {auth.user ? 'Account & sync' : 'Sign in to sync'}
+                </span>
+                <span className={'app-menu-item-meta ' + (auth.user ? 'sync-on' : '')}>
+                  {auth.user ? '☁ Synced' : ''}
+                </span>
+              </button>
+            )}
 
             <div className="app-menu-divider" />
 
