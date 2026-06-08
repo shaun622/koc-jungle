@@ -14,6 +14,11 @@ export function LeaderboardScreen() {
   const event = useEventStore((s) => s.event);
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  // All hooks must run before any early return, otherwise the hook count
+  // changes when `event` flips to null (e.g. "New event" resets the store
+  // while this screen is mounted) and React crashes. rankMovements handles
+  // a null event by returning an empty map, so calling it here is safe.
+  const movements = useMemo(() => rankMovements(event), [event]);
 
   if (!event) {
     return <p style={{ padding: 24, color: 'var(--text-2)' }}>No event.</p>;
@@ -22,7 +27,6 @@ export function LeaderboardScreen() {
     const team = event.teams.find((t) => t.id === r.teamId);
     return team?.active;
   });
-  const movements = useMemo(() => rankMovements(event), [event]);
   const topId = rows[0]?.teamId;
   const completedRounds = event.rounds.filter((r) => r.completedAt).length;
   // Manual point correction is offered once the event is over.

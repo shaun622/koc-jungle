@@ -238,7 +238,10 @@ export function AppMenu({ event }: { event: EventState | null }) {
         onConfirm={() => {
           resetEvent();
           setConfirmNew(false);
-          setTimeout(() => navigate('/setup'), 0);
+          // Land on the dashboard (the launch pad with the format picker).
+          // SetupScreen renders nothing without an event, so navigating
+          // there directly would show a blank screen.
+          setTimeout(() => navigate('/home'), 0);
         }}
         onCancel={() => setConfirmNew(false)}
       />
