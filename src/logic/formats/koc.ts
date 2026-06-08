@@ -13,7 +13,7 @@ import type { TournamentFormat } from './index';
 export const koc: TournamentFormat = {
   id: 'koc',
   name: 'King of the Court',
-  blurb: 'The classic — qualifier seeds 14 teams onto 7 courts. Winners climb, losers drop, King defends Centre Court.',
+  blurb: 'The classic. A qualifier seeds 14 teams onto 7 courts. Winners climb, losers drop, the King defends Centre Court.',
   usesQualifier: true,
 
   buildFirstRound({ rankedTeamIds, courts }) {

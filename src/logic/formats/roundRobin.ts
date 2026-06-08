@@ -27,7 +27,7 @@ export const roundRobin: TournamentFormat = {
   id: 'round-robin',
   name: 'Round Robin',
   blurb:
-    'Each team plays every other team in their group. Top of the table wins. Fair and complete — no rotation, no surprises.',
+    'Each team plays every other team in their group. Top of the table wins. Fair and complete, no rotation and no surprises.',
   usesQualifier: false,
 
   buildFirstRound({ courts, config }) {

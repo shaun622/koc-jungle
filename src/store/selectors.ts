@@ -238,13 +238,17 @@ export function nightlyStats(event: EventState | null): NightlyStat[] {
       });
     }
   }
-  // Wooden spoon: bottom of the final table (needs a real field to be fun).
+  // Wooden spoon: the team that finished on the fewest points. Explicitly
+  // lowest total (ties broken by fewest games won) so it reads as a
+  // points-based award rather than "whoever sorted last".
   if (lb.length >= 3) {
-    const last = lb[lb.length - 1];
+    const spoon = lb
+      .slice()
+      .sort((a, b) => a.total - b.total || a.gamesFor - b.gamesFor)[0];
     stats.push({
       label: 'Wooden spoon 🥄',
-      value: teamNameFor(event, last.teamId),
-      detail: `${last.wins} win${last.wins === 1 ? '' : 's'} · ${last.total} pts — there's always next week`,
+      value: teamNameFor(event, spoon.teamId),
+      detail: `${spoon.total} pt${spoon.total === 1 ? '' : 's'} · ${spoon.wins} win${spoon.wins === 1 ? '' : 's'}. There's always next week.`,
     });
   }
   return stats;

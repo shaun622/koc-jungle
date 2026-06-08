@@ -163,6 +163,9 @@ function buildFixture(status, completedRounds) {
           warningAtMs: 60 * 1000,
           roundsTotal: completedRounds + (status === 'round-in-progress' ? 1 : 0),
           announceRoundStart: false,
+          qualifierEnabled: false,
+          qualifierUnit: 'points',
+          qualifierTarget: 16,
         },
         courts,
         teams,
@@ -264,10 +267,10 @@ for (const device of filteredDevices) {
       : 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
   });
 
-  // 1. Landing (no event)
-  await captureFrame(context, 'Landing', {
+  // 1. Home dashboard (no event) — the landing block now lives at /home.
+  await captureFrame(context, 'Home', {
     outPath: resolve(folder, '01-landing.png'),
-    hash: '/#/setup',
+    hash: '/#/home',
   });
 
   // 2. Setup with demo event loaded
@@ -298,6 +301,19 @@ for (const device of filteredDevices) {
     fixture: buildFixture('complete', 3),
     hash: '/#/display',
     settleMs: 1200,
+  });
+
+  // 6. Nightly stats (opens the modal from the podium toolbar)
+  await captureFrame(context, 'Nightly stats', {
+    outPath: resolve(folder, '06-nightly-stats.png'),
+    fixture: buildFixture('complete', 3),
+    hash: '/#/display',
+    settleMs: 1200,
+    beforeShot: async (page) => {
+      await page.getByRole('button', { name: /nightly stats/i }).click();
+      await page.waitForSelector('.nightly-row', { timeout: 4000 });
+      await page.waitForTimeout(500); // let the modal-pop animation settle
+    },
   });
 
   await context.close();
