@@ -8,7 +8,13 @@
  */
 
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
-import { isIAPAvailable, purchasePlan, restorePurchases } from '@/lib/iap';
+import {
+  isIAPAvailable,
+  isRedeemCodeAvailable,
+  presentRedeemCodeSheet,
+  purchasePlan,
+  restorePurchases,
+} from '@/lib/iap';
 import { useState } from 'react';
 import { Portal } from './Portal';
 
@@ -39,7 +45,7 @@ export function PaywallModal({
 }) {
   const { pro, trialUsed, startTrial } = useEntitlementsStore();
   const trialDays = trialDaysRemaining();
-  const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | null>(null);
+  const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | 'redeem' | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   async function handlePurchase(plan: 'monthly' | 'annual') {
@@ -58,6 +64,16 @@ export function PaywallModal({
     setBusy(null);
     if (result.ok) onClose();
     else if (result.error) setPurchaseError(result.error);
+  }
+
+  async function handleRedeem() {
+    setBusy('redeem');
+    setPurchaseError(null);
+    const result = await presentRedeemCodeSheet();
+    setBusy(null);
+    // Don't close: if the code grants Pro, the customer-info listener
+    // flips `pro` and this modal re-renders into its "You're Pro" state.
+    if (!result.ok && result.error) setPurchaseError(result.error);
   }
 
   if (pro) {
@@ -157,6 +173,11 @@ export function PaywallModal({
         )}
 
         <div className="modal-actions">
+          {isRedeemCodeAvailable() && (
+            <button className="btn" disabled={busy !== null} onClick={handleRedeem}>
+              {busy === 'redeem' ? 'Opening…' : 'Redeem code'}
+            </button>
+          )}
           <button className="btn" disabled={busy !== null} onClick={handleRestore}>
             {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
           </button>

@@ -47,6 +47,13 @@ interface RevenueCatPackage {
 
 let cachedOfferings: RevenueCatOffering | null = null;
 
+// Identity state. RevenueCat must be configured before logIn/logOut can be
+// called, but Supabase auth can resolve either side of that, so we track
+// readiness and stash a pending id to apply once configure() completes.
+let configured = false;
+let pendingAppUserId: string | null = null;
+let currentAppUserId: string | null = null;
+
 /**
  * Configure the SDK + subscribe to customer-info updates so the
  * entitlements store reflects whatever RevenueCat says is active.
@@ -67,10 +74,24 @@ export async function initIAP(): Promise<void> {
   }
   await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
   await Purchases.configure({ apiKey });
+  configured = true;
 
-  // First read of customer info to seed the entitlements store.
-  const { customerInfo } = await Purchases.getCustomerInfo();
-  applyCustomerInfo(customerInfo);
+  if (pendingAppUserId) {
+    // The user signed in before the SDK finished configuring; apply that
+    // identity now so entitlements resolve against their account.
+    try {
+      const { customerInfo } = await Purchases.logIn({ appUserID: pendingAppUserId });
+      currentAppUserId = pendingAppUserId;
+      applyCustomerInfo(customerInfo);
+    } catch (err) {
+      console.warn('[iap] deferred logIn failed', err);
+    }
+    pendingAppUserId = null;
+  } else {
+    // First read of customer info to seed the entitlements store.
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    applyCustomerInfo(customerInfo);
+  }
 
   // Live updates whenever RevenueCat hears about a purchase / renewal /
   // cancellation. Note the listener is async-fire-and-forget.
@@ -141,6 +162,74 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
   } catch (err) {
     const e = err as { message?: string };
     return { ok: false, error: e.message ?? 'Restore failed.' };
+  }
+}
+
+/**
+ * Identify the RevenueCat customer with a stable app-level id (the
+ * Supabase auth user id). This keeps Pro status attached to the account
+ * across devices and, crucially, lets us grant a promotional entitlement
+ * by user id from the RevenueCat dashboard (e.g. comp a friend for free).
+ * No-op on web. Safe to call before configure() finishes; the id is
+ * applied once the SDK is ready.
+ */
+export async function logInIAP(appUserId: string): Promise<void> {
+  if (!isIAPAvailable() || !appUserId) return;
+  if (!configured) {
+    pendingAppUserId = appUserId;
+    return;
+  }
+  if (currentAppUserId === appUserId) return;
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  try {
+    const { customerInfo } = await Purchases.logIn({ appUserID: appUserId });
+    currentAppUserId = appUserId;
+    applyCustomerInfo(customerInfo);
+  } catch (err) {
+    console.warn('[iap] logIn failed', err);
+  }
+}
+
+/** Revert to an anonymous RevenueCat id on sign-out. No-op on web or when already anonymous. */
+export async function logOutIAP(): Promise<void> {
+  if (!isIAPAvailable()) return;
+  if (!configured) {
+    pendingAppUserId = null;
+    return;
+  }
+  if (!currentAppUserId) return;
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  try {
+    const { customerInfo } = await Purchases.logOut();
+    currentAppUserId = null;
+    applyCustomerInfo(customerInfo);
+  } catch (err) {
+    // logOut rejects if the user is already anonymous, which is harmless here.
+    console.warn('[iap] logOut skipped', err);
+  }
+}
+
+/** iOS only: whether the App Store offer-code redemption sheet can be shown. */
+export function isRedeemCodeAvailable(): boolean {
+  return isIAPAvailable() && Capacitor.getPlatform() === 'ios';
+}
+
+/**
+ * Present the native App Store offer-code redemption sheet (iOS only).
+ * Any entitlement the code unlocks arrives via the customer-info listener,
+ * so the paywall flips to the Pro state on its own with no manual refresh.
+ */
+export async function presentRedeemCodeSheet(): Promise<{ ok: boolean; error?: string }> {
+  if (!isRedeemCodeAvailable()) {
+    return { ok: false, error: 'Code redemption opens inside the iOS app.' };
+  }
+  const { Purchases } = await import('@revenuecat/purchases-capacitor');
+  try {
+    await Purchases.presentCodeRedemptionSheet();
+    return { ok: true };
+  } catch (err) {
+    const e = err as { message?: string };
+    return { ok: false, error: e.message ?? 'Could not open the redemption sheet.' };
   }
 }
 

@@ -25,6 +25,7 @@ import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { useAuth } from '@/hooks/useAuth';
 import { useApplyTheme } from '@/hooks/useApplyTheme';
 import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
+import { logInIAP, logOutIAP } from '@/lib/iap';
 import type { EventStatus } from '@/types/domain';
 
 function routeForStatus(status: EventStatus): string {
@@ -84,6 +85,16 @@ function OperatorShell() {
 
 function CloudSyncGate() {
   const auth = useAuth();
+
+  // Identify the RevenueCat customer with the signed-in account so Pro
+  // follows the user across devices and can be comped by user id from the
+  // dashboard. Independent of cloud sync; no-op on web.
+  useEffect(() => {
+    if (auth.loading) return;
+    if (auth.user) logInIAP(auth.user.id);
+    else logOutIAP();
+  }, [auth.loading, auth.user]);
+
   useEffect(() => {
     if (!auth.cloudEnabled || auth.loading) return;
     if (auth.user) {
