@@ -19,8 +19,8 @@ export interface AuthState {
 export function useAuth(): AuthState & {
   signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
-  signInWithApple: () => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ error?: string }>;
 } {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(supabase !== null);
@@ -61,23 +61,21 @@ export function useAuth(): AuthState & {
       return error ? { error: error.message } : {};
     },
 
-    async signInWithApple() {
-      if (!supabase) return { error: 'Cloud sync not configured.' };
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          // Apple insists on returning to the exact URL it has on file.
-          // The web PWA uses HashRouter, so any path resolves the same SPA.
-          redirectTo:
-            typeof window !== 'undefined' ? window.location.origin : undefined,
-        },
-      });
-      return error ? { error: error.message } : {};
-    },
-
     async signOut() {
       if (!supabase) return;
       await supabase.auth.signOut();
+    },
+
+    async deleteAccount() {
+      if (!supabase) return { error: 'Cloud sync not configured.' };
+      // The anon key cannot delete its own auth.users row, so this calls a
+      // SECURITY DEFINER Postgres function (see supabase/schema.sql) that
+      // removes the signed-in user's events + auth record. Then we sign out
+      // to clear the now-orphaned local session.
+      const { error } = await supabase.rpc('delete_account');
+      if (error) return { error: error.message };
+      await supabase.auth.signOut();
+      return {};
     },
   };
 }

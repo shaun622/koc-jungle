@@ -9,8 +9,8 @@
  * Provisioning checklist for the user (one-time):
  *  1. Create a free Supabase project at https://app.supabase.com
  *  2. Run the migration SQL in supabase/schema.sql against the project's
- *     SQL editor (creates the `events` table + Row Level Security).
- *  3. Enable Email auth + Sign in with Apple in Auth → Providers.
+ *     SQL editor (creates the `events` table + RLS + delete_account RPC).
+ *  3. Enable Email auth in Auth → Providers.
  *  4. Copy the project URL + anon public key into `.env.local`:
  *       VITE_SUPABASE_URL=...
  *       VITE_SUPABASE_ANON_KEY=...

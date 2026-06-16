@@ -9,22 +9,19 @@
 
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
 import {
+  fetchOfferings,
   isIAPAvailable,
   isRedeemCodeAvailable,
   presentRedeemCodeSheet,
   purchasePlan,
   restorePurchases,
 } from '@/lib/iap';
-import { useState } from 'react';
+import { openUrl } from '@/lib/browser';
+import { useEffect, useState } from 'react';
 import { Portal } from './Portal';
 
-// Prices are shown in the user's local currency at the App Store /
-// Play Store purchase step (Apple + Google auto-convert from the base
-// tier we set in the store dashboards). The PWA can't read those tiers
-// directly, so it shows a deferred label until the native build wires
-// in live RevenueCat pricing.
-const PROD_MONTHLY_PRICE = 'See your local price';
-const PROD_ANNUAL_PRICE = 'See your local price';
+const TERMS_URL = 'https://koc-jungle.pages.dev/terms/';
+const PRIVACY_URL = 'https://koc-jungle.pages.dev/privacy/';
 
 const FEATURES = [
   'King of the Court: winners climb, losers drop',
@@ -47,14 +44,57 @@ export function PaywallModal({
   const trialDays = trialDaysRemaining();
   const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | 'redeem' | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [prices, setPrices] = useState<{ monthly?: string; annual?: string }>({});
+  const [offerStatus, setOfferStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    isIAPAvailable() ? 'loading' : 'idle',
+  );
+
+  // Fetch live store prices on mount (native only). fetchOfferings is
+  // timeout-bounded, so this can never leave the buttons stuck loading.
+  useEffect(() => {
+    if (!isIAPAvailable()) return;
+    let cancelled = false;
+    fetchOfferings()
+      .then((o) => {
+        if (cancelled) return;
+        if (o && (o.monthly || o.annual)) {
+          setPrices({
+            monthly: o.monthly?.product.priceString,
+            annual: o.annual?.product.priceString,
+          });
+          setOfferStatus('ready');
+        } else {
+          setOfferStatus('error');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOfferStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function priceLabel(plan: 'monthly' | 'annual'): string {
+    if (busy === plan) return 'Connecting…';
+    const p = plan === 'monthly' ? prices.monthly : prices.annual;
+    if (p) return `${p} / ${plan === 'annual' ? 'year' : 'month'}`;
+    if (offerStatus === 'loading') return 'Loading price…';
+    if (offerStatus === 'error') return 'Price unavailable';
+    return ''; // web / idle: the footer note explains store pricing
+  }
 
   async function handlePurchase(plan: 'monthly' | 'annual') {
     setBusy(plan);
     setPurchaseError(null);
-    const result = await purchasePlan(plan);
-    setBusy(null);
-    if (result.ok) onClose();
-    else if (result.error) setPurchaseError(result.error);
+    try {
+      const result = await purchasePlan(plan);
+      if (result.ok) onClose();
+      else if (result.error) setPurchaseError(result.error);
+    } finally {
+      // Always clear busy so the button can never stick on "Connecting…".
+      setBusy(null);
+    }
   }
 
   async function handleRestore() {
@@ -142,10 +182,11 @@ export function PaywallModal({
             disabled={busy !== null}
             onClick={() => handlePurchase('monthly')}
           >
-            <span className="paywall-plan-name">Monthly</span>
-            <span className="paywall-plan-price">
-              {busy === 'monthly' ? 'Connecting…' : PROD_MONTHLY_PRICE}
+            <span className="paywall-plan-name">
+              Pro Monthly
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 2 }}>Auto-renews monthly</span>
             </span>
+            <span className="paywall-plan-price">{priceLabel('monthly')}</span>
           </button>
           <button
             className="btn full lg paywall-plan"
@@ -153,11 +194,10 @@ export function PaywallModal({
             onClick={() => handlePurchase('annual')}
           >
             <span className="paywall-plan-name">
-              Annual <span className="paywall-plan-badge">save 33%</span>
+              Pro Annual <span className="paywall-plan-badge">save 33%</span>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 2 }}>Auto-renews yearly</span>
             </span>
-            <span className="paywall-plan-price">
-              {busy === 'annual' ? 'Connecting…' : PROD_ANNUAL_PRICE}
-            </span>
+            <span className="paywall-plan-price">{priceLabel('annual')}</span>
           </button>
         </div>
 
@@ -186,10 +226,63 @@ export function PaywallModal({
           </button>
         </div>
 
-        <p style={{ fontSize: 11, color: 'var(--text-2)', textAlign: 'center', marginTop: 8 }}>
-          Cancel anytime in the platform's subscription settings. Pricing in your local
-          currency is shown at the App Store / Play Store purchase step.
+        <p
+          style={{
+            fontSize: 10,
+            color: 'var(--text-2)',
+            textAlign: 'center',
+            marginTop: 10,
+            lineHeight: 1.5,
+          }}
+        >
+          Pro Monthly and Pro Annual are auto-renewable subscriptions. Payment is
+          charged to your Apple ID at confirmation of purchase. Each renews
+          automatically unless cancelled at least 24 hours before the end of the
+          current period; your account is charged within 24 hours before renewal.
+          Manage or cancel anytime in your App Store account settings.
         </p>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 6,
+            marginTop: 8,
+            fontSize: 11,
+          }}
+        >
+          <button
+            onClick={() => openUrl(TERMS_URL)}
+            style={{
+              background: 'none',
+              border: 0,
+              color: 'var(--accent)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              padding: 0,
+              font: 'inherit',
+            }}
+          >
+            Terms of Use (EULA)
+          </button>
+          <span aria-hidden style={{ color: 'var(--text-2)' }}>
+            ·
+          </span>
+          <button
+            onClick={() => openUrl(PRIVACY_URL)}
+            style={{
+              background: 'none',
+              border: 0,
+              color: 'var(--accent)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              padding: 0,
+              font: 'inherit',
+            }}
+          >
+            Privacy Policy
+          </button>
+        </div>
       </div>
     </div>
     </Portal>

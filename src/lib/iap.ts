@@ -105,14 +105,21 @@ export async function fetchOfferings(): Promise<RevenueCatOffering | null> {
   if (!isIAPAvailable()) return null;
   if (cachedOfferings) return cachedOfferings;
   const { Purchases } = await import('@revenuecat/purchases-capacitor');
-  const result = await Purchases.getOfferings();
-  const current = result.current;
-  if (!current) return null;
-  cachedOfferings = {
-    monthly: current.monthly ?? undefined,
-    annual: current.annual ?? undefined,
-  };
-  return cachedOfferings;
+  // Bound the call: a hung getOfferings (the symptom App Review saw while
+  // the Paid Apps Agreement was inactive) must never freeze the paywall.
+  // Resolve to null on timeout; the caller shows a fallback label.
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
+  const load = (async (): Promise<RevenueCatOffering | null> => {
+    const result = await Purchases.getOfferings();
+    const current = result.current;
+    if (!current) return null;
+    cachedOfferings = {
+      monthly: current.monthly ?? undefined,
+      annual: current.annual ?? undefined,
+    };
+    return cachedOfferings;
+  })();
+  return Promise.race([load, timeout]);
 }
 
 /** Purchase a plan. Returns true on success (entitlement applied via listener). */

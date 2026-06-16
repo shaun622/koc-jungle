@@ -1,15 +1,17 @@
 /**
- * AuthModal: sign in / sign up / sign in with Apple.
+ * AuthModal: sign in / sign up with email + password, plus account
+ * deletion for the signed-in state.
  *
  * Surfaces only when `cloudEnabled` (env vars present at build time).
- * Sign-in with Apple is required by Apple's App Review whenever any
- * third-party auth is offered; the email flow stays for users who don't
- * want an Apple ID tied to the app.
+ * Auth is email/password only and happens entirely in-app (no external
+ * browser) to satisfy App Review Guideline 4.
  */
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { stopCloudSync } from '@/store/cloudSync';
 import { Portal } from './Portal';
+import { ConfirmDialog } from './ConfirmDialog';
 
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const auth = useAuth();
@@ -18,6 +20,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!auth.cloudEnabled) {
     return (
@@ -60,7 +63,17 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             Your events sync automatically across every device you sign in
             on. Sign out to switch accounts or go local-only on this device.
           </p>
+          {err && (
+            <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{err}</div>
+          )}
           <div className="modal-actions">
+            <button
+              className="btn danger"
+              onClick={() => setConfirmDelete(true)}
+              disabled={busy}
+            >
+              Delete account
+            </button>
             <button
               className="btn"
               onClick={async () => {
@@ -71,13 +84,33 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               }}
               disabled={busy}
             >
-              {busy ? 'Signing out…' : 'Sign out'}
+              {busy ? 'Working…' : 'Sign out'}
             </button>
-            <button className="btn primary" onClick={onClose}>
+            <button className="btn primary" onClick={onClose} disabled={busy}>
               Done
             </button>
           </div>
         </div>
+        <ConfirmDialog
+          open={confirmDelete}
+          title="Delete your account?"
+          message="This permanently deletes your account and every event synced to the cloud. It cannot be undone. Events saved only on this device stay on the device."
+          confirmLabel="Delete account"
+          destructive
+          onConfirm={async () => {
+            setErr(null);
+            setBusy(true);
+            // Stop sync first so a late upload can't recreate a row after
+            // the account is gone.
+            stopCloudSync();
+            const res = await auth.deleteAccount();
+            setBusy(false);
+            setConfirmDelete(false);
+            if (res.error) setErr(res.error);
+            else onClose();
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       </div>
       </Portal>
     );
@@ -100,15 +133,6 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function clickApple() {
-    setErr(null);
-    setBusy(true);
-    const res = await auth.signInWithApple();
-    setBusy(false);
-    if (res.error) setErr(res.error);
-    // OAuth flow redirects; success doesn't reach here directly.
-  }
-
   return (
     <Portal>
     <div
@@ -123,18 +147,6 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           Sync events across every device you sign in on. Local-only stays the
           default. No account needed.
         </p>
-
-        <button
-          className="btn full lg auth-apple"
-          onClick={clickApple}
-          disabled={busy}
-        >
-          Continue with Apple
-        </button>
-
-        <div className="auth-divider">
-          <span>or with email</span>
-        </div>
 
         <div className="auth-form">
           <div className="setup-field">

@@ -44,3 +44,33 @@ create policy "events_delete_own"
 -- Enable Postgres CDC (Realtime) on the events table. The Supabase
 -- dashboard equivalent: Database → Replication → events → ON.
 alter publication supabase_realtime add table public.events;
+
+-- Account deletion (App Store Guideline 5.1.1(v)).
+--
+-- The anon key runs as the `authenticated` role, which cannot touch the
+-- protected `auth` schema, so a user can't delete their own auth.users
+-- record directly. This SECURITY DEFINER function runs as its owner and
+-- re-derives the caller from auth.uid() (never a client-supplied id, so
+-- one user can't delete another). It removes the user's events and then
+-- their auth record. The events row is also ON DELETE CASCADE, so the
+-- explicit delete is belt-and-suspenders.
+create or replace function public.delete_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Not authenticated';
+  end if;
+  delete from public.events where user_id = uid;
+  delete from auth.users where id = uid;
+end;
+$$;
+
+-- Only signed-in users may call it; never anon or public.
+revoke all on function public.delete_account() from public, anon;
+grant execute on function public.delete_account() to authenticated;

@@ -52,3 +52,6 @@ review-paywall-placeholder.png
 
 # Apple keys — never commit private keys
 *.p8
+
+# Local crash logs / review artifacts
+Error Logs/
