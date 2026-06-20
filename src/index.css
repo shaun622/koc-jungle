@@ -956,6 +956,33 @@ button {
   flex-direction: column;
   min-height: 0;
 }
+
+/* iPad / tablet portrait: the 2-column setup is cramped, so stack it into
+   one wide scrollable column. Landscape (which looks great) and phones
+   (handled by the <=768 rule) are untouched. */
+@media (orientation: portrait) and (min-width: 769px) {
+  .setup {
+    grid-template-columns: minmax(0, 1fr);
+    /* max-content (not auto): the container has a definite height from the
+       absolute positioning, so `auto` rows shrink to fit and the flex
+       columns squash their lists. max-content sizes each row to its full
+       content height, letting the whole .setup scroll instead. */
+    grid-template-rows: max-content max-content;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .setup-col {
+    min-height: 0;
+  }
+  /* Higher specificity than the base .setup-list rule (defined later in
+     the file) so the lists flow and the whole column scrolls instead of
+     each list scrolling internally / clipping. */
+  .setup .setup-list {
+    overflow: visible;
+    max-height: none;
+    padding-right: 0;
+  }
+}
 .setup-h {
   font-family: var(--font-display);
   font-weight: 800;
