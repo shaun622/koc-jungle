@@ -18,7 +18,10 @@ export interface AuthState {
 
 export function useAuth(): AuthState & {
   signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+  ) => Promise<{ error?: string; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<{ error?: string }>;
 } {
@@ -57,8 +60,12 @@ export function useAuth(): AuthState & {
 
     async signUpWithEmail(email, password) {
       if (!supabase) return { error: 'Cloud sync not configured.' };
-      const { error } = await supabase.auth.signUp({ email, password });
-      return error ? { error: error.message } : {};
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return { error: error.message };
+      // With email confirmation disabled, signUp returns a session and the
+      // user is signed in immediately. Only ask them to "check your inbox"
+      // when confirmation is actually required (no session yet).
+      return { needsConfirmation: !data.session };
     },
 
     async signOut() {

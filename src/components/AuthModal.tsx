@@ -10,11 +10,26 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { stopCloudSync } from '@/store/cloudSync';
+import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
+import { isIAPAvailable, restorePurchases } from '@/lib/iap';
+import { openUrl } from '@/lib/browser';
 import { Portal } from './Portal';
 import { ConfirmDialog } from './ConfirmDialog';
 
+const MANAGE_SUBS_URL = 'https://apps.apple.com/account/subscriptions';
+
+function subscriptionLabel(pro: boolean, trialDays: number): string {
+  if (pro) {
+    return trialDays > 0
+      ? `Free trial, ${trialDays} day${trialDays === 1 ? '' : 's'} left`
+      : 'Pro subscription active';
+  }
+  return 'No active subscription';
+}
+
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const auth = useAuth();
+  const pro = useEntitlementsStore((s) => s.pro);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,17 +70,48 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <div className="modal auth-modal">
-          <h2 className="auth-title">SIGNED IN</h2>
-          <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
-            {auth.user.email ?? auth.user.id}
+          <h2 className="auth-title">ACCOUNT</h2>
+
+          <div className="account-rows">
+            <div className="account-row">
+              <span className="account-row-label">Email</span>
+              <span className="account-row-value">{auth.user.email ?? auth.user.id}</span>
+            </div>
+            <div className="account-row">
+              <span className="account-row-label">Subscription</span>
+              <span className="account-row-value">{subscriptionLabel(pro, trialDaysRemaining())}</span>
+            </div>
+          </div>
+
+          <p style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>
+            Your events sync automatically across every device you sign in on.
           </p>
-          <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>
-            Your events sync automatically across every device you sign in
-            on. Sign out to switch accounts or go local-only on this device.
-          </p>
+
           {err && (
             <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{err}</div>
           )}
+
+          {isIAPAvailable() && (
+            <div className="account-actions">
+              <button className="btn full" onClick={() => openUrl(MANAGE_SUBS_URL)} disabled={busy}>
+                Manage subscription
+              </button>
+              <button
+                className="btn full"
+                disabled={busy}
+                onClick={async () => {
+                  setErr(null);
+                  setBusy(true);
+                  const r = await restorePurchases();
+                  setBusy(false);
+                  setErr(r.ok ? 'Purchases restored.' : (r.error ?? 'Nothing to restore.'));
+                }}
+              >
+                {busy ? 'Working…' : 'Restore purchases'}
+              </button>
+            </div>
+          )}
+
           <div className="modal-actions">
             <button
               className="btn danger"
@@ -124,11 +170,14 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setBusy(false);
     if (res.error) {
       setErr(res.error);
-    } else if (mode === 'sign-up') {
-      setErr(
-        'Check your inbox for a confirmation link, then sign in.',
-      );
+    } else if (
+      mode === 'sign-up' &&
+      (res as { needsConfirmation?: boolean }).needsConfirmation
+    ) {
+      setErr('Check your inbox for a confirmation link, then sign in.');
     } else {
+      // Signed in (or signed up with confirmation off, which creates a
+      // session immediately) — the signed-in view takes over.
       onClose();
     }
   }

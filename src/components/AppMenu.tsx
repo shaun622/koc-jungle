@@ -139,7 +139,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
               >
                 <Icons.Account className="icon" />
                 <span className="app-menu-item-label">
-                  {auth.user ? 'Account & sync' : 'Sign in to sync'}
+                  {auth.user ? 'Account settings' : 'Sign in to sync'}
                 </span>
                 <span className={'app-menu-item-meta ' + (auth.user ? 'sync-on' : '')}>
                   {auth.user ? '☁ Synced' : ''}

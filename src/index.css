@@ -4863,6 +4863,33 @@ button {
   max-width: 22rem;
   gap: 10px;
 }
+.account-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0;
+}
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  align-items: baseline;
+}
+.account-row-label {
+  color: var(--text-2);
+}
+.account-row-value {
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
 .auth-title {
   font-family: var(--font-headline, var(--font-display));
   letter-spacing: 0.06em;
