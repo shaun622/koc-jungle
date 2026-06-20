@@ -14,7 +14,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { buildDemoEvent } from '@/logic/demoData';
-import { parseImportJson } from '@/utils/exportImport';
 import {
   deleteTemplate,
   listTemplates,
@@ -86,7 +85,6 @@ export function HomeScreen() {
   const [authOpen, setAuthOpen] = useState(false);
   const [paywall, setPaywall] = useState<{ reason: string } | null>(null);
   const [rulesForFormat, setRulesForFormat] = useState<TournamentFormatId | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
   const [confirmReplace, setConfirmReplace] = useState<null | (() => void)>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -210,7 +208,6 @@ export function HomeScreen() {
           <button className="btn" onClick={() => tryLoad(buildDemoEvent())}>
             Load KoC demo
           </button>
-          <ImportButton onLoad={tryLoad} onError={setImportError} />
           <button
             className={'btn ' + (pro ? '' : 'paywall-cta')}
             onClick={() => setPaywall({ reason: pro ? '' : 'Unlock the full toolkit.' })}
@@ -232,8 +229,6 @@ export function HomeScreen() {
             </button>
           )}
         </div>
-
-        {importError && <p style={{ color: 'var(--red)', textAlign: 'center' }}>{importError}</p>}
 
         {templates.length > 0 && (
           <div className="home-section">
@@ -350,32 +345,3 @@ function ModeCard({
   );
 }
 
-function ImportButton({
-  onLoad,
-  onError,
-}: {
-  onLoad: (event: EventState) => void;
-  onError: (message: string | null) => void;
-}) {
-  return (
-    <label className="btn" style={{ cursor: 'pointer' }} title="Import an event from JSON">
-      Import event
-      <input
-        type="file"
-        accept="application/json,.json"
-        style={{ display: 'none' }}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          try {
-            onLoad(parseImportJson(await file.text()));
-            onError(null);
-          } catch (err) {
-            onError(err instanceof Error ? err.message : 'Could not parse file.');
-          }
-          e.target.value = '';
-        }}
-      />
-    </label>
-  );
-}
