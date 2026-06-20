@@ -56,8 +56,14 @@ function RouteGate() {
 
   useEffect(() => {
     if (!event) {
-      // No event: the home screen is the launch pad.
-      if (location.pathname !== '/home' && location.pathname !== '/display') {
+      // No event: the home screen is the launch pad. Also allow the static
+      // format guide (/help) so the menu's "Format guide" actually opens it
+      // instead of being bounced back to the dashboard.
+      const noEventOk =
+        location.pathname === '/home' ||
+        location.pathname === '/display' ||
+        location.pathname === '/help';
+      if (!noEventOk) {
         navigate('/home', { replace: true });
       }
       return;

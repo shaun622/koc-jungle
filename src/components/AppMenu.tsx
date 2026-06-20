@@ -17,7 +17,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
-import { downloadJsonFile, parseImportJson, toExportJson } from '@/utils/exportImport';
 import { useAuth } from '@/hooks/useAuth';
 import { useThemeStore } from '@/store/theme';
 import { Icons } from './Icons';
@@ -35,11 +34,9 @@ export function AppMenu({ event }: { event: EventState | null }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clubOpen, setClubOpen] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const resetEvent = useEventStore((s) => s.resetEvent);
-  const loadEvent = useEventStore((s) => s.loadEvent);
   const finishEventNow = useEventStore((s) => s.finishEventNow);
 
   const auth = useAuth();
@@ -51,15 +48,6 @@ export function AppMenu({ event }: { event: EventState | null }) {
   const canFinish =
     event &&
     (event.status === 'round-in-progress' || event.status === 'between-rounds');
-
-  function doExport() {
-    if (!event) return;
-    const filename = `padel-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`;
-    downloadJsonFile(filename, toExportJson(event));
-    close();
-  }
 
   return (
     <>
@@ -186,33 +174,16 @@ export function AppMenu({ event }: { event: EventState | null }) {
               <span className="app-menu-item-label">New event</span>
             </button>
 
-            <label className="app-menu-item" style={{ cursor: 'pointer' }}>
-              <Icons.Upload className="icon" />
-              <span className="app-menu-item-label">Import event</span>
-              <input
-                type="file"
-                accept="application/json,.json"
-                style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const text = await file.text();
-                    loadEvent(parseImportJson(text));
-                    setImportError(null);
-                    close();
-                  } catch (err) {
-                    setImportError(err instanceof Error ? err.message : 'Could not parse file.');
-                  }
-                  e.target.value = '';
+            {auth.cloudEnabled && auth.user && (
+              <button
+                className="app-menu-item"
+                onClick={async () => {
+                  close();
+                  await auth.signOut();
                 }}
-              />
-            </label>
-
-            {event && (
-              <button className="app-menu-item" onClick={doExport}>
-                <Icons.Download className="icon" />
-                <span className="app-menu-item-label">Export event</span>
+              >
+                <Icons.Account className="icon" />
+                <span className="app-menu-item-label">Sign out</span>
               </button>
             )}
 
@@ -258,18 +229,6 @@ export function AppMenu({ event }: { event: EventState | null }) {
         }}
         onCancel={() => setConfirmFinish(false)}
       />
-
-      {importError && (
-        <ConfirmDialog
-          open
-          title="Couldn't import that file"
-          message={importError}
-          confirmLabel="OK"
-          cancelLabel="Dismiss"
-          onConfirm={() => setImportError(null)}
-          onCancel={() => setImportError(null)}
-        />
-      )}
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {clubOpen && <ClubBrandingModal onClose={() => setClubOpen(false)} />}
