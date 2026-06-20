@@ -895,13 +895,22 @@ function SortableSeedRow({
     id,
     disabled,
   });
+  // Own flex layout (not .setup-court-row, whose 5-col grid reserves an
+  // empty points column and squashes the name).
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 12px',
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-soft)',
+    borderRadius: 10,
   };
   return (
-    <div ref={setNodeRef} style={style} className="setup-court-row">
+    <div ref={setNodeRef} style={style}>
       {!disabled ? (
         <button
           className="setup-court-drag"
@@ -915,8 +924,8 @@ function SortableSeedRow({
       ) : (
         <span className="setup-court-drag" aria-hidden="true" />
       )}
-      <div className="setup-court-pos">{seed}</div>
-      <span style={{ flex: 1, fontWeight: 600 }}>{label}</span>
+      <div className="setup-court-pos" style={{ minWidth: 16, textAlign: 'center' }}>{seed}</div>
+      <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{label}</span>
     </div>
   );
 }
