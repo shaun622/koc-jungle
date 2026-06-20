@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
 import { activeTeams } from '@/store/selectors';
 import { getFormat } from '@/logic/formats';
-import { isCentreCourt, type Court, type Player, type QualifierUnit, type TieRule } from '@/types/domain';
+import { isCentreCourt, type Court, type Player, type QualifierUnit, type Team, type TieRule } from '@/types/domain';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
@@ -92,6 +92,19 @@ export function SetupScreen() {
   const rrGroupSize = Number(
     (event.formatConfig as { groupSize?: number } | undefined)?.groupSize ?? 4,
   );
+  // Bracket seeding: how teams get placed into the draw.
+  const bracketSeeding =
+    (event.formatConfig as { seedingSource?: 'entered' | 'random' | 'manual' } | undefined)
+      ?.seedingSource ?? 'entered';
+  const savedSeedOrder =
+    (event.formatConfig as { seedOrder?: string[] } | undefined)?.seedOrder ?? [];
+  const activeTeamIds = teams.map((t) => t.id);
+  // Reconcile the saved order with the current roster (teams may have been
+  // added/removed since it was set), keeping saved order first.
+  const bracketSeedOrder = [
+    ...savedSeedOrder.filter((id) => activeTeamIds.includes(id)),
+    ...activeTeamIds.filter((id) => !savedSeedOrder.includes(id)),
+  ];
   const canStartNonQualifier =
     !format.usesQualifier && event.status === 'setup' && teams.length >= 2;
 
@@ -126,6 +139,41 @@ export function SetupScreen() {
             </div>
           </div>
         )}
+        {format.id === 'bracket' && (
+          <div className="setup-form" style={{ marginBottom: 12 }}>
+            <div className="setup-field">
+              <label>Seeding</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['entered', 'random', 'manual'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={'btn sm ' + (bracketSeeding === s ? 'primary' : '')}
+                    disabled={event.status !== 'setup'}
+                    onClick={() => setFormatConfig({ seedingSource: s })}
+                  >
+                    {s === 'entered' ? 'As entered' : s === 'random' ? 'Random' : 'Manual'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="setup-sub" style={{ marginTop: -4 }}>
+              {bracketSeeding === 'entered'
+                ? 'Teams are seeded in the order you added them. Seed 1 gets the first bye when the field is not a power of 2.'
+                : bracketSeeding === 'random'
+                  ? 'Teams are drawn into the bracket randomly when you start.'
+                  : 'Drag teams into seed order. Seed 1 (top) gets the first bye when the field is not a power of 2.'}
+            </div>
+            {bracketSeeding === 'manual' && (
+              <SortableSeedList
+                order={bracketSeedOrder}
+                teams={teams}
+                disabled={event.status !== 'setup'}
+                onReorder={(ids) => setFormatConfig({ seedingSource: 'manual', seedOrder: ids })}
+              />
+            )}
+          </div>
+        )}
         <div className="setup-form">
           <div className="setup-field">
             <label>Event name</label>
@@ -149,15 +197,17 @@ export function SetupScreen() {
             valueMs={event.settings.defaultRoundDurationMs}
             onChange={(ms) => updateSettings({ defaultRoundDurationMs: ms })}
           />
-          <div className="setup-field">
-            <label>Total rounds</label>
-            <NumberField
-              value={event.settings.roundsTotal}
-              min={1}
-              max={20}
-              onCommit={(n) => updateSettings({ roundsTotal: n })}
-            />
-          </div>
+          {format.id !== 'bracket' && format.id !== 'round-robin' && (
+            <div className="setup-field">
+              <label>Total rounds</label>
+              <NumberField
+                value={event.settings.roundsTotal}
+                min={1}
+                max={20}
+                onCommit={(n) => updateSettings({ roundsTotal: n })}
+              />
+            </div>
+          )}
           <div className="setup-field">
             <label>Tie rule</label>
             <select
@@ -781,6 +831,92 @@ function SortableCourtRow({
       ) : (
         <span style={{ width: 32 }} />
       )}
+    </div>
+  );
+}
+
+function teamLabel(t: Team): string {
+  return t.name?.trim() || t.players.map((p) => p.name).join(' & ');
+}
+
+/** Drag-to-arrange seed order for a manually-seeded bracket. */
+function SortableSeedList({
+  order,
+  teams,
+  disabled,
+  onReorder,
+}: {
+  order: string[];
+  teams: Team[];
+  disabled: boolean;
+  onReorder: (orderedIds: string[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = order.indexOf(String(active.id));
+    const to = order.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    onReorder(arrayMove(order, from, to));
+  };
+  return (
+    <div className="setup-list" style={{ marginTop: 8 }}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+          {order.map((id, i) => {
+            const t = teamById.get(id);
+            if (!t) return null;
+            return (
+              <SortableSeedRow key={id} id={id} seed={i + 1} label={teamLabel(t)} disabled={disabled} />
+            );
+          })}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+function SortableSeedRow({
+  id,
+  seed,
+  label,
+  disabled,
+}: {
+  id: string;
+  seed: number;
+  label: string;
+  disabled: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="setup-court-row">
+      {!disabled ? (
+        <button
+          className="setup-court-drag"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder seed"
+          type="button"
+        >
+          <Icons.Drag className="icon" />
+        </button>
+      ) : (
+        <span className="setup-court-drag" aria-hidden="true" />
+      )}
+      <div className="setup-court-pos">{seed}</div>
+      <span style={{ flex: 1, fontWeight: 600 }}>{label}</span>
     </div>
   );
 }

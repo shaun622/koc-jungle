@@ -636,16 +636,39 @@ export const useEventStore = create<EventStore>()(
           // Keep the operator's chosen settings.roundsTotal — that's the
           // distinguishing feature of Americano/Mexicano vs. Round Robin.
         } else if (format.id === 'bracket') {
-          // Bracket: size is the next power of 2 ≥ team count. Top seeds
-          // get byes if the count isn't a power of 2. Total rounds is
-          // log2(bracketSize); we overwrite settings.roundsTotal so the
-          // round counter reads "Round X of Y" correctly.
-          const bracketSize = nextPowerOf2(activeTeams.length);
-          const slots = buildBracketSlots(
-            activeTeams.map((t) => t.id),
+          // Bracket: order the teams per the operator's chosen seeding, then
+          // size = next power of 2 ≥ count. Seed 1 (first in the ordered
+          // list) gets the first bye when the field isn't a power of 2.
+          // Total rounds is log2(bracketSize); we overwrite settings.roundsTotal
+          // so the round counter reads "Round X of Y" correctly.
+          const bcfg = formatConfig as {
+            seedingSource?: 'entered' | 'random' | 'manual';
+            seedOrder?: string[];
+          };
+          const activeIds = activeTeams.map((t) => t.id);
+          let seeded: string[];
+          if (bcfg.seedingSource === 'random') {
+            seeded = activeIds.slice();
+            for (let i = seeded.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [seeded[i], seeded[j]] = [seeded[j], seeded[i]];
+            }
+          } else if (bcfg.seedingSource === 'manual' && Array.isArray(bcfg.seedOrder)) {
+            // Honour the manual order; reconcile against the current roster so
+            // a team added/removed after seeding still ends up in the draw.
+            const inOrder = bcfg.seedOrder.filter((id) => activeIds.includes(id));
+            const missing = activeIds.filter((id) => !inOrder.includes(id));
+            seeded = [...inOrder, ...missing];
+          } else {
+            seeded = activeIds; // 'entered' (default): roster order
+          }
+          const bracketSize = nextPowerOf2(seeded.length);
+          const slots = buildBracketSlots(seeded, bracketSize);
+          formatConfig = {
             bracketSize,
-          );
-          formatConfig = { bracketSize, slots };
+            slots,
+            seedingSource: bcfg.seedingSource ?? 'entered',
+          };
           roundsTotal = Math.max(1, bracketRoundCount(bracketSize));
         }
 
