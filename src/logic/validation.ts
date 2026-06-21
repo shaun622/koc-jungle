@@ -13,9 +13,15 @@ export function validateAssignments(
   const courtIds = new Set(courts.map((c) => c.id));
   const activeTeamIds = new Set(teams.filter((t) => t.active).map((t) => t.id));
 
-  if (assignments.length !== courts.length) {
+  // A round may legitimately use FEWER courts than are configured — a
+  // bracket round with byes, or any format whose match count shrinks. Only
+  // flag the impossible case: more matches than there are courts to play
+  // them on at once. (KoC always fills every court, so it's unaffected.)
+  if (assignments.length > courts.length) {
     issues.push({
-      message: `Expected ${courts.length} court assignments, got ${assignments.length}.`,
+      message: `${assignments.length} matches but only ${courts.length} court${
+        courts.length === 1 ? '' : 's'
+      } available.`,
     });
   }
 

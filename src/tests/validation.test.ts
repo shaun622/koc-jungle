@@ -58,6 +58,26 @@ describe('validateAssignments', () => {
     const issues = validateAssignments(assignments, courts, teams);
     expect(issues.some((i) => /both sides/i.test(i.message))).toBe(true);
   });
+
+  it('accepts fewer matches than courts (e.g. a bracket bye round)', () => {
+    const teams = ['a', 'b'].map((id) => team(id));
+    const assignments: PendingAssignment[] = [
+      { courtId: 'c1', teamAId: 'a', teamBId: 'b' },
+    ];
+    // 1 match, 2 courts — fine, the other court just sits empty.
+    expect(validateAssignments(assignments, courts, teams)).toEqual([]);
+  });
+
+  it('rejects more matches than courts', () => {
+    const teams = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => team(id));
+    const assignments: PendingAssignment[] = [
+      { courtId: 'c1', teamAId: 'a', teamBId: 'b' },
+      { courtId: 'c2', teamAId: 'c', teamBId: 'd' },
+      { courtId: 'c1', teamAId: 'e', teamBId: 'f' },
+    ];
+    const issues = validateAssignments(assignments, courts, teams);
+    expect(issues.some((i) => /only 2 courts/i.test(i.message))).toBe(true);
+  });
 });
 
 describe('validateQualifierScore', () => {
