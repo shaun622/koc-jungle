@@ -196,7 +196,8 @@ export function DisplayScreen() {
         <div className="display-toolbar display-toolbar--between">
           <div className="display-toolbar-summary" style={{ justifyContent: 'flex-start' }}>
             <span style={{ color: 'var(--text-1)' }}>
-              Round {event.rounds.at(-1)?.index ?? '·'} complete · rotation preview
+              Round {event.rounds.at(-1)?.index ?? '·'} complete ·{' '}
+              {event.format === 'koc' ? 'rotation preview' : 'next round preview'}
             </span>
           </div>
           <NextRoundDurationField
@@ -614,6 +615,15 @@ function DisplayToolbar({
 // Live canvas — header + standings rail + main grid
 // ============================================================
 
+/** Bracket round name from its position relative to the final. */
+function bracketRoundName(roundIndex: number, totalRounds: number): string {
+  const fromEnd = totalRounds - roundIndex; // 0 = final
+  if (fromEnd <= 0) return 'Final';
+  if (fromEnd === 1) return 'Semifinals';
+  if (fromEnd === 2) return 'Quarterfinals';
+  return `Round of ${2 ** (fromEnd + 1)}`;
+}
+
 function TvLiveCanvas({
   event,
   round,
@@ -671,6 +681,16 @@ function TvLiveCanvas({
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
     : 'TBD';
 
+  // King-of-the-Court chrome (crown, "King's Court", climb/drop, King stat)
+  // only makes sense for KoC. Other formats show a neutral label.
+  const isKoc = event.format === 'koc';
+  const isBracket = event.format === 'bracket';
+  const featureLabel = isBracket
+    ? bracketRoundName(roundIndex, totalRounds)
+    : isKoc
+      ? "King's Court"
+      : (centre?.name ?? 'Featured court');
+
   return (
     <div className="tv-display">
       <div className="tv-header">
@@ -713,8 +733,8 @@ function TvLiveCanvas({
                 <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
                   <span className="rank">{idx + 1}</span>
                   <div className="team-name">
-                    {isKing && <Icons.Crown className="tv-lb-crown" />}
-                    <RankMovement movement={movements.get(row.teamId)} />
+                    {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
+                    {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
                     <span>{teamNameFor(event, row.teamId)}</span>
                   </div>
                   <span className="wl">
@@ -729,7 +749,7 @@ function TvLiveCanvas({
               <div key={row.teamId} className="tv-lb-row">
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
-                  <RankMovement movement={movements.get(row.teamId)} />
+                  {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
                   <span>{teamNameFor(event, row.teamId)}</span>
                 </div>
                 <span className="wl">
@@ -745,10 +765,12 @@ function TvLiveCanvas({
           <div className="tv-centre">
             <div className="tv-centre-label">
               <div className="tv-centre-crown">
-                <Icons.Crown className="icon lg" /> King's Court
+                {isKoc && <Icons.Crown className="icon lg" />} {featureLabel}
               </div>
-              <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>
-              <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+              {isKoc && <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>}
+              {isKoc && (
+                <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+              )}
             </div>
             <div className="tv-centre-team">
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
@@ -849,7 +871,7 @@ function TvLiveCanvas({
                   </span>
                 </div>
                 <div className="tv-timer-stat">
-                  <span className="tv-timer-stat-label">King</span>
+                  <span className="tv-timer-stat-label">{isKoc ? 'King' : 'Leader'}</span>
                   <span
                     className="tv-timer-stat-value"
                     style={{ color: 'var(--gold)' }}
@@ -1183,6 +1205,14 @@ function TvBetweenCanvas({
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
     : 'TBD';
 
+  const isKoc = event.format === 'koc';
+  const isBracket = event.format === 'bracket';
+  const featureLabel = isBracket
+    ? bracketRoundName(nextRoundIndex, totalRounds)
+    : isKoc
+      ? "King's Court"
+      : (centre?.name ?? 'Featured court');
+
   return (
     <div className="tv-display tv-display--between">
       <div className="tv-header">
@@ -1215,7 +1245,7 @@ function TvBetweenCanvas({
                 fontWeight: 700,
               }}
             >
-              ROTATION
+              {isKoc ? 'ROTATION' : 'NEXT ROUND'}
             </span>
           </div>
         </div>
@@ -1234,8 +1264,8 @@ function TvBetweenCanvas({
                 <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
                   <span className="rank">{idx + 1}</span>
                   <div className="team-name">
-                    {isKing && <Icons.Crown className="tv-lb-crown" />}
-                    <RankMovement movement={rankMoves.get(row.teamId)} />
+                    {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
+                    {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
                     <span>{teamNameFor(event, row.teamId)}</span>
                   </div>
                   <span className="wl">
@@ -1250,7 +1280,7 @@ function TvBetweenCanvas({
               <div key={row.teamId} className="tv-lb-row">
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
-                  <RankMovement movement={rankMoves.get(row.teamId)} />
+                  {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
                   <span>{teamNameFor(event, row.teamId)}</span>
                 </div>
                 <span className="wl">
@@ -1266,10 +1296,12 @@ function TvBetweenCanvas({
           <div className="tv-centre">
             <div className="tv-centre-label">
               <div className="tv-centre-crown">
-                <Icons.Crown className="icon lg" /> King's Court
+                {isKoc && <Icons.Crown className="icon lg" />} {featureLabel}
               </div>
-              <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>
-              <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+              {isKoc && <div className="tv-centre-name">{centre?.name ?? 'TBD'}</div>}
+              {isKoc && (
+                <div className="tv-centre-pts">{centre?.pointValue ?? 0} POINTS</div>
+              )}
             </div>
             <div className="tv-centre-team">
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
@@ -1277,7 +1309,7 @@ function TvBetweenCanvas({
               <div className="tv-centre-team-name">
                 {centreA ? teamLabelShort(centreA) : 'TBD'}
               </div>
-              {centreA && (
+              {isKoc && centreA && (
                 <MovementChip
                   arrow={movements.get(centreA.id)?.arrow ?? 'stay'}
                   large
@@ -1293,7 +1325,7 @@ function TvBetweenCanvas({
               <div className="tv-centre-team-name">
                 {centreB ? teamLabelShort(centreB) : 'TBD'}
               </div>
-              {centreB && (
+              {isKoc && centreB && (
                 <MovementChip
                   arrow={movements.get(centreB.id)?.arrow ?? 'stay'}
                   large
@@ -1312,6 +1344,7 @@ function TvBetweenCanvas({
                   assignment={pending.find((a) => a.courtId === c.id)}
                   teams={event.teams}
                   movements={movements}
+                  showMovement={isKoc}
                 />
               ))}
             </div>
@@ -1336,7 +1369,7 @@ function TvBetweenCanvas({
                   </span>
                 </div>
                 <div className="tv-timer-stat">
-                  <span className="tv-timer-stat-label">King</span>
+                  <span className="tv-timer-stat-label">{isKoc ? 'King' : 'Leader'}</span>
                   <span
                     className="tv-timer-stat-value"
                     style={{ color: 'var(--gold)' }}
@@ -1355,6 +1388,7 @@ function TvBetweenCanvas({
                   assignment={pending.find((a) => a.courtId === c.id)}
                   teams={event.teams}
                   movements={movements}
+                  showMovement={isKoc}
                 />
               ))}
             </div>
@@ -1370,11 +1404,13 @@ function TvBetweenCourtCard({
   assignment,
   teams,
   movements,
+  showMovement,
 }: {
   court: Court;
   assignment: { teamAId: string; teamBId: string } | undefined;
   teams: Team[];
   movements: Map<string, Movement>;
+  showMovement: boolean;
 }) {
   if (!assignment) {
     return (
@@ -1407,7 +1443,7 @@ function TvBetweenCourtCard({
             <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
           </div>
         </div>
-        {teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
+        {showMovement && teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
@@ -1417,7 +1453,7 @@ function TvBetweenCourtCard({
             <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
           </div>
         </div>
-        {teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
+        {showMovement && teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
       </div>
     </div>
   );
