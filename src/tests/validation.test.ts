@@ -68,15 +68,27 @@ describe('validateAssignments', () => {
     expect(validateAssignments(assignments, courts, teams)).toEqual([]);
   });
 
-  it('rejects more matches than courts', () => {
+  it('rejects more matches than courts in a single wave', () => {
     const teams = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => team(id));
     const assignments: PendingAssignment[] = [
       { courtId: 'c1', teamAId: 'a', teamBId: 'b' },
       { courtId: 'c2', teamAId: 'c', teamBId: 'd' },
       { courtId: 'c1', teamAId: 'e', teamBId: 'f' },
     ];
+    // No wave field → all wave 0 → 3 matches > 2 courts at once.
     const issues = validateAssignments(assignments, courts, teams);
     expect(issues.some((i) => /only 2 courts/i.test(i.message))).toBe(true);
+  });
+
+  it('accepts more matches than courts when split across waves', () => {
+    const teams = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => team(id));
+    const assignments: PendingAssignment[] = [
+      { courtId: 'c1', teamAId: 'a', teamBId: 'b', wave: 0 },
+      { courtId: 'c2', teamAId: 'c', teamBId: 'd', wave: 0 },
+      { courtId: 'c1', teamAId: 'e', teamBId: 'f', wave: 1 },
+    ];
+    // 3 matches on 2 courts, but wave 0 has 2 and wave 1 has 1 — both fit.
+    expect(validateAssignments(assignments, courts, teams)).toEqual([]);
   });
 });
 

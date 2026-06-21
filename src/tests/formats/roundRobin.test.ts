@@ -160,21 +160,25 @@ describe('roundRobin.buildFirstRound', () => {
     expect(playing.size).toBe(8);
   });
 
-  it('throws if more matches scheduled than courts available', () => {
-    expect(() =>
-      roundRobin.buildFirstRound({
-        rankedTeamIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        teams: [],
-        courts: courts(2), // need 4
-        config: {
-          groupSize: 4,
-          groups: [
-            ['a', 'b', 'c', 'd'],
-            ['e', 'f', 'g', 'h'],
-          ],
-        },
-      }),
-    ).toThrow(/Round Robin/);
+  it('runs more matches than courts in waves (no throw)', () => {
+    // 2 groups × 2 matches = 4 matches on 2 courts → 2 waves of 2.
+    const assignments = roundRobin.buildFirstRound({
+      rankedTeamIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+      teams: [],
+      courts: courts(2),
+      config: {
+        groupSize: 4,
+        groups: [
+          ['a', 'b', 'c', 'd'],
+          ['e', 'f', 'g', 'h'],
+        ],
+      },
+    });
+    expect(assignments).toHaveLength(4);
+    const perWave = new Map<number, number>();
+    for (const a of assignments) perWave.set(a.wave ?? 0, (perWave.get(a.wave ?? 0) ?? 0) + 1);
+    expect(perWave.get(0)).toBe(2);
+    expect(perWave.get(1)).toBe(2);
   });
 });
 

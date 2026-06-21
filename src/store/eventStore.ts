@@ -131,6 +131,7 @@ function buildMatchesFromAssignments(
       scoreB: 0,
       status: 'in-progress',
       pointValueAtTime: court.pointValue,
+      ...(a.wave ? { wave: a.wave } : {}),
     };
   });
 }
@@ -848,9 +849,30 @@ export const useEventStore = create<EventStore>()(
         if (!event) return;
         const round = getCurrentRound(event);
         if (!round) return;
-        const ties = unresolvedTies(round, event.settings.tieRule);
+        // Only the wave currently on court must be resolved — later waves are
+        // still 0-0 (which reads as a tie) and earlier waves are already done.
+        const currentWave = round.currentWave ?? 0;
+        const maxWave = round.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0);
+        const waveMatches = round.matches.filter((m) => (m.wave ?? 0) === currentWave);
+        const ties = unresolvedTies({ ...round, matches: waveMatches }, event.settings.tieRule);
         if (ties.length) {
           set({ lastError: `Resolve ${ties.length} tied match(es) before ending the round.` });
+          return;
+        }
+        // More waves to play in this round → advance to the next wave on the
+        // same courts with a fresh, unstarted timer. The round stays open.
+        if (currentWave < maxWave) {
+          const advanced: MainRound = {
+            ...round,
+            currentWave: currentWave + 1,
+            startedAt: undefined,
+            pausedAt: undefined,
+            totalPausedMs: 0,
+          };
+          set({
+            event: { ...event, rounds: event.rounds.slice(0, -1).concat(advanced) },
+            lastError: null,
+          });
           return;
         }
         const completed: MainRound = { ...round, completedAt: Date.now() };

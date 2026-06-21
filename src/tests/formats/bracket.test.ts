@@ -140,15 +140,19 @@ describe('bracket.buildFirstRound', () => {
     );
   });
 
-  it('throws when more matches than available courts', () => {
-    expect(() =>
-      bracket.buildFirstRound({
-        rankedTeamIds: ['a', 'b', 'c', 'd'],
-        teams: [],
-        courts: courts(1), // need 2
-        config: { bracketSize: 4, slots: ['a', 'd', 'b', 'c'] },
-      }),
-    ).toThrow(/Bracket/);
+  it('runs more matches than courts in waves (no throw)', () => {
+    // 4-team bracket = 2 round-1 matches on a single court → 2 waves.
+    const assignments = bracket.buildFirstRound({
+      rankedTeamIds: ['a', 'b', 'c', 'd'],
+      teams: [],
+      courts: courts(1),
+      config: { bracketSize: 4, slots: ['a', 'd', 'b', 'c'] },
+    });
+    expect(assignments).toHaveLength(2);
+    expect(new Set(assignments.map((a) => a.courtId)).size).toBe(1); // same court
+    expect(assignments.map((a) => a.wave).sort()).toEqual([0, 1]);
+    const playing = new Set(assignments.flatMap((a) => [a.teamAId, a.teamBId]));
+    expect(playing).toEqual(new Set(['a', 'b', 'c', 'd']));
   });
 });
 

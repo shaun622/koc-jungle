@@ -56,15 +56,17 @@ describe('americano.buildFirstRound', () => {
     expect(playing).toEqual(new Set(['x', 'y', 'z', 'w']));
   });
 
-  it('throws if matches exceed available courts', () => {
-    expect(() =>
-      americano.buildFirstRound({
-        rankedTeamIds: ['a', 'b', 'c', 'd'],
-        teams: [],
-        courts: courts(1), // need 2
-        config: { teams: ['a', 'b', 'c', 'd'] },
-      }),
-    ).toThrow(/Americano/);
+  it('runs matches that exceed courts in waves (no throw)', () => {
+    // 4 teams = 2 matches on a single court → 2 waves.
+    const assignments = americano.buildFirstRound({
+      rankedTeamIds: ['a', 'b', 'c', 'd'],
+      teams: [],
+      courts: courts(1),
+      config: { teams: ['a', 'b', 'c', 'd'] },
+    });
+    expect(assignments).toHaveLength(2);
+    expect(new Set(assignments.map((a) => a.courtId)).size).toBe(1); // same court
+    expect(assignments.map((a) => a.wave).sort()).toEqual([0, 1]);
   });
 });
 

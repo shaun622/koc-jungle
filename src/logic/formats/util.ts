@@ -7,26 +7,29 @@ import { decideWinnerLoser } from '@/logic/rotation';
 
 /**
  * Pack scheduled matches onto the highest-position courts first.
- * Throws if there are more matches than courts.
  *
- *  - `formatName` is just used in the thrown error message so each format
- *    reports its own context.
+ * When there are more matches than courts, the surplus matches run in later
+ * "waves" on the same courts: court assignment cycles through the courts and
+ * each match is tagged with its wave (`floor(i / courtCount)`). A round with
+ * matches <= courts is a single wave 0, identical to the original behaviour —
+ * so KoC and every fitting round are unaffected. The operator advances wave
+ * by wave; teams not in the current wave are shown resting.
+ *
+ *  - `_formatName` is retained for call-site compatibility (formats pass their
+ *    own name); it's no longer needed now that we never throw.
  */
 export function packMatchesOntoCourts(
   matches: Array<[string, string]>,
   courts: Court[],
-  formatName: string,
+  _formatName: string,
 ): PendingAssignment[] {
   const sortedCourts = courts.slice().sort((a, b) => b.position - a.position);
-  if (matches.length > sortedCourts.length) {
-    throw new Error(
-      `${formatName}: ${matches.length} matches scheduled but only ${sortedCourts.length} courts available.`,
-    );
-  }
+  if (sortedCourts.length === 0) return [];
   return matches.map(([teamAId, teamBId], i) => ({
-    courtId: sortedCourts[i].id,
+    courtId: sortedCourts[i % sortedCourts.length].id,
     teamAId,
     teamBId,
+    wave: Math.floor(i / sortedCourts.length),
   }));
 }
 

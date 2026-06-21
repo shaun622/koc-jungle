@@ -13,16 +13,25 @@ export function validateAssignments(
   const courtIds = new Set(courts.map((c) => c.id));
   const activeTeamIds = new Set(teams.filter((t) => t.active).map((t) => t.id));
 
-  // A round may legitimately use FEWER courts than are configured — a
-  // bracket round with byes, or any format whose match count shrinks. Only
-  // flag the impossible case: more matches than there are courts to play
-  // them on at once. (KoC always fills every court, so it's unaffected.)
-  if (assignments.length > courts.length) {
-    issues.push({
-      message: `${assignments.length} matches but only ${courts.length} court${
-        courts.length === 1 ? '' : 's'
-      } available.`,
-    });
+  // A round may legitimately use FEWER courts than are configured (a bracket
+  // bye round) or MORE matches than courts (they run in waves on the same
+  // courts). The only impossible case is more matches than courts *within a
+  // single wave*, so count per wave. Assignments with no wave field are all
+  // wave 0, so single-wave rounds (KoC always) are checked exactly as before.
+  const perWaveCount = new Map<number, number>();
+  for (const a of assignments) {
+    const w = a.wave ?? 0;
+    perWaveCount.set(w, (perWaveCount.get(w) ?? 0) + 1);
+  }
+  for (const count of perWaveCount.values()) {
+    if (count > courts.length) {
+      issues.push({
+        message: `${count} matches but only ${courts.length} court${
+          courts.length === 1 ? '' : 's'
+        } available.`,
+      });
+      break;
+    }
   }
 
   const seenTeams = new Set<string>();

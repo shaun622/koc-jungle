@@ -58,6 +58,20 @@ function MobileLive({ event }: { event: EventState }) {
 
   if (!round) return null;
 
+  // Only the wave currently on court is shown; later waves rest. Single-wave
+  // rounds (KoC always, matches <= courts) are a no-op here.
+  const liveWave = round.currentWave ?? 0;
+  const waveCount = round.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0) + 1;
+  const waveMatches = round.matches.filter((m) => (m.wave ?? 0) === liveWave);
+  const restingTeams =
+    waveCount > 1
+      ? round.matches
+          .filter((m) => (m.wave ?? 0) !== liveWave)
+          .flatMap((m) => [m.teamAId, m.teamBId])
+          .map((id) => event.teams.find((t) => t.id === id))
+          .filter((t): t is Team => !!t)
+      : [];
+
   let timerCls = '';
   if (!timer.hasStarted) timerCls = 'idle';
   else if (timer.remainingMs <= 60_000) timerCls = 'danger';
@@ -70,6 +84,7 @@ function MobileLive({ event }: { event: EventState }) {
           <div className="mobile-display-event">{event.name}</div>
           <div className="mobile-display-meta">
             Round {round.index} of {event.settings.roundsTotal}
+            {waveCount > 1 ? ` · Wave ${liveWave + 1}/${waveCount}` : ''}
             {event.venue ? ` · ${event.venue}` : ''}
           </div>
         </div>
@@ -80,7 +95,7 @@ function MobileLive({ event }: { event: EventState }) {
 
       <div className="mobile-display-body">
         {sortedCourtsDesc.map((court) => {
-          const match = round.matches.find((m) => m.courtId === court.id);
+          const match = waveMatches.find((m) => m.courtId === court.id);
           return (
             <MobileCourtScore
               key={court.id}
@@ -94,6 +109,17 @@ function MobileLive({ event }: { event: EventState }) {
             />
           );
         })}
+
+        {restingTeams.length > 0 && (
+          <div className="mobile-resting">
+            <span className="mobile-resting-label">Resting</span>
+            {restingTeams.map((t) => (
+              <span key={t.id} className="mobile-resting-team">
+                {teamLabelShort(t)}
+              </span>
+            ))}
+          </div>
+        )}
 
         <button
           className="mobile-standings-toggle"

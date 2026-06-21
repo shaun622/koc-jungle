@@ -53,6 +53,14 @@ export interface Match {
   tieBreakWinnerId?: ID;
   status: MatchStatus;
   pointValueAtTime: number;
+  /**
+   * Which wave of the round this match plays in (0-based). When a round has
+   * more matches than courts, the extra matches run in later waves on the
+   * same courts; teams not in the current wave are "resting". Absent means
+   * wave 0 — every single-wave round (KoC always, and any round with
+   * matches <= courts) leaves this unset and behaves exactly as before.
+   */
+  wave?: number;
 }
 
 export interface TimerState {
@@ -73,6 +81,11 @@ export interface MainRound extends TimerState {
   index: number;
   matches: Match[];
   completedAt?: number;
+  /**
+   * The wave currently on court (0-based). Only meaningful when the round
+   * spans multiple waves (more matches than courts). Absent means wave 0.
+   */
+  currentWave?: number;
 }
 
 /**
@@ -107,6 +120,8 @@ export interface PendingAssignment {
   courtId: ID;
   teamAId: ID;
   teamBId: ID;
+  /** Wave this assignment plays in (0-based). Absent means wave 0. */
+  wave?: number;
 }
 
 /**

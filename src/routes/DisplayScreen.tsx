@@ -111,13 +111,23 @@ export function DisplayScreen() {
   const showBetweenRounds = event.status === 'between-rounds' && !!event.pendingAssignments;
   const showCompleteCanvas = event.status === 'complete';
 
-  // Round-end state for the bottom toolbar
-  const ties = round ? unresolvedTies(round, event.settings.tieRule) : [];
+  // Round-end state for the bottom toolbar. When a round spans multiple waves
+  // (more matches than courts), only the wave currently on court is live;
+  // scoring/ties/end-button all key off that wave, and later waves wait.
+  const currentWave = round?.currentWave ?? 0;
+  const waveCount = round
+    ? round.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0) + 1
+    : 1;
+  const isLastWave = currentWave >= waveCount - 1;
+  const waveMatches = round
+    ? round.matches.filter((m) => (m.wave ?? 0) === currentWave)
+    : [];
+  const ties = round
+    ? unresolvedTies({ ...round, matches: waveMatches }, event.settings.tieRule)
+    : [];
   const realTies = ties.filter((m) => m.scoreA > 0 || m.scoreB > 0);
-  const unscored = round
-    ? round.matches.filter((m) => m.scoreA === 0 && m.scoreB === 0).length
-    : 0;
-  const scored = round ? round.matches.length - unscored : 0;
+  const unscored = waveMatches.filter((m) => m.scoreA === 0 && m.scoreB === 0).length;
+  const scored = waveMatches.length - unscored;
   const isFinalRound = round ? round.index >= event.settings.roundsTotal : false;
 
   // On phone portrait the bottom toolbar already carries a menu while a
@@ -172,11 +182,15 @@ export function DisplayScreen() {
           scored={scored}
           realTiesCount={realTies.length}
           isFinalRound={isFinalRound}
+          waveCount={waveCount}
+          currentWave={currentWave}
+          isLastWave={isLastWave}
           onTimerStart={startRoundTimer}
           onTimerPause={pauseRoundTimer}
           onTimerReset={resetRoundTimer}
           onTimerAdjust={adjustTimer}
           onEndRound={() => setConfirmEnd(true)}
+          onAdvanceWave={endRound}
           onMenuToggle={() => setMenuOpen((v) => !v)}
           menuOpen={menuOpen}
           onNavigate={navigate}
@@ -385,11 +399,15 @@ interface DisplayToolbarProps {
   scored: number;
   realTiesCount: number;
   isFinalRound: boolean;
+  waveCount: number;
+  currentWave: number;
+  isLastWave: boolean;
   onTimerStart: () => void;
   onTimerPause: () => void;
   onTimerReset: () => void;
   onTimerAdjust: (deltaMs: number) => void;
   onEndRound: () => void;
+  onAdvanceWave: () => void;
   onMenuToggle: () => void;
   menuOpen: boolean;
   onNavigate: (path: string) => void;
@@ -454,11 +472,15 @@ function DisplayToolbar({
   scored,
   realTiesCount,
   isFinalRound,
+  waveCount,
+  currentWave,
+  isLastWave,
   onTimerStart,
   onTimerPause,
   onTimerReset,
   onTimerAdjust,
   onEndRound,
+  onAdvanceWave,
   onMenuToggle,
   menuOpen,
   onNavigate,
@@ -530,6 +552,14 @@ function DisplayToolbar({
       </div>
 
       <div className="display-toolbar-summary">
+        {waveCount > 1 && (
+          <>
+            <span style={{ color: 'var(--text-1)' }}>
+              Wave {currentWave + 1} of {waveCount}
+            </span>
+            <span style={{ opacity: 0.3 }}>•</span>
+          </>
+        )}
         {unscored > 0 ? (
           <span style={{ color: 'var(--amber)' }}>{unscored} unscored</span>
         ) : (
@@ -547,10 +577,14 @@ function DisplayToolbar({
 
       <button
         className="btn lg primary display-end-round"
-        onClick={onEndRound}
+        onClick={isLastWave ? onEndRound : onAdvanceWave}
         disabled={endDisabled || realTiesCount > 0}
       >
-        {isFinalRound ? 'End event → podium' : 'End round'}
+        {!isLastWave
+          ? 'Next wave →'
+          : isFinalRound
+            ? 'End event → podium'
+            : 'End round'}
       </button>
 
       <div className="display-toolbar-menu">
@@ -653,7 +687,25 @@ function TvLiveCanvas({
   const leftCol = restCourts.slice(0, half);
   const rightCol = restCourts.slice(half);
 
-  const centreMatch = round?.matches.find((m) => m.courtId === centre?.id);
+  // Only the wave currently on court is shown; later waves rest. A round
+  // with matches <= courts is a single wave 0, so this is a no-op there.
+  const liveWave = round?.currentWave ?? 0;
+  const waveCountLive = round
+    ? round.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0) + 1
+    : 1;
+  const waveMatchesLive = round
+    ? round.matches.filter((m) => (m.wave ?? 0) === liveWave)
+    : [];
+  const restingTeams =
+    waveCountLive > 1 && round
+      ? round.matches
+          .filter((m) => (m.wave ?? 0) !== liveWave)
+          .flatMap((m) => [m.teamAId, m.teamBId])
+          .map((id) => event.teams.find((t) => t.id === id))
+          .filter((t): t is Team => !!t)
+      : [];
+
+  const centreMatch = waveMatchesLive.find((m) => m.courtId === centre?.id);
   const centreA = centreMatch && event.teams.find((t) => t.id === centreMatch.teamAId);
   const centreB = centreMatch && event.teams.find((t) => t.id === centreMatch.teamBId);
   const centreResult =
@@ -703,6 +755,7 @@ function TvLiveCanvas({
               {roundIndex > 0
                 ? `Round ${roundIndex} of ${totalRounds}`
                 : `${event.teams.filter((t) => t.active).length} teams • ${event.courts.length} courts`}
+              {waveCountLive > 1 && ` • Wave ${liveWave + 1} of ${waveCountLive}`}
             </div>
           </div>
         </div>
@@ -833,7 +886,7 @@ function TvLiveCanvas({
                 <TvCourtCard
                   key={c.id}
                   court={c}
-                  match={round?.matches.find((m) => m.courtId === c.id)}
+                  match={waveMatchesLive.find((m) => m.courtId === c.id)}
                   teams={event.teams}
                   showControls={showControls}
                   onIncrement={onIncrement}
@@ -887,7 +940,7 @@ function TvLiveCanvas({
                 <TvCourtCard
                   key={c.id}
                   court={c}
-                  match={round?.matches.find((m) => m.courtId === c.id)}
+                  match={waveMatchesLive.find((m) => m.courtId === c.id)}
                   teams={event.teams}
                   showControls={showControls}
                   onIncrement={onIncrement}
@@ -897,6 +950,16 @@ function TvLiveCanvas({
               ))}
             </div>
           </div>
+          {restingTeams.length > 0 && (
+            <div className="tv-resting">
+              <span className="tv-resting-label">Resting</span>
+              {restingTeams.map((t) => (
+                <span key={t.id} className="tv-resting-team">
+                  {teamNameFor(event, t.id)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
