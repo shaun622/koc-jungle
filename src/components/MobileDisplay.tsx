@@ -54,6 +54,7 @@ function MobileLive({ event }: { event: EventState }) {
   );
   const lb = useMemo(() => leaderboard(event), [event]);
   const completed = event.rounds.filter((r) => r.completedAt).length;
+  const isKoc = event.format === 'koc';
 
   if (!round) return null;
 
@@ -84,7 +85,7 @@ function MobileLive({ event }: { event: EventState }) {
             <MobileCourtScore
               key={court.id}
               court={court}
-              isCentre={isCentreCourt(court, event.courts)}
+              isCentre={isKoc && isCentreCourt(court, event.courts)}
               match={match}
               teams={event.teams}
               tieRule={event.settings.tieRule}
@@ -259,6 +260,7 @@ function MobileStandings({
   completed: number;
 }) {
   const movements = useMemo(() => rankMovements(event), [event]);
+  const isKoc = event.format === 'koc';
   return (
     <div className="mobile-standings">
       <div className="mobile-standings-head">
@@ -274,8 +276,8 @@ function MobileStandings({
           >
             <span className="rank">{idx + 1}</span>
             <span className="name">
-              {isKing && <Icons.Crown className="icon" />}
-              <RankMovement movement={movements.get(row.teamId)} />
+              {isKoc && isKing && <Icons.Crown className="icon" />}
+              {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
               {teamNameFor(event, row.teamId)}
             </span>
             <span className="wl">
@@ -296,6 +298,7 @@ function MobileStandings({
 function MobileBetween({ event }: { event: EventState }) {
   const lastRound = event.rounds.at(-1);
   const pending = event.pendingAssignments ?? [];
+  const isKoc = event.format === 'koc';
   const sortedCourtsDesc = useMemo(
     () => event.courts.slice().sort((a, b) => b.position - a.position),
     [event.courts],
@@ -335,7 +338,8 @@ function MobileBetween({ event }: { event: EventState }) {
         <div className="mobile-display-header-left">
           <div className="mobile-display-event">{event.name}</div>
           <div className="mobile-display-meta">
-            Round {lastRound?.index ?? '·'} complete · rotation preview
+            Round {lastRound?.index ?? '·'} complete ·{' '}
+            {isKoc ? 'rotation preview' : 'next round preview'}
           </div>
         </div>
         <div className="mobile-display-timer warn">
@@ -359,7 +363,7 @@ function MobileBetween({ event }: { event: EventState }) {
           }
           const teamA = event.teams.find((t) => t.id === assignment.teamAId);
           const teamB = event.teams.find((t) => t.id === assignment.teamBId);
-          const isCentre = isCentreCourt(court, event.courts);
+          const isCentre = isKoc && isCentreCourt(court, event.courts);
           return (
             <div
               key={court.id}
@@ -372,8 +376,8 @@ function MobileBetween({ event }: { event: EventState }) {
                 </span>
                 <span className="mobile-court-pts">{court.pointValue} pts</span>
               </div>
-              <MobilePreviewRow team={teamA} arrow={teamA && movements.get(teamA.id)} />
-              <MobilePreviewRow team={teamB} arrow={teamB && movements.get(teamB.id)} />
+              <MobilePreviewRow team={teamA} arrow={teamA && movements.get(teamA.id)} showMovement={isKoc} />
+              <MobilePreviewRow team={teamB} arrow={teamB && movements.get(teamB.id)} showMovement={isKoc} />
             </div>
           );
         })}
@@ -385,9 +389,11 @@ function MobileBetween({ event }: { event: EventState }) {
 function MobilePreviewRow({
   team,
   arrow,
+  showMovement,
 }: {
   team: Team | undefined;
   arrow: MovementArrow | undefined;
+  showMovement: boolean;
 }) {
   return (
     <div className="mobile-court-row">
@@ -395,7 +401,7 @@ function MobilePreviewRow({
       <span className="mobile-court-team-name">
         {team ? teamLabelShort(team) : 'TBD'}
       </span>
-      <MobileMovementChip arrow={arrow ?? 'stay'} />
+      {showMovement && <MobileMovementChip arrow={arrow ?? 'stay'} />}
     </div>
   );
 }
