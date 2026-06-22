@@ -110,14 +110,21 @@ export async function fetchOfferings(): Promise<RevenueCatOffering | null> {
   // Resolve to null on timeout; the caller shows a fallback label.
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
   const load = (async (): Promise<RevenueCatOffering | null> => {
-    const result = await Purchases.getOfferings();
-    const current = result.current;
-    if (!current) return null;
-    cachedOfferings = {
-      monthly: current.monthly ?? undefined,
-      annual: current.annual ?? undefined,
-    };
-    return cachedOfferings;
+    try {
+      const result = await Purchases.getOfferings();
+      const current = result.current;
+      if (!current) return null;
+      cachedOfferings = {
+        monthly: current.monthly ?? undefined,
+        annual: current.annual ?? undefined,
+      };
+      return cachedOfferings;
+    } catch {
+      // SDK not configured (missing key), store unreachable, agreement not
+      // active, etc. Resolve to null so the paywall shows a fallback label
+      // rather than letting an unhandled rejection escape.
+      return null;
+    }
   })();
   return Promise.race([load, timeout]);
 }
