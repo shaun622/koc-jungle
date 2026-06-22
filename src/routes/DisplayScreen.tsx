@@ -189,7 +189,17 @@ export function DisplayScreen() {
           onTimerPause={pauseRoundTimer}
           onTimerReset={resetRoundTimer}
           onTimerAdjust={adjustTimer}
-          onEndRound={() => setConfirmEnd(true)}
+          onEndRound={() => {
+            // Between rounds: no dialog — end the round and start the next
+            // one straight away (mirrors how the preview screen was dropped).
+            // Only the irreversible final "end event" keeps a confirm.
+            if (isFinalRound) {
+              setConfirmEnd(true);
+            } else {
+              endRound();
+              startNextRound();
+            }
+          }}
           onAdvanceWave={endRound}
           onMenuToggle={() => setMenuOpen((v) => !v)}
           menuOpen={menuOpen}
@@ -320,32 +330,16 @@ export function DisplayScreen() {
 
       {showCompleteCanvas && <ShareCard ref={podiumShareRef} variant="podium" event={event} />}
 
-      {/* ConfirmDialog left as-is below */}
+      {/* Only the irreversible final "end event" keeps a confirm; ending a
+          round mid-tournament goes straight to the next round with no dialog. */}
       <ConfirmDialog
         open={confirmEnd}
-        title={
-          round && isFinalRound
-            ? `End event after Round ${round.index}?`
-            : round
-              ? `End Round ${round.index}?`
-              : 'End round?'
-        }
-        message={
-          isFinalRound
-            ? 'This is the final scheduled round. Scores will be locked and the podium will be revealed.'
-            : `Scores lock and the courts rotate: winners up, losers down. Round ${(round?.index ?? 0) + 1} starts straight away.`
-        }
-        confirmLabel={
-          isFinalRound ? 'End event' : `Start Round ${(round?.index ?? 0) + 1} →`
-        }
+        title={round ? `End event after Round ${round.index}?` : 'End event?'}
+        message="Scores will be locked and the podium will be revealed."
+        confirmLabel="End event"
         onConfirm={() => {
           setConfirmEnd(false);
-          // End the round and immediately start the next one — the
-          // rotation-preview screen is skipped. endRound() flips to
-          // 'between-rounds' and computes assignments; startNextRound()
-          // consumes them and begins the next round in the same tick.
           endRound();
-          if (!isFinalRound) startNextRound();
         }}
         onCancel={() => setConfirmEnd(false)}
       />
