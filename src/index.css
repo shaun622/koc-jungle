@@ -4765,6 +4765,50 @@ button {
   }
 }
 
+/* "Best on iPad" one-time banner (top of the Home screen). Distinct from
+   the .rotate-hint modal — this is an inline, dismissable tip. */
+.ipad-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: color-mix(in oklch, var(--lime) 6%, var(--bg-1));
+  border: 1px solid color-mix(in oklch, var(--lime) 22%, var(--line-soft));
+  border-radius: 12px;
+  padding: 11px 14px;
+  margin-bottom: 4px;
+}
+.ipad-hint-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--lime);
+}
+.ipad-hint-text {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.ipad-hint-text strong {
+  color: var(--text-1);
+  font-weight: 700;
+}
+.ipad-hint-close {
+  flex: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-2);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+.ipad-hint-close:hover {
+  color: var(--text-1);
+}
+
 /* Nightly stats modal */
 .nightly-modal {
   max-width: 26rem;

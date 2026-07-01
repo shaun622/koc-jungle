@@ -29,6 +29,7 @@ import { AuthModal } from '@/components/AuthModal';
 import { PaywallModal } from '@/components/PaywallModal';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IpadHint } from '@/components/IpadHint';
 import { Icons } from '@/components/Icons';
 import type { EventState, EventStatus, TournamentFormatId } from '@/types/domain';
 
@@ -130,6 +131,7 @@ export function HomeScreen() {
       </header>
 
       <div className="home-body">
+        <IpadHint />
         <div className="home-hero">
           <div className="brand-mark home-hero-logo"><BrandLogo /></div>
           <h1>Padel Tournament Maker</h1>
