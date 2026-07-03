@@ -1791,8 +1791,8 @@ button {
 .lbfull-header,
 .lbfull-row {
   display: grid;
-  /* RANK | TEAM | WINS | LOSSES | GF | GA | QUAL | POINTS */
-  grid-template-columns: 60px 1fr 80px 80px 80px 80px 80px 100px;
+  /* RANK | TEAM | WINS | LOSSES | GF | GA | GD | QUAL | POINTS */
+  grid-template-columns: 60px 1fr 80px 80px 80px 80px 80px 80px 100px;
   gap: 16px;
   align-items: center;
   padding: 12px 24px;
@@ -2949,7 +2949,7 @@ button {
   display: grid;
   grid-template-columns: 28px 1fr 60px 60px;
   align-items: center;
-  padding: 8px 8px 8px 4px;
+  padding: 4px 8px 4px 4px;
   border-radius: 8px;
   font-size: 14px;
   position: relative;
@@ -3004,6 +3004,114 @@ button {
   height: 14px;
   color: var(--gold);
   flex-shrink: 0;
+}
+/* Secondary "games" line under each team in the standings. Shows games
+   won-lost and the signed game difference — explains the tie-break when
+   teams share the same points. Deliberately near-white + small. */
+.tv-lb-name-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.tv-lb-games {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-standings-name-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.mobile-standings-team {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-standings-games {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+/* Adjust-courts modal — drag a team chip onto another to swap their courts. */
+.adjust-courts-hint {
+  font-size: 13px;
+  color: var(--text-1);
+  margin: 4px 0 14px;
+  line-height: 1.5;
+}
+.adjust-courts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+.adjust-court {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-1);
+}
+.adjust-court-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.adjust-court-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+}
+.adjust-court-pts {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-2);
+}
+.adjust-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-2, var(--bg-1));
+  border: 1px solid var(--line-soft);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.adjust-chip:active {
+  cursor: grabbing;
+}
+.adjust-chip--over {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--lime) 45%, transparent);
+}
+.adjust-chip-name {
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adjust-chip-grip {
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* Tiny up/down arrow next to a team in the standings — shows the rank
@@ -6210,12 +6318,13 @@ button {
     gap: 10px;
     padding: 10px 14px;
   }
-  /* Hide WINS / LOSSES / GF / GA / QUAL — only RANK | TEAM | POINTS show. */
+  /* Hide WINS / LOSSES / GF / GA / GD / QUAL — only RANK | TEAM | POINTS show. */
   .lbfull-header > span:nth-child(3),
   .lbfull-header > span:nth-child(4),
   .lbfull-header > span:nth-child(5),
   .lbfull-header > span:nth-child(6),
   .lbfull-header > span:nth-child(7),
+  .lbfull-header > span:nth-child(8),
   .lbfull-row .lbfull-stat {
     display: none;
   }
@@ -6502,12 +6611,13 @@ button {
     gap: 10px;
     padding: 10px 14px;
   }
-  /* Hide WINS / LOSSES / GF / GA / QUAL — only RANK | TEAM | POINTS show. */
+  /* Hide WINS / LOSSES / GF / GA / GD / QUAL — only RANK | TEAM | POINTS show. */
   .lbfull-header > span:nth-child(3),
   .lbfull-header > span:nth-child(4),
   .lbfull-header > span:nth-child(5),
   .lbfull-header > span:nth-child(6),
   .lbfull-header > span:nth-child(7),
+  .lbfull-header > span:nth-child(8),
   .lbfull-row .lbfull-stat {
     display: none;
   }

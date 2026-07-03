@@ -22,8 +22,10 @@ import { RotateHint } from '@/components/RotateHint';
 import { ShareCard } from '@/components/ShareCard';
 import { SettingsModal } from '@/components/SettingsModal';
 import { EditPointsModal } from '@/components/EditPointsModal';
+import { AdjustCourtsModal } from '@/components/AdjustCourtsModal';
 import { TeamAvatars } from '@/components/Avatar';
 import { RankMovement } from '@/components/RankMovement';
+import { GamesLine } from '@/components/GamesLine';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
@@ -62,11 +64,14 @@ export function DisplayScreen() {
   const adjustTimer = useEventStore((s) => s.adjustTimer);
   const startNextRound = useEventStore((s) => s.startNextRound);
   const finishEventNow = useEventStore((s) => s.finishEventNow);
+  const undoLastRound = useEventStore((s) => s.undoLastRound);
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEditPoints, setShowEditPoints] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [confirmBack, setConfirmBack] = useState(false);
+  const [showAdjustCourts, setShowAdjustCourts] = useState(false);
 
   // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
   // bottom for the operator toolbar so the canvas doesn't get hidden behind
@@ -130,6 +135,15 @@ export function DisplayScreen() {
   const scored = waveMatches.length - unscored;
   const isFinalRound = round ? round.index >= event.settings.roundsTotal : false;
 
+  // Which round "Back to previous round" would reopen (with scores intact),
+  // or null when there's nothing to go back to.
+  const backRoundIndex =
+    showBetweenRounds && event.rounds.at(-1)?.completedAt
+      ? (event.rounds.at(-1)?.index ?? null)
+      : showOperatorRound && event.rounds.length >= 2
+        ? (event.rounds.at(-2)?.index ?? null)
+        : null;
+
   // On phone portrait the bottom toolbar already carries a menu while a
   // round / preview is on screen, so the floating top-right gear would just
   // sit over the scoreboard. Keep it for the podium + all larger screens.
@@ -185,6 +199,15 @@ export function DisplayScreen() {
           waveCount={waveCount}
           currentWave={currentWave}
           isLastWave={isLastWave}
+          backRoundIndex={backRoundIndex}
+          onBack={() => {
+            setMenuOpen(false);
+            setConfirmBack(true);
+          }}
+          onAdjustCourts={() => {
+            setMenuOpen(false);
+            setShowAdjustCourts(true);
+          }}
           onTimerStart={startRoundTimer}
           onTimerPause={pauseRoundTimer}
           onTimerReset={resetRoundTimer}
@@ -242,6 +265,17 @@ export function DisplayScreen() {
               <>
                 <div className="display-menu-backdrop" onClick={() => setMenuOpen(false)} />
                 <div className="display-menu">
+                  {backRoundIndex !== null && (
+                    <button
+                      className="display-menu-item"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setConfirmBack(true);
+                      }}
+                    >
+                      ← Back to Round {backRoundIndex}
+                    </button>
+                  )}
                   <button
                     className="display-menu-item"
                     onClick={() => {
@@ -370,6 +404,18 @@ export function DisplayScreen() {
         onCancel={() => setConfirmFinish(false)}
       />
 
+      <ConfirmDialog
+        open={confirmBack}
+        title={backRoundIndex !== null ? `Go back to Round ${backRoundIndex}?` : 'Go back a round?'}
+        message={`Round ${backRoundIndex ?? ''} reopens with its scores intact so you can correct them. Any scores entered in the round after it are discarded. Ending it again rebuilds the next round from the corrected results.`}
+        confirmLabel="Go back"
+        onConfirm={() => {
+          setConfirmBack(false);
+          undoLastRound();
+        }}
+        onCancel={() => setConfirmBack(false)}
+      />
+
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
 
       {showEditPoints && (
@@ -379,6 +425,8 @@ export function DisplayScreen() {
       {showStats && (
         <NightlyStatsModal event={event} onClose={() => setShowStats(false)} />
       )}
+
+      {showAdjustCourts && <AdjustCourtsModal onClose={() => setShowAdjustCourts(false)} />}
     </div>
   );
 }
@@ -396,6 +444,9 @@ interface DisplayToolbarProps {
   waveCount: number;
   currentWave: number;
   isLastWave: boolean;
+  backRoundIndex: number | null;
+  onBack: () => void;
+  onAdjustCourts: () => void;
   onTimerStart: () => void;
   onTimerPause: () => void;
   onTimerReset: () => void;
@@ -469,6 +520,9 @@ function DisplayToolbar({
   waveCount,
   currentWave,
   isLastWave,
+  backRoundIndex,
+  onBack,
+  onAdjustCourts,
   onTimerStart,
   onTimerPause,
   onTimerReset,
@@ -594,6 +648,14 @@ function DisplayToolbar({
           <>
             <div className="display-menu-backdrop" onClick={onMenuToggle} />
             <div className="display-menu">
+              {backRoundIndex !== null && (
+                <button className="display-menu-item" onClick={onBack}>
+                  ← Back to Round {backRoundIndex}
+                </button>
+              )}
+              <button className="display-menu-item" onClick={onAdjustCourts}>
+                Adjust courts (drag to swap)
+              </button>
               <button
                 className="display-menu-item"
                 onClick={() => {
@@ -782,7 +844,10 @@ function TvLiveCanvas({
                   <div className="team-name">
                     {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
                     {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
-                    <span>{teamNameFor(event, row.teamId)}</span>
+                    <div className="tv-lb-name-col">
+                      <span>{teamNameFor(event, row.teamId)}</span>
+                      <GamesLine row={row} className="tv-lb-games" />
+                    </div>
                   </div>
                   <span className="wl">
                     {row.wins}W-{row.losses}L
@@ -797,7 +862,10 @@ function TvLiveCanvas({
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
                   {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
-                  <span>{teamNameFor(event, row.teamId)}</span>
+                  <div className="tv-lb-name-col">
+                    <span>{teamNameFor(event, row.teamId)}</span>
+                    <GamesLine row={row} className="tv-lb-games" />
+                  </div>
                 </div>
                 <span className="wl">
                   {row.wins}W-{row.losses}L
@@ -1323,7 +1391,10 @@ function TvBetweenCanvas({
                   <div className="team-name">
                     {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
                     {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
-                    <span>{teamNameFor(event, row.teamId)}</span>
+                    <div className="tv-lb-name-col">
+                      <span>{teamNameFor(event, row.teamId)}</span>
+                      <GamesLine row={row} className="tv-lb-games" />
+                    </div>
                   </div>
                   <span className="wl">
                     {row.wins}W-{row.losses}L
@@ -1338,7 +1409,10 @@ function TvBetweenCanvas({
                 <span className="rank">{idx + 6}</span>
                 <div className="team-name">
                   {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
-                  <span>{teamNameFor(event, row.teamId)}</span>
+                  <div className="tv-lb-name-col">
+                    <span>{teamNameFor(event, row.teamId)}</span>
+                    <GamesLine row={row} className="tv-lb-games" />
+                  </div>
                 </div>
                 <span className="wl">
                   {row.wins}W-{row.losses}L

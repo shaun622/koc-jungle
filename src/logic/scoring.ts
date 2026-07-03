@@ -104,11 +104,16 @@ export function sortStandings(
 ): TeamStanding[] {
   // Tie-break chain (operator decision):
   //   1. points total (court pointValue per win + manual overrides)
-  //   2. games for — total scores accumulated in the rounds
-  //   3. qualifier score — best of QUALIFIER_TOTAL per match
-  //   4. team name (deterministic fallback)
+  //   2. game difference — gamesFor minus gamesAgainst (the operator's
+  //      main way to separate teams tied on points)
+  //   3. games for — total scores accumulated in the rounds
+  //   4. qualifier score — best of QUALIFIER_TOTAL per match
+  //   5. team name (deterministic fallback)
   return standings.slice().sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total;
+    const diffA = a.gamesFor - a.gamesAgainst;
+    const diffB = b.gamesFor - b.gamesAgainst;
+    if (diffB !== diffA) return diffB - diffA;
     if (b.gamesFor !== a.gamesFor) return b.gamesFor - a.gamesFor;
     if (b.qualifierScore !== a.qualifierScore) return b.qualifierScore - a.qualifierScore;
     return teamNameFor(a.teamId).localeCompare(teamNameFor(b.teamId));

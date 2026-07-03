@@ -83,6 +83,12 @@ interface Actions {
   setMatchScore: (matchId: string, scoreA: number, scoreB: number) => void;
   incrementScore: (matchId: string, side: 'A' | 'B', delta: number) => void;
   nominateTieWinner: (matchId: string, winnerId: string) => void;
+  /** Swap the teams occupying two match slots in the current round (drag to
+   *  re-assign courts). Each slot is a match id + side ('A' | 'B'). */
+  swapMatchSlots: (
+    a: { matchId: string; side: 'A' | 'B' },
+    b: { matchId: string; side: 'A' | 'B' },
+  ) => void;
   endRound: () => void;
   overrideNextAssignments: (assignments: PendingAssignment[]) => void;
   startNextRound: (overrideDurationMs?: number) => void;
@@ -960,18 +966,22 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event) return;
         if (event.rounds.length === 0) return;
+        // Reopen on the round's LAST wave so a multi-wave round shows the
+        // final set of matches (all scored) ready for correction.
+        const lastWaveOf = (r: MainRound) =>
+          r.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0);
         const last = event.rounds[event.rounds.length - 1];
         if (last.completedAt && event.status === 'between-rounds') {
-          const previous = event.rounds.slice(0, -1);
           const restored: MainRound = {
             ...last,
             completedAt: undefined,
+            currentWave: lastWaveOf(last),
           };
-          previous.push(restored);
+          const rounds = event.rounds.slice(0, -1).concat(restored);
           set({
             event: {
               ...event,
-              rounds: previous,
+              rounds,
               pendingAssignments: undefined,
               status: 'round-in-progress',
             },
@@ -979,7 +989,11 @@ export const useEventStore = create<EventStore>()(
           });
         } else if (event.status === 'round-in-progress' && event.rounds.length >= 2) {
           const prev = event.rounds[event.rounds.length - 2];
-          const restored: MainRound = { ...prev, completedAt: undefined };
+          const restored: MainRound = {
+            ...prev,
+            completedAt: undefined,
+            currentWave: lastWaveOf(prev),
+          };
           const rounds = event.rounds.slice(0, -2).concat(restored);
           set({
             event: {
@@ -991,6 +1005,43 @@ export const useEventStore = create<EventStore>()(
             lastError: null,
           });
         }
+      },
+
+      swapMatchSlots: (a, b) => {
+        const event = get().event;
+        if (!event) return;
+        const round = getCurrentRound(event);
+        if (!round) return;
+        const teamAt = (matchId: string, side: 'A' | 'B'): string | undefined => {
+          const m = round.matches.find((mm) => mm.id === matchId);
+          return m ? (side === 'A' ? m.teamAId : m.teamBId) : undefined;
+        };
+        const teamFromA = teamAt(a.matchId, a.side);
+        const teamFromB = teamAt(b.matchId, b.side);
+        if (teamFromA === undefined || teamFromB === undefined) return;
+        if (teamFromA === teamFromB) return; // dropped on itself — no-op
+        const setSlot = (m: Match, side: 'A' | 'B', teamId: string): Match => {
+          const next: Match = { ...m, [side === 'A' ? 'teamAId' : 'teamBId']: teamId };
+          // A nominated tie-break winner that's no longer one of the two
+          // teams on this court is meaningless — clear it.
+          if (
+            next.tieBreakWinnerId &&
+            next.tieBreakWinnerId !== next.teamAId &&
+            next.tieBreakWinnerId !== next.teamBId
+          ) {
+            next.tieBreakWinnerId = undefined;
+          }
+          return next;
+        };
+        const matches = round.matches.map((m) => {
+          let next = m;
+          if (m.id === a.matchId) next = setSlot(next, a.side, teamFromB);
+          if (m.id === b.matchId) next = setSlot(next, b.side, teamFromA);
+          return next;
+        });
+        const nextRound = { ...round, matches };
+        const rounds = event.rounds.slice(0, -1).concat(nextRound);
+        set({ event: { ...event, rounds }, lastError: null });
       },
 
       endEvent: () => {

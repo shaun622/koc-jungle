@@ -15,6 +15,7 @@ import { decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from './Icons';
 import { TeamAvatars } from './Avatar';
 import { RankMovement } from './RankMovement';
+import { GamesLine } from './GamesLine';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 
@@ -304,7 +305,10 @@ function MobileStandings({
             <span className="name">
               {isKoc && isKing && <Icons.Crown className="icon" />}
               {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
-              {teamNameFor(event, row.teamId)}
+              <span className="mobile-standings-name-col">
+                <span className="mobile-standings-team">{teamNameFor(event, row.teamId)}</span>
+                <GamesLine row={row} className="mobile-standings-games" />
+              </span>
             </span>
             <span className="wl">
               {row.wins}W-{row.losses}L
@@ -504,7 +508,10 @@ function MobileComplete({ event }: { event: EventState }) {
                 <span className="rank">{idx + 4}</span>
                 <span className="name">
                   <RankMovement movement={movements.get(row.teamId)} />
-                  {teamNameFor(event, row.teamId)}
+                  <span className="mobile-standings-name-col">
+                    <span className="mobile-standings-team">{teamNameFor(event, row.teamId)}</span>
+                    <GamesLine row={row} className="mobile-standings-games" />
+                  </span>
                 </span>
                 <span className="wl">
                   {row.wins}W-{row.losses}L

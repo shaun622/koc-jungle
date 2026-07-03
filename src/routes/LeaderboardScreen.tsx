@@ -70,6 +70,7 @@ export function LeaderboardScreen() {
           <span style={{ textAlign: 'right' }}>LOSSES</span>
           <span style={{ textAlign: 'right' }} title="Games scored across all rounds">GF</span>
           <span style={{ textAlign: 'right' }} title="Games conceded across all rounds">GA</span>
+          <span style={{ textAlign: 'right' }} title="Game difference (GF minus GA)">GD</span>
           <span style={{ textAlign: 'right' }}>QUAL</span>
           <span style={{ textAlign: 'right' }}>POINTS</span>
         </div>
@@ -77,6 +78,7 @@ export function LeaderboardScreen() {
           {rows.map((row, idx) => {
             const team = event.teams.find((t) => t.id === row.teamId);
             const isKing = row.teamId === topId && row.total > 0;
+            const gd = row.gamesFor - row.gamesAgainst;
             const cells = (
               <>
                 <span className="lbfull-rank">#{idx + 1}</span>
@@ -94,6 +96,7 @@ export function LeaderboardScreen() {
                 <span className="lbfull-stat">{row.losses}</span>
                 <span className="lbfull-stat">{row.gamesFor}</span>
                 <span className="lbfull-stat">{row.gamesAgainst}</span>
+                <span className="lbfull-stat">{gd >= 0 ? `+${gd}` : gd}</span>
                 <span className="lbfull-stat">{row.qualifierScore}</span>
                 {editMode ? (
                   <PointsCell teamId={row.teamId} total={row.total} />

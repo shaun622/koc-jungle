@@ -8,6 +8,7 @@ import {
 } from '@/store/selectors';
 import { Avatar } from './Avatar';
 import { RankMovement } from './RankMovement';
+import { GamesLine } from './GamesLine';
 import { Icons } from './Icons';
 
 /**
@@ -120,7 +121,10 @@ export function TvCompleteView({ event }: { event: EventState }) {
                 <div className="team-name">
                   {idx === 0 && <Icons.Crown className="tv-lb-crown" />}
                   <RankMovement movement={movements.get(row.teamId)} />
-                  <span>{teamLabel(row.teamId)}</span>
+                  <div className="tv-lb-name-col">
+                    <span>{teamLabel(row.teamId)}</span>
+                    <GamesLine row={row} className="tv-lb-games" />
+                  </div>
                 </div>
                 <span className="wl">
                   {row.wins}W-{row.losses}L

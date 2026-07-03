@@ -94,8 +94,9 @@ describe('sortStandings', () => {
     expect(standings.map((s) => s.teamId)).toEqual(['a', 'd', 'c', 'b']);
   });
 
-  it('breaks ties on equal totals by gamesFor', () => {
-    // Two teams both with total = 5; team x has more gamesFor → ranks first.
+  it('breaks ties on equal totals by game difference (over raw gamesFor)', () => {
+    // Both total = 5. y has MORE games-for, but x has a BETTER game
+    // difference — difference must win, so x ranks first.
     const standings = sortStandings(
       [
         {
@@ -106,8 +107,8 @@ describe('sortStandings', () => {
           ties: 0,
           qualifierScore: 10,
           matchesPlayed: 1,
-          gamesFor: 12,
-          gamesAgainst: 4,
+          gamesFor: 10, // fewer for...
+          gamesAgainst: 2, // ...but +8 difference
         },
         {
           teamId: 'y',
@@ -115,10 +116,10 @@ describe('sortStandings', () => {
           wins: 1,
           losses: 0,
           ties: 0,
-          qualifierScore: 15, // higher qual but should NOT trump gamesFor
+          qualifierScore: 15,
           matchesPlayed: 1,
-          gamesFor: 8,
-          gamesAgainst: 4,
+          gamesFor: 14, // more for...
+          gamesAgainst: 10, // ...but only +4 difference
         },
       ],
       (id) => id,
@@ -126,7 +127,39 @@ describe('sortStandings', () => {
     expect(standings.map((s) => s.teamId)).toEqual(['x', 'y']);
   });
 
-  it('falls back to qualifierScore when totals + gamesFor are tied', () => {
+  it('then by gamesFor when totals + game difference are tied', () => {
+    // Both total = 5 and both +6 difference; m has more games-for.
+    const standings = sortStandings(
+      [
+        {
+          teamId: 'm',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 0,
+          matchesPlayed: 1,
+          gamesFor: 12,
+          gamesAgainst: 6, // +6
+        },
+        {
+          teamId: 'n',
+          total: 5,
+          wins: 1,
+          losses: 0,
+          ties: 0,
+          qualifierScore: 0,
+          matchesPlayed: 1,
+          gamesFor: 10,
+          gamesAgainst: 4, // +6
+        },
+      ],
+      (id) => id,
+    );
+    expect(standings.map((s) => s.teamId)).toEqual(['m', 'n']);
+  });
+
+  it('falls back to qualifierScore when totals, difference + gamesFor all tie', () => {
     const standings = sortStandings(
       [
         {
