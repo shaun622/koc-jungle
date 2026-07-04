@@ -112,6 +112,22 @@ describe('splitTeamsIntoGroups', () => {
   it('rejects groupSize < 2', () => {
     expect(() => splitTeamsIntoGroups(['t1', 't2'], 1)).toThrow();
   });
+
+  // startTournament blocks the start when any group would have < 2 teams
+  // (a lone team plays zero matches). These assert the exact predicate it
+  // uses, against the real splitter, for the reported 9-teams / size-4 case.
+  it('leaves an unplayable group of 1 for 9 teams at group size 4', () => {
+    const ids = Array.from({ length: 9 }, (_, i) => `t${i + 1}`);
+    const groups = splitTeamsIntoGroups(ids, 4);
+    expect(groups.map((g) => g.length)).toEqual([4, 4, 1]);
+    expect(groups.some((g) => g.length < 2)).toBe(true); // → start blocked
+  });
+
+  it('a clean split has no group smaller than 2', () => {
+    const ids = Array.from({ length: 8 }, (_, i) => `t${i + 1}`);
+    const groups = splitTeamsIntoGroups(ids, 4);
+    expect(groups.some((g) => g.length < 2)).toBe(false); // → start allowed
+  });
 });
 
 // ---------------------------------------------------------------------------

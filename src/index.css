@@ -6679,6 +6679,11 @@ button {
    complete variants.
    ========================================================================== */
 @media (max-width: 600px) {
+  /* Stack the two player-name inputs on any phone (not just <=500px) so
+     names aren't crammed into ~130px columns. */
+  .setup-team-inputs {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .display-toolbar {
     height: auto;
     grid-template-columns: minmax(0, 1fr) auto;

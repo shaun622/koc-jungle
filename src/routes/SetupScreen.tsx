@@ -60,6 +60,7 @@ export function SetupScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
   const [sharingRoster, setSharingRoster] = useState(false);
+  const [rosterShareError, setRosterShareError] = useState<string | null>(null);
   const rosterShareRef = useRef<HTMLDivElement>(null);
 
   const requestRemoveTeam = (id: string) => {
@@ -340,10 +341,12 @@ export function SetupScreen() {
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
             <strong>Mid-event edits.</strong> Editing a player name is a safe substitution. The
-            team's points and standings stay attached to the team, not the individual player.
-            Adding or removing a team won't change the current round; removed teams stay in the
-            history but are skipped in future rotations, and added teams need to be dragged into a
-            court on the next rotation preview.
+            team's points and standings stay attached to the team, not the individual player.{' '}
+            {event.format === 'americano' || event.format === 'mexicano'
+              ? 'A team you add now joins the schedule from the next round; a removed team drops out of it. The current round is unaffected.'
+              : event.format === 'round-robin' || event.format === 'bracket'
+                ? "This format locks its draw when the tournament starts — a team added now won't be scheduled, and a removed team is simply skipped. The current round is unaffected."
+                : "Adding or removing a team won't change the current round; removed teams are skipped in future rotations, and an added team needs to be dragged into a court on the next rotation preview."}
           </div>
         )}
         <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
@@ -393,12 +396,14 @@ export function SetupScreen() {
             onClick={async () => {
               if (!rosterShareRef.current) return;
               setSharingRoster(true);
+              setRosterShareError(null);
               try {
-                await captureAndShare(rosterShareRef.current, {
+                const r = await captureAndShare(rosterShareRef.current, {
                   filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
                   shareTitle: `${event.name} lineup`,
                   shareText: 'Tonight\'s padel lineup 🎾',
                 });
+                if (!r.ok && r.error) setRosterShareError(r.error);
               } finally {
                 setSharingRoster(false);
               }
@@ -406,6 +411,11 @@ export function SetupScreen() {
           >
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
+          {rosterShareError && (
+            <span style={{ flexBasis: '100%', color: 'var(--red)', fontSize: 12 }}>
+              {rosterShareError}
+            </span>
+          )}
           {event.status !== 'setup' ? (
             <button
               className="btn full primary lg"

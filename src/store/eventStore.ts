@@ -102,7 +102,7 @@ interface Actions {
 
 export type EventStore = State & Actions;
 
-function defaultCourts(): Court[] {
+function defaultCourts(ladder: boolean): Court[] {
   return Array.from({ length: 7 }, (_, i) => {
     const position = i + 1;
     const isCentre = position === 7;
@@ -110,7 +110,11 @@ function defaultCourts(): Court[] {
       id: newId(),
       position,
       name: isCentre ? 'Centre Court' : `Court ${position}`,
-      pointValue: position + 2,
+      // KoC (and Mexicano, where the top pair meet on the top court) use a
+      // laddered value so the top court is worth more. For Americano / Round
+      // Robin / Bracket, court assignment is just scheduling — equal points
+      // keep it fair. The operator can still edit any value in Setup.
+      pointValue: ladder ? position + 2 : 5,
     };
   });
 }
@@ -164,7 +168,7 @@ export const useEventStore = create<EventStore>()(
           createdAt: Date.now(),
           status: 'setup',
           settings: { ...DEFAULT_SETTINGS },
-          courts: defaultCourts(),
+          courts: defaultCourts(fmt === 'koc' || fmt === 'mexicano'),
           teams: [],
           rounds: [],
           format: fmt,
@@ -204,7 +208,22 @@ export const useEventStore = create<EventStore>()(
           createdAt: Date.now(),
           active: true,
         };
-        set({ event: { ...event, teams: [...event.teams, team] }, lastError: null });
+        // Americano/Mexicano freeze their team pool in formatConfig.teams at
+        // start. If the operator adds a team mid-event, append it to that pool
+        // so it actually joins the next round's schedule (KoC reads the live
+        // roster and needs no help; RR/Bracket lock the draw — see Setup copy).
+        const cfg = event.formatConfig as { teams?: string[] };
+        const joinsPool =
+          (event.format === 'americano' || event.format === 'mexicano') &&
+          event.status !== 'setup' &&
+          Array.isArray(cfg.teams);
+        const formatConfig = joinsPool
+          ? { ...event.formatConfig, teams: [...(cfg.teams as string[]), team.id] }
+          : event.formatConfig;
+        set({
+          event: { ...event, teams: [...event.teams, team], formatConfig },
+          lastError: null,
+        });
       },
 
       updateTeam: (id, patch) => {
@@ -339,12 +358,18 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event) return;
         const next = event.courts.length + 1;
-        const top = event.courts.reduce((m, c) => Math.max(m, c.pointValue), 2);
+        const values = event.courts.map((c) => c.pointValue);
+        // If the courts all share one value (equal-points formats), keep it
+        // uniform; if they're laddered (KoC), continue the ladder at max+1.
+        const uniform = values.length > 0 && values.every((v) => v === values[0]);
+        const pointValue = uniform
+          ? values[0]
+          : values.reduce((m, v) => Math.max(m, v), 2) + 1;
         const court: Court = {
           id: newId(),
           position: next,
           name: `Court ${next}`,
-          pointValue: top + 1,
+          pointValue,
         };
         set({ event: { ...event, courts: [...event.courts, court] } });
       },
@@ -656,6 +681,13 @@ export const useEventStore = create<EventStore>()(
             activeTeams.map((t) => t.id),
             groupSize,
           );
+          if (groups.some((g) => g.length < 2)) {
+            const smallest = Math.min(...groups.map((g) => g.length));
+            set({
+              lastError: `${activeTeams.length} teams with a group size of ${groupSize} leaves a group of ${smallest} — that team would play no matches. Adjust the group size or the number of teams.`,
+            });
+            return;
+          }
           formatConfig = { groupSize, groups };
           roundsTotal = Math.max(
             1,

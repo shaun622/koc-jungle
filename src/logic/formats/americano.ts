@@ -38,21 +38,26 @@ export const americano: TournamentFormat = {
     'Every team in one pool. The schedule rotates so you face as many different opponents as possible across the rounds you set.',
   usesQualifier: false,
 
-  buildFirstRound({ courts, config, rankedTeamIds }) {
+  buildFirstRound({ courts, config, rankedTeamIds, teams }) {
     // formatConfig.teams is set by startTournament(); fall back to the
     // ranked / active team list for forward-compat or hand-crafted events.
-    const teams = readTeams(config) ?? rankedTeamIds;
-    const schedule = bergerRounds(teams);
+    // Only ACTIVE teams play.
+    const pool = activePool(config, teams, rankedTeamIds);
+    const schedule = bergerRounds(pool);
     const pairs = schedule[0] ?? [];
     return packMatchesOntoCourts(pairs, courts, 'Americano');
   },
 
-  computeNextRound({ rounds, courts, config }) {
-    const teams = readTeams(config);
-    if (!teams) {
+  computeNextRound({ rounds, courts, config, teams }) {
+    if (!readTeams(config)) {
       throw new Error('Americano: event.formatConfig.teams is required.');
     }
-    const schedule = bergerRounds(teams);
+    // Build the schedule from the ACTIVE pool: teams deactivated mid-event
+    // drop out and teams added mid-event (appended to formatConfig.teams by
+    // addTeam) join in. This also avoids ever scheduling an inactive team,
+    // which would otherwise fail assignment validation and block the round.
+    const pool = activePool(config, teams);
+    const schedule = bergerRounds(pool);
     // rounds.length completed rounds → next round is index `rounds.length`
     // (0-indexed). If we've outrun the full Berger schedule (e.g. operator
     // set roundsTotal higher than the schedule length) wrap around so the
@@ -70,4 +75,21 @@ export const americano: TournamentFormat = {
 function readTeams(config: unknown): string[] | undefined {
   const cfg = (config ?? {}) as Partial<AmericanoConfig>;
   return Array.isArray(cfg.teams) && cfg.teams.length > 0 ? cfg.teams : undefined;
+}
+
+/**
+ * The teams that actually play: the frozen config order (which grows as teams
+ * are added mid-event) intersected with the currently-active roster, order
+ * preserved. Falls back to the ranked / active list when no config is present.
+ */
+function activePool(
+  config: unknown,
+  teams: { id: string; active: boolean }[],
+  fallback?: string[],
+): string[] {
+  const base = readTeams(config) ?? fallback ?? teams.map((t) => t.id);
+  // No roster provided (degenerate / unit-test) → nothing to filter against.
+  if (teams.length === 0) return base;
+  const activeIds = new Set(teams.filter((t) => t.active).map((t) => t.id));
+  return base.filter((id) => activeIds.has(id));
 }

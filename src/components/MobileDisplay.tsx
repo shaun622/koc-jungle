@@ -64,7 +64,8 @@ function MobileLive({ event }: { event: EventState }) {
   const liveWave = round.currentWave ?? 0;
   const waveCount = round.matches.reduce((mx, m) => Math.max(mx, m.wave ?? 0), 0) + 1;
   const waveMatches = round.matches.filter((m) => (m.wave ?? 0) === liveWave);
-  const restingTeams =
+  // Resting = later-wave teams + (pool formats) teams on a bye this round.
+  const waveResting =
     waveCount > 1
       ? round.matches
           .filter((m) => (m.wave ?? 0) !== liveWave)
@@ -72,6 +73,16 @@ function MobileLive({ event }: { event: EventState }) {
           .map((id) => event.teams.find((t) => t.id === id))
           .filter((t): t is Team => !!t)
       : [];
+  const byeFormat =
+    event.format === 'americano' ||
+    event.format === 'mexicano' ||
+    event.format === 'round-robin';
+  const playingIds = new Set(round.matches.flatMap((m) => [m.teamAId, m.teamBId]));
+  const byeTeams = byeFormat
+    ? event.teams.filter((t) => t.active && !playingIds.has(t.id))
+    : [];
+  const restingIds = new Set(waveResting.map((t) => t.id));
+  const restingTeams = [...waveResting, ...byeTeams.filter((t) => !restingIds.has(t.id))];
 
   let timerCls = '';
   if (!timer.hasStarted) timerCls = 'idle';

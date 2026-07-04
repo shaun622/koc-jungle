@@ -157,6 +157,24 @@ describe('mexicano.computeNextRound', () => {
     const playing = new Set(next.flatMap((a) => [a.teamAId, a.teamBId]));
     expect(playing.has('d')).toBe(false);
   });
+
+  it('ranks and pairs a team appended to config mid-event', () => {
+    // Round 1 ran with only a/b/c; the operator then added team d, so
+    // addTeam appended 'd' to formatConfig.teams. With 4 teams (even) the
+    // freshly-added d (0 points, ranked last) must still be scheduled.
+    const teams: Team[] = [fakeTeam('a'), fakeTeam('b'), fakeTeam('c'), fakeTeam('d')];
+    const round1 = fakeRound(1, [fakeMatch('a', 'b', 10, 2, 'c1', 10)]); // c byed
+    const next = mexicano.computeNextRound({
+      rounds: [round1],
+      teams,
+      courts: courts(2),
+      tieRule: 'operator-decides',
+      config: { teams: ['a', 'b', 'c', 'd'] }, // 'd' appended by addTeam
+    });
+    expect(next).toHaveLength(2);
+    const playing = new Set(next.flatMap((a) => [a.teamAId, a.teamBId]));
+    expect(playing.has('d')).toBe(true);
+  });
 });
 
 describe('mexicano.isComplete', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { americano } from '@/logic/formats/americano';
-import type { Court, MainRound } from '@/types/domain';
+import type { Court, MainRound, Player, Team } from '@/types/domain';
 
 function courts(n: number): Court[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -9,6 +9,19 @@ function courts(n: number): Court[] {
     name: `Court ${n - i}`,
     pointValue: 3 + (n - i),
   }));
+}
+
+function fakePlayer(name: string): Player {
+  return { id: `p-${name}`, name };
+}
+
+function fakeTeam(id: string, active = true): Team {
+  return {
+    id,
+    players: [fakePlayer(`${id}-1`), fakePlayer(`${id}-2`)],
+    createdAt: 0,
+    active,
+  };
 }
 
 function fakeRound(i: number): MainRound {
@@ -125,6 +138,47 @@ describe('americano.computeNextRound', () => {
         config: {},
       }),
     ).toThrow(/teams is required/);
+  });
+
+  it('excludes a deactivated team from the next round (no validation error)', () => {
+    // d is deactivated mid-event. It stays in formatConfig.teams but must
+    // drop out of the schedule so we never assign an inactive team (which
+    // would otherwise fail assignment validation and block the round).
+    const teams = [fakeTeam('a'), fakeTeam('b'), fakeTeam('c'), fakeTeam('d', false)];
+    let assignments: ReturnType<typeof americano.computeNextRound> = [];
+    expect(() => {
+      assignments = americano.computeNextRound({
+        rounds: [fakeRound(1)],
+        teams,
+        courts: courts(2),
+        tieRule: 'operator-decides',
+        config: { teams: ['a', 'b', 'c', 'd'] },
+      });
+    }).not.toThrow();
+    const playing = new Set(assignments.flatMap((x) => [x.teamAId, x.teamBId]));
+    expect(playing.has('d')).toBe(false);
+  });
+
+  it('schedules a team appended to config mid-event in a later round', () => {
+    // addTeam appends the new team's id to formatConfig.teams; the active
+    // pool then includes it, so it must appear somewhere in the schedule.
+    const cfg = { teams: ['a', 'b', 'c', 'd', 'e'] }; // 'e' added mid-event
+    const teams = ['a', 'b', 'c', 'd', 'e'].map((id) => fakeTeam(id));
+    const seen = new Set<string>();
+    for (let done = 1; done <= 5; done++) {
+      const asn = americano.computeNextRound({
+        rounds: Array.from({ length: done }, (_, i) => fakeRound(i + 1)),
+        teams,
+        courts: courts(3),
+        tieRule: 'operator-decides',
+        config: cfg,
+      });
+      asn.forEach((x) => {
+        seen.add(x.teamAId);
+        seen.add(x.teamBId);
+      });
+    }
+    expect(seen.has('e')).toBe(true);
   });
 });
 

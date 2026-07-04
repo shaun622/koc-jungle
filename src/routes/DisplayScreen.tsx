@@ -30,6 +30,7 @@ import { useBuzzer } from '@/hooks/useBuzzer';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
 import { captureAndShare } from '@/utils/shareCard';
+import { useKeepAwake } from '@/hooks/useKeepAwake';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 
@@ -53,6 +54,10 @@ export function DisplayScreen() {
   const [confirmFinish, setConfirmFinish] = useState(false);
   const navigate = useNavigate();
   const isMobile = useIsMobileDisplay();
+  // Don't let the iPad sleep while a round is live and mirroring to a TV.
+  useKeepAwake(
+    event?.status === 'round-in-progress' || event?.status === 'between-rounds',
+  );
 
   const incrementScore = useEventStore((s) => s.incrementScore);
   const nominateTieWinner = useEventStore((s) => s.nominateTieWinner);
@@ -67,6 +72,7 @@ export function DisplayScreen() {
   const undoLastRound = useEventStore((s) => s.undoLastRound);
   const podiumShareRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showEditPoints, setShowEditPoints] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -340,12 +346,14 @@ export function DisplayScreen() {
             onClick={async () => {
               if (!podiumShareRef.current) return;
               setSharing(true);
+              setShareError(null);
               try {
-                await captureAndShare(podiumShareRef.current, {
+                const r = await captureAndShare(podiumShareRef.current, {
                   filename: `padel-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-podium.png`,
                   shareTitle: `${event.name} results`,
                   shareText: 'Tonight\'s padel results 🏆',
                 });
+                if (!r.ok && r.error) setShareError(r.error);
               } finally {
                 setSharing(false);
               }
@@ -359,6 +367,11 @@ export function DisplayScreen() {
           <button className="btn ghost" onClick={() => navigate('/leaderboard')}>
             Full standings
           </button>
+          {shareError && (
+            <span style={{ color: 'var(--red)', fontSize: 12, alignSelf: 'center' }}>
+              {shareError}
+            </span>
+          )}
         </div>
       )}
 
@@ -752,7 +765,10 @@ function TvLiveCanvas({
   const waveMatchesLive = round
     ? round.matches.filter((m) => (m.wave ?? 0) === liveWave)
     : [];
-  const restingTeams =
+  // "Resting" = teams not on court right now: those waiting for a later wave,
+  // plus (for pool formats with odd counts) teams sitting out the whole round
+  // on a bye. Byes are otherwise invisible — the team just vanishes.
+  const waveResting =
     waveCountLive > 1 && round
       ? round.matches
           .filter((m) => (m.wave ?? 0) !== liveWave)
@@ -760,6 +776,19 @@ function TvLiveCanvas({
           .map((id) => event.teams.find((t) => t.id === id))
           .filter((t): t is Team => !!t)
       : [];
+  const byeFormat =
+    event.format === 'americano' ||
+    event.format === 'mexicano' ||
+    event.format === 'round-robin';
+  const playingIds = round
+    ? new Set(round.matches.flatMap((m) => [m.teamAId, m.teamBId]))
+    : new Set<string>();
+  const byeTeams =
+    byeFormat && round
+      ? event.teams.filter((t) => t.active && !playingIds.has(t.id))
+      : [];
+  const restingIds = new Set(waveResting.map((t) => t.id));
+  const restingTeams = [...waveResting, ...byeTeams.filter((t) => !restingIds.has(t.id))];
 
   const centreMatch = waveMatchesLive.find((m) => m.courtId === centre?.id);
   const centreA = centreMatch && event.teams.find((t) => t.id === centreMatch.teamAId);

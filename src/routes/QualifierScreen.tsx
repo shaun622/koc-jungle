@@ -4,6 +4,7 @@ import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
 import { validateQualifierScore } from '@/logic/validation';
 import { Timer } from '@/components/Timer';
+import { useKeepAwake } from '@/hooks/useKeepAwake';
 
 export function QualifierScreen() {
   const event = useEventStore((s) => s.event);
@@ -14,6 +15,7 @@ export function QualifierScreen() {
   const resetQualifierTimer = useEventStore((s) => s.resetQualifierTimer);
   const adjustQualifierTimer = useEventStore((s) => s.adjustQualifierTimer);
   const navigate = useNavigate();
+  useKeepAwake(true); // qualifier matches are timed on court too
 
   if (!event || !event.qualifier) {
     return null;
