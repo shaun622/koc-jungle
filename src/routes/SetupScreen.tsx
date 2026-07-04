@@ -109,6 +109,25 @@ export function SetupScreen() {
   const canStartNonQualifier =
     !format.usesQualifier && event.status === 'setup' && teams.length >= 2;
 
+  // Setup is reachable mid-event (the display's "Setup & teams" menu item, or
+  // navigating back). When the event has already moved past setup, the start
+  // button can't apply — so offer a way back to wherever the event is instead
+  // of stranding the operator on a dead screen.
+  const resumeRoute =
+    event.status === 'qualifier'
+      ? '/qualifier'
+      : event.status === 'seeding'
+        ? '/seeding'
+        : '/display'; // round-in-progress / between-rounds / complete
+  const resumeLabel =
+    event.status === 'qualifier'
+      ? 'Resume qualifier →'
+      : event.status === 'seeding'
+        ? 'Resume seeding →'
+        : event.status === 'complete'
+          ? 'View podium →'
+          : 'Back to the event →';
+
   return (
     <div className="setup">
       <div className="setup-col">
@@ -387,7 +406,14 @@ export function SetupScreen() {
           >
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
-          {format.usesQualifier ? (
+          {event.status !== 'setup' ? (
+            <button
+              className="btn full primary lg"
+              onClick={() => navigate(resumeRoute)}
+            >
+              {resumeLabel}
+            </button>
+          ) : format.usesQualifier ? (
             <button
               className="btn full primary lg"
               disabled={!canStartQualifier}
