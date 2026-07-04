@@ -51,6 +51,7 @@ export function SetupScreen() {
   const updateSettings = useEventStore((s) => s.updateSettings);
   const startQualifier = useEventStore((s) => s.startQualifier);
   const skipQualifierToSeeding = useEventStore((s) => s.skipQualifierToSeeding);
+  const setQualifierEnabled = useEventStore((s) => s.setQualifierEnabled);
   const setFormatConfig = useEventStore((s) => s.setFormatConfig);
   const startTournament = useEventStore((s) => s.startTournament);
   const lastError = useEventStore((s) => s.lastError);
@@ -248,7 +249,7 @@ export function SetupScreen() {
                 <label>Use qualifier round</label>
                 <ToggleField
                   value={qualifierEnabled}
-                  onChange={(v) => updateSettings({ qualifierEnabled: v })}
+                  onChange={(v) => setQualifierEnabled(v)}
                 />
               </div>
               {qualifierEnabled && (

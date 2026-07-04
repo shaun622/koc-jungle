@@ -65,6 +65,9 @@ interface Actions {
 
   startQualifier: () => void;
   skipQualifierToSeeding: () => void;
+  /** Toggle whether the KoC qualifier is used. Flipping it mid-flow (from
+   *  'qualifier'/'seeding') resets the event back to 'setup' for consistency. */
+  setQualifierEnabled: (enabled: boolean) => void;
   setQualifierScore: (matchId: string, scoreA: number, scoreB: number) => void;
   startQualifierTimer: () => void;
   pauseQualifierTimer: () => void;
@@ -478,6 +481,32 @@ export const useEventStore = create<EventStore>()(
         set({
           event: { ...event, qualifier: { ...event.qualifier, durationMs: next } },
         });
+      },
+
+      setQualifierEnabled: (enabled) => {
+        const event = get().event;
+        if (!event) return;
+        const settings = { ...event.settings, qualifierEnabled: enabled };
+        // Whether the KoC qualifier is used can only be meaningfully changed
+        // before it has produced results. If the operator flips it after
+        // starting (they navigated back to Setup while a qualifier/seeding was
+        // in progress), snap the event back to 'setup' so the flow stays
+        // consistent and the Setup start button works again. Any provisional
+        // qualifier + assignments are discarded.
+        if (event.status === 'qualifier' || event.status === 'seeding') {
+          set({
+            event: {
+              ...event,
+              settings,
+              status: 'setup',
+              qualifier: undefined,
+              pendingAssignments: undefined,
+            },
+            lastError: null,
+          });
+        } else {
+          set({ event: { ...event, settings } });
+        }
       },
 
       setQualifierScore: (matchId, scoreA, scoreB) => {
