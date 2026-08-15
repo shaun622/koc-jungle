@@ -17,8 +17,8 @@ export function HelpScreen() {
         </button>
         <h2>FORMAT GUIDE</h2>
         <div className="help-sub">
-          Five tournament formats, one per card. Pick the one that fits your night. Tap a
-          card to expand the rules and scoring.
+          Choose King of the Court or Americano today. Our complete Tournament
+          mode is coming next.
         </div>
       </div>
 
@@ -51,6 +51,17 @@ export function HelpScreen() {
             </article>
           );
         })}
+        <article className="help-card help-card--coming-soon">
+          <h3 className="help-card-title">TOURNAMENT</h3>
+          <p className="help-card-tagline">A complete draw, from first match to TV-ready podium.</p>
+          <div className="help-card-section">
+            <div className="help-card-label">Coming soon</div>
+            <p>
+              Tournament mode is being designed as the third flagship format.
+              It will join King of the Court and Americano after the core flow is finalised.
+            </p>
+          </div>
+        </article>
       </div>
     </div>
   );

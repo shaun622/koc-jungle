@@ -368,7 +368,7 @@ export function DisplayScreen() {
             Full standings
           </button>
           {shareError && (
-            <span style={{ color: 'var(--red)', fontSize: 12, alignSelf: 'center' }}>
+            <span style={{ color: 'var(--red)', fontSize: 14, alignSelf: 'center' }}>
               {shareError}
             </span>
           )}
@@ -787,8 +787,13 @@ function TvLiveCanvas({
     byeFormat && round
       ? event.teams.filter((t) => t.active && !playingIds.has(t.id))
       : [];
-  const restingIds = new Set(waveResting.map((t) => t.id));
-  const restingTeams = [...waveResting, ...byeTeams.filter((t) => !restingIds.has(t.id))];
+  const nextRoundTeams =
+    event.format === 'americano' &&
+    round &&
+    round.index < event.settings.roundsTotal
+      ? byeTeams
+      : [];
+  const roundByeTeams = nextRoundTeams.length > 0 ? [] : byeTeams;
 
   const centreMatch = waveMatchesLive.find((m) => m.courtId === centre?.id);
   const centreA = centreMatch && event.teams.find((t) => t.id === centreMatch.teamAId);
@@ -1041,14 +1046,38 @@ function TvLiveCanvas({
               ))}
             </div>
           </div>
-          {restingTeams.length > 0 && (
+          {(waveResting.length > 0 || roundByeTeams.length > 0 || nextRoundTeams.length > 0) && (
             <div className="tv-resting">
-              <span className="tv-resting-label">Resting</span>
-              {restingTeams.map((t) => (
-                <span key={t.id} className="tv-resting-team">
-                  {teamNameFor(event, t.id)}
-                </span>
-              ))}
+              {waveResting.length > 0 && (
+                <div className="tv-resting-group">
+                  <span className="tv-resting-label">Later this round</span>
+                  {waveResting.map((t) => (
+                    <span key={t.id} className="tv-resting-team">
+                      {teamNameFor(event, t.id)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {roundByeTeams.length > 0 && (
+                <div className="tv-resting-group">
+                  <span className="tv-resting-label">Resting</span>
+                  {roundByeTeams.map((t) => (
+                    <span key={t.id} className="tv-resting-team">
+                      {teamNameFor(event, t.id)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {nextRoundTeams.length > 0 && round && (
+                <div className="tv-resting-group tv-resting-group--next">
+                  <span className="tv-resting-label">Joins Round {round.index + 1}</span>
+                  {nextRoundTeams.map((t) => (
+                    <span key={t.id} className="tv-resting-team">
+                      {teamNameFor(event, t.id)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

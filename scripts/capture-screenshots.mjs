@@ -249,7 +249,12 @@ async function captureFrame(context, label, opts) {
 
 // ─── Main ─────────────────────────────────────────────────────────────
 
-const browser = await chromium.launch();
+// CI can use Playwright's bundled Chromium. Local Windows machines can set
+// PLAYWRIGHT_CHANNEL=msedge (or chrome) to reuse an installed browser.
+const browser = await chromium.launch({
+  channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
+  headless: true,
+});
 
 for (const device of filteredDevices) {
   const folder = resolve(outRoot, device.folder);

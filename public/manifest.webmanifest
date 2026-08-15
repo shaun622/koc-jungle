@@ -1,7 +1,7 @@
 {
   "name": "Padel Tournament Maker",
   "short_name": "Padel TM",
-  "description": "Run padel tournaments: King of the Court, Americano, Mexicano, Round Robin, Bracket. Timer, scoring, cloud sync.",
+  "description": "Run King of the Court and Americano padel nights from an iPad, with live scoring, automatic rotations and a TV-ready scoreboard.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

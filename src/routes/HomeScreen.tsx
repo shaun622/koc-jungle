@@ -10,7 +10,7 @@
  * elsewhere navigates back to this screen.
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { buildDemoEvent } from '@/logic/demoData';
@@ -136,9 +136,14 @@ export function HomeScreen() {
           <div className="brand-mark home-hero-logo"><BrandLogo /></div>
           <h1>Padel Tournament Maker</h1>
           <p className="home-hero-sub">
-            Run your padel night: timer, courts, scoring, auto-rotation, live
-            leaderboard. Five formats, one operator app.
+            Run every court from one iPad, then mirror the live scoreboard to
+            the TV so everyone can follow the action.
           </p>
+          <div className="home-hero-proof" aria-label="Designed for iPad and TV">
+            <span><Icons.Plus className="icon" /> Enter scores on iPad</span>
+            <span><Icons.Rotate className="icon" /> Mirror to the TV</span>
+            <span><Icons.Trophy className="icon" /> Live standings</span>
+          </div>
         </div>
 
         {event && (
@@ -164,44 +169,33 @@ export function HomeScreen() {
 
         <div className="home-section">
           <div className="home-section-title">
-            {event ? 'Start a new event' : 'Pick a format'}
-            {pro && <span className="pro-chip">PRO</span>}
+            {event ? 'Start a new event' : 'Choose a format'}
+            <span className="pro-chip">{pro ? 'PRO ACTIVE' : '7-DAY FREE TRIAL'}</span>
           </div>
           <div className="home-modes">
             <ModeCard
               name="King of the Court"
-              blurb="Qualifier seeds teams onto courts. Winners climb, losers drop, King defends Centre Court."
+              blurb="Winners climb, losers drop, and the King defends Centre Court. Built for fast-moving club nights."
+              icon={<Icons.Crown className="icon" />}
               locked={isFormatLocked('koc')}
               onPick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
               onShowRules={() => setRulesForFormat('koc')}
             />
             <ModeCard
               name="Americano"
-              blurb="Every team in one pool. Schedule rotates so you face as many different opponents as fit in the rounds you set."
+              blurb="Automatic rotations, balanced court time and a live points table for every player."
+              icon={<Icons.Rotate className="icon" />}
               locked={isFormatLocked('americano')}
               onPick={() => tryCreate('Americano', 'americano', 'Americano')}
               onShowRules={() => setRulesForFormat('americano')}
             />
             <ModeCard
-              name="Mexicano"
-              blurb="Re-pairs every round from the live standings: top vs second, third vs fourth. Tight games every round."
-              locked={isFormatLocked('mexicano')}
-              onPick={() => tryCreate('Mexicano', 'mexicano', 'Mexicano')}
-              onShowRules={() => setRulesForFormat('mexicano')}
-            />
-            <ModeCard
-              name="Round Robin"
-              blurb="Each team plays every other team in their group. Fair, complete, top of the table wins."
-              locked={isFormatLocked('round-robin')}
-              onPick={() => tryCreate('Round Robin', 'round-robin', 'Round Robin')}
-              onShowRules={() => setRulesForFormat('round-robin')}
-            />
-            <ModeCard
-              name="Bracket"
-              blurb="Single elimination. Win to advance, lose to go home. Top seeds bye if the field isn't a power of 2."
-              locked={isFormatLocked('bracket')}
-              onPick={() => tryCreate('Bracket', 'bracket', 'Bracket')}
-              onShowRules={() => setRulesForFormat('bracket')}
+              name="Tournament"
+              blurb="Build a complete tournament, progress through the draw and finish on a TV-ready podium."
+              icon={<Icons.Trophy className="icon" />}
+              locked={false}
+              disabled
+              status="COMING SOON"
             />
           </div>
         </div>
@@ -244,7 +238,7 @@ export function HomeScreen() {
                     onClick={() => tryLoad(templateToEventState(t))}
                   >
                     <span style={{ fontWeight: 700 }}>{t.name}</span>
-                    <span style={{ color: 'var(--text-2)', marginLeft: 8, fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-2)', marginLeft: 8, fontSize: 14 }}>
                       {t.teams.length} teams · {t.courts.length} courts
                     </span>
                   </button>
@@ -313,37 +307,46 @@ export function HomeScreen() {
 function ModeCard({
   name,
   blurb,
+  icon,
   locked,
   onPick,
   onShowRules,
+  disabled = false,
+  status,
 }: {
   name: string;
   blurb: string;
+  icon: ReactNode;
   locked: boolean;
-  onPick: () => void;
-  onShowRules: () => void;
+  onPick?: () => void;
+  onShowRules?: () => void;
+  disabled?: boolean;
+  status?: string;
 }) {
   return (
-    <div className={'landing-mode-wrap ' + (locked ? 'locked' : '')}>
-      <button className="landing-mode" onClick={onPick}>
+    <div className={'landing-mode-wrap ' + (locked ? 'locked ' : '') + (disabled ? 'disabled' : '')}>
+      <button className="landing-mode" onClick={onPick} disabled={disabled}>
+        <span className="landing-mode-icon" aria-hidden>{icon}</span>
         <span className="landing-mode-name">
           {name}
-          {locked && <span className="lock-chip">🔒 Pro</span>}
+          {status && <span className="coming-soon-chip">{status}</span>}
+          {locked && <span className="lock-chip">Trial / Pro</span>}
         </span>
         <span className="landing-mode-blurb">{blurb}</span>
       </button>
-      <button
-        type="button"
-        className="landing-mode-info"
-        onClick={(e) => {
-          e.stopPropagation();
-          onShowRules();
-        }}
-        aria-label={`Show rules for ${name}`}
-      >
-        Rules
-      </button>
+      {onShowRules && (
+        <button
+          type="button"
+          className="landing-mode-info"
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowRules();
+          }}
+          aria-label={`Show rules for ${name}`}
+        >
+          Rules
+        </button>
+      )}
     </div>
   );
 }
-

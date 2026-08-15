@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useApplyTheme } from '@/hooks/useApplyTheme';
 import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
 import { logInIAP, logOutIAP } from '@/lib/iap';
+import { useEntitlementsStore } from '@/store/entitlements';
 import type { EventStatus } from '@/types/domain';
 
 function routeForStatus(status: EventStatus): string {
@@ -116,6 +117,24 @@ export function App() {
   const hydrated = useEventStore((s) => s.hydrated);
   useStorageBroadcast();
   useApplyTheme();
+
+  // Keep the local seven-day trial honest. Check at launch, once a minute
+  // while the app is open, and whenever it returns to the foreground.
+  useEffect(() => {
+    const tickTrial = () => useEntitlementsStore.getState().tickTrial();
+    const onVisibilityChange = () => {
+      if (!document.hidden) tickTrial();
+    };
+
+    tickTrial();
+    const intervalId = window.setInterval(tickTrial, 60_000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (useEventStore.persist) {

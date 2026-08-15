@@ -54,7 +54,7 @@ export function EditPointsModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h2>Edit points</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-1)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 15, color: 'var(--text-1)', margin: '4px 0 0' }}>
               Correct any team's total and the podium and standings re-sort
               automatically.
             </p>
@@ -82,7 +82,7 @@ export function EditPointsModal({ onClose }: { onClose: () => void }) {
             );
           })}
           {orderedTeamIds.length === 0 && (
-            <div style={{ color: 'var(--text-2)', fontSize: 13 }}>No teams.</div>
+            <div style={{ color: 'var(--text-2)', fontSize: 15 }}>No teams.</div>
           )}
         </div>
 

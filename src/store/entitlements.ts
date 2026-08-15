@@ -2,14 +2,16 @@
  * Entitlements store (Stage 2.5 — subscription paywall).
  *
  * Tracks whether the user has the "Pro" entitlement that unlocks:
- *   - The 4 new tournament formats (Round Robin, Americano, Mexicano, Bracket)
+ *   - King of the Court and Americano during the trial or with Pro
+ *   - The future Tournament mode when it launches
  *   - Cloud sync (Stage 2.4)
  *
- * KoC stays free for everyone.
+ * No format is permanently free. A new user gets a one-time seven-day
+ * trial; after it expires an active Pro subscription is required.
  *
- * Trial model: each device gets one 7-day free trial. Starting the trial
- * grants `pro=true` for 7 days; after that the user must subscribe via
- * the in-app purchase flow.
+ * Trial model: native builds use the App Store / Play introductory offer
+ * through the purchase flow. The local `startTrial` action exists only for
+ * the web preview, where store billing is unavailable.
  *
  * IAP wiring: the actual subscription is gated by the platform billing:
  *   - Native (Capacitor, Stage 2.2): @revenuecat/purchases-capacitor
@@ -96,11 +98,11 @@ export function isFormatLocked(formatId: string): boolean {
   return isFeatureLocked();
 }
 
-/** Days remaining in the trial (rounded down). 0 if no trial / expired. */
+/** Calendar days remaining in the trial. 0 if no trial / expired. */
 export function trialDaysRemaining(): number {
   const s = useEntitlementsStore.getState();
   if (!s.trialEndsAt) return 0;
   const ms = s.trialEndsAt - Date.now();
   if (ms <= 0) return 0;
-  return Math.floor(ms / (24 * 60 * 60 * 1000));
+  return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }

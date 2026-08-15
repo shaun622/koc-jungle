@@ -210,7 +210,7 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
         <div className="team-history-head">
           <div>
             <h2 style={{ marginBottom: 4 }}>{teamName}</h2>
-            <div style={{ fontSize: 12, color: 'var(--text-2)', letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-2)', letterSpacing: '0.04em' }}>
               {wins} wins · {losses} losses · {total} points
             </div>
           </div>

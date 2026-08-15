@@ -81,8 +81,11 @@ function MobileLive({ event }: { event: EventState }) {
   const byeTeams = byeFormat
     ? event.teams.filter((t) => t.active && !playingIds.has(t.id))
     : [];
-  const restingIds = new Set(waveResting.map((t) => t.id));
-  const restingTeams = [...waveResting, ...byeTeams.filter((t) => !restingIds.has(t.id))];
+  const nextRoundTeams =
+    event.format === 'americano' && round.index < event.settings.roundsTotal
+      ? byeTeams
+      : [];
+  const roundByeTeams = nextRoundTeams.length > 0 ? [] : byeTeams;
 
   let timerCls = '';
   if (!timer.hasStarted) timerCls = 'idle';
@@ -122,14 +125,38 @@ function MobileLive({ event }: { event: EventState }) {
           );
         })}
 
-        {restingTeams.length > 0 && (
+        {(waveResting.length > 0 || roundByeTeams.length > 0 || nextRoundTeams.length > 0) && (
           <div className="mobile-resting">
-            <span className="mobile-resting-label">Resting</span>
-            {restingTeams.map((t) => (
-              <span key={t.id} className="mobile-resting-team">
-                {teamLabelShort(t)}
-              </span>
-            ))}
+            {waveResting.length > 0 && (
+              <div className="mobile-resting-group">
+                <span className="mobile-resting-label">Later this round</span>
+                {waveResting.map((t) => (
+                  <span key={t.id} className="mobile-resting-team">
+                    {teamLabelShort(t)}
+                  </span>
+                ))}
+              </div>
+            )}
+            {roundByeTeams.length > 0 && (
+              <div className="mobile-resting-group">
+                <span className="mobile-resting-label">Resting</span>
+                {roundByeTeams.map((t) => (
+                  <span key={t.id} className="mobile-resting-team">
+                    {teamLabelShort(t)}
+                  </span>
+                ))}
+              </div>
+            )}
+            {nextRoundTeams.length > 0 && (
+              <div className="mobile-resting-group mobile-resting-group--next">
+                <span className="mobile-resting-label">Joins Round {round.index + 1}</span>
+                {nextRoundTeams.map((t) => (
+                  <span key={t.id} className="mobile-resting-team">
+                    {teamLabelShort(t)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

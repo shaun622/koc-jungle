@@ -342,8 +342,10 @@ export function SetupScreen() {
           <div className="setup-mid-event-banner">
             <strong>Mid-event edits.</strong> Editing a player name is a safe substitution. The
             team's points and standings stay attached to the team, not the individual player.{' '}
-            {event.format === 'americano' || event.format === 'mexicano'
-              ? 'A team you add now joins the schedule from the next round; a removed team drops out of it. The current round is unaffected.'
+            {event.format === 'americano'
+              ? 'Before the round timer starts, adding a team refreshes the draw and fills any available court space. Once play has started, the new team joins from the next round. A removed team drops out of future rounds.'
+              : event.format === 'mexicano'
+                ? 'A team you add now joins the schedule from the next round; a removed team drops out of it. The current round is unaffected.'
               : event.format === 'round-robin' || event.format === 'bracket'
                 ? "This format locks its draw when the tournament starts — a team added now won't be scheduled, and a removed team is simply skipped. The current round is unaffected."
                 : "Adding or removing a team won't change the current round; removed teams are skipped in future rotations, and an added team needs to be dragged into a court on the next rotation preview."}
@@ -384,7 +386,7 @@ export function SetupScreen() {
             </div>
           ))}
           {teams.length === 0 && (
-            <div style={{ color: 'var(--text-2)', fontSize: 12, fontStyle: 'italic' }}>
+            <div style={{ color: 'var(--text-2)', fontSize: 14, fontStyle: 'italic' }}>
               No teams yet.
             </div>
           )}
@@ -412,7 +414,7 @@ export function SetupScreen() {
             {sharingRoster ? 'Generating…' : 'Share roster'}
           </button>
           {rosterShareError && (
-            <span style={{ flexBasis: '100%', color: 'var(--red)', fontSize: 12 }}>
+            <span style={{ flexBasis: '100%', color: 'var(--red)', fontSize: 14 }}>
               {rosterShareError}
             </span>
           )}
@@ -468,7 +470,7 @@ export function SetupScreen() {
           )}
         </div>
         {lastError && event.status === 'setup' && (
-          <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 8 }}>
+          <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 8 }}>
             {lastError}
           </div>
         )}
@@ -847,7 +849,7 @@ function SortableCourtRow({
         />
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: 'var(--text-2)',
             fontFamily: 'var(--font-mono)',
             letterSpacing: '0.12em',
@@ -966,4 +968,3 @@ function SortableSeedRow({
     </div>
   );
 }
-

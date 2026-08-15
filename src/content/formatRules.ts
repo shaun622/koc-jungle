@@ -124,7 +124,4 @@ export const FORMAT_RULES: Record<TournamentFormatId, FormatRuleGuide> = {
 export const FORMAT_ORDER: TournamentFormatId[] = [
   'koc',
   'americano',
-  'mexicano',
-  'round-robin',
-  'bracket',
 ];

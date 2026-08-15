@@ -1,7 +1,7 @@
 {
   "name": "padel-koc-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "cap:sync": "npm run build && cap sync",
     "cap:ios": "npm run build && cap sync ios && cap open ios",
     "cap:android": "npm run build && cap sync android && cap open android",
-    "cap:assets": "capacitor-assets generate --assetPath resources"
+    "cap:assets": "capacitor-assets generate --assetPath resources",
+    "release:check:ios": "node scripts/check-ios-release.mjs"
   },
   "dependencies": {
     "@capacitor-community/keep-awake": "^7.0.0",

@@ -87,7 +87,7 @@ export function ClubBrandingModal({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        {error && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 6 }}>{error}</div>}
 
         <div className="modal-actions">
           <button

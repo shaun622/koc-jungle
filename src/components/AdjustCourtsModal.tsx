@@ -116,7 +116,7 @@ export function AdjustCourtsModal({ onClose }: { onClose: () => void }) {
                 );
               })}
               {sortedMatches.length === 0 && (
-                <div style={{ color: 'var(--text-2)', fontSize: 13 }}>
+                <div style={{ color: 'var(--text-2)', fontSize: 15 }}>
                   No matches on court in this wave.
                 </div>
               )}

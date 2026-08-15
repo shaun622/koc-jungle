@@ -149,6 +149,77 @@ function buildMatchesFromAssignments(
   });
 }
 
+/**
+ * Americano builds its fixtures from the active roster. When the operator
+ * corrects the roster after starting the event, keep any not-yet-played
+ * schedule in sync so spare courts are filled instead of showing valid teams
+ * as resting.
+ *
+ * A live round is only rebuilt before its timer has ever started and while all
+ * scores are still untouched. Once play begins, the current round is kept
+ * stable and the new team joins from the following round.
+ */
+function refreshAmericanoSchedule(
+  event: EventState,
+  teams: Team[],
+  formatConfig: Record<string, unknown>,
+): EventState {
+  const nextEvent: EventState = { ...event, teams, formatConfig };
+  if (event.format !== 'americano') return nextEvent;
+
+  const format = getFormat('americano');
+
+  if (event.status === 'between-rounds') {
+    const assignments = format.computeNextRound({
+      rounds: event.rounds,
+      teams,
+      courts: event.courts,
+      tieRule: event.settings.tieRule,
+      config: formatConfig,
+    });
+    return { ...nextEvent, pendingAssignments: assignments };
+  }
+
+  if (event.status !== 'round-in-progress') return nextEvent;
+  const current = getCurrentRound(event);
+  const canRebuildCurrent =
+    current !== null &&
+    current.startedAt === undefined &&
+    (current.currentWave ?? 0) === 0 &&
+    current.matches.every(
+      (match) =>
+        match.scoreA === 0 &&
+        match.scoreB === 0 &&
+        match.tieBreakWinnerId === undefined,
+    );
+  if (!canRebuildCurrent || !current) return nextEvent;
+
+  const completedRounds = event.rounds.slice(0, -1);
+  const activeTeams = teams.filter((team) => team.active);
+  const assignments =
+    completedRounds.length === 0
+      ? format.buildFirstRound({
+          rankedTeamIds: activeTeams.map((team) => team.id),
+          teams: activeTeams,
+          courts: event.courts,
+          config: formatConfig,
+        })
+      : format.computeNextRound({
+          rounds: completedRounds,
+          teams,
+          courts: event.courts,
+          tieRule: event.settings.tieRule,
+          config: formatConfig,
+        });
+
+  const refreshedRound: MainRound = {
+    ...current,
+    matches: buildMatchesFromAssignments(assignments, event.courts),
+    currentWave: undefined,
+  };
+  return { ...nextEvent, rounds: [...completedRounds, refreshedRound] };
+}
+
 export const useEventStore = create<EventStore>()(
   persist(
     (set, get) => ({
@@ -220,8 +291,13 @@ export const useEventStore = create<EventStore>()(
         const formatConfig = joinsPool
           ? { ...event.formatConfig, teams: [...(cfg.teams as string[]), team.id] }
           : event.formatConfig;
+        const teams = [...event.teams, team];
         set({
-          event: { ...event, teams: [...event.teams, team], formatConfig },
+          event: refreshAmericanoSchedule(
+            event,
+            teams,
+            formatConfig as Record<string, unknown>,
+          ),
           lastError: null,
         });
       },

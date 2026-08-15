@@ -2,11 +2,12 @@
  * In-App Purchase wrapper for native Capacitor builds.
  *
  * Two layers:
- *  - Web (PWA, including koc-jungle.pages.dev): IAP is a no-op. The
- *    7-day trial runs in local state; subscribe buttons show a "Open
- *    the iOS or Android app to subscribe" message.
+ *  - Web (PWA, including koc-jungle.pages.dev): IAP is a no-op. A
+ *    local preview trial is available, while purchases are directed to
+ *    the native app.
  *  - Native (Capacitor iOS / Android): wires through RevenueCat which
- *    talks to StoreKit / Google Billing.
+ *    talks to StoreKit / Google Billing. The seven-day trial is the
+ *    store-managed introductory offer, never a local entitlement.
  *
  * Architecture detail: the platform-specific imports are dynamic so
  * the @revenuecat/purchases-capacitor module doesn't get bundled into
@@ -258,14 +259,23 @@ export async function presentRedeemCodeSheet(): Promise<{ ok: boolean; error?: s
 function applyCustomerInfo(customerInfo: unknown): void {
   const info = customerInfo as {
     entitlements?: {
-      active?: Record<string, { isActive?: boolean; expirationDate?: string | null }>;
+      active?: Record<
+        string,
+        {
+          isActive?: boolean;
+          expirationDate?: string | null;
+          periodType?: string;
+        }
+      >;
     };
   };
   const active = info.entitlements?.active ?? {};
   const entries = Object.values(active).filter((e) => e?.isActive !== false);
   const proActive = entries.length > 0;
-  // Use the soonest expiration among active entitlements for the trial clock.
+  // A paid subscription's expiration is its renewal date, not a trial end.
+  // Only expose a countdown for RevenueCat's actual StoreKit trial period.
   const exps = entries
+    .filter((e) => e.periodType?.toUpperCase() === 'TRIAL')
     .map((e) => (e.expirationDate ? new Date(e.expirationDate).getTime() : undefined))
     .filter((n): n is number => typeof n === 'number');
   const trialEndsAt = exps.length ? Math.min(...exps) : undefined;

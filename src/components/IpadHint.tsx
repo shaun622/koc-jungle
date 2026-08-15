@@ -34,8 +34,8 @@ export function IpadHint() {
     <div className="ipad-hint" role="note">
       <Icons.Rotate className="icon ipad-hint-icon" />
       <span className="ipad-hint-text">
-        <strong>Best on iPad, in landscape</strong> — the full scoreboard, timer
-        and standings all fit on screen.
+        <strong>Best on iPad, brilliant on TV</strong> — enter scores courtside,
+        then mirror the live scoreboard for every player to follow.
       </span>
       <button className="ipad-hint-close" onClick={close} aria-label="Dismiss">
         ×

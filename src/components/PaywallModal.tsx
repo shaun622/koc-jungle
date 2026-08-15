@@ -2,9 +2,9 @@
  * PaywallModal: pitches Pro and starts the 7-day trial or initiates
  * a subscription purchase.
  *
- * Prices shown here are placeholders for the PWA build. Native builds
- * (Capacitor, Stage 2.2) replace these with prices fetched live from
- * the store via RevenueCat so any price changes propagate automatically.
+ * On native builds the seven-day trial is Apple's approved introductory
+ * offer and starts through StoreKit with the selected subscription. The
+ * local-device trial remains available only in the web preview.
  */
 
 import { useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
@@ -25,10 +25,9 @@ const PRIVACY_URL = 'https://koc-jungle.pages.dev/privacy/';
 
 const FEATURES = [
   'King of the Court: winners climb, losers drop',
-  'Americano: rotating partners pool',
-  'Mexicano: dynamic re-pairing each round',
-  'Round Robin: group stage all-play-all',
-  'Single-elimination bracket: knockout tournaments',
+  'Americano: automatic rotations and live points',
+  'Courtside score entry designed for iPad',
+  'TV-ready scoreboard, timer and standings',
   'Cloud sync: events across all your devices',
 ];
 
@@ -37,10 +36,11 @@ export function PaywallModal({
   reason,
 }: {
   onClose: () => void;
-  /** Optional contextual reason for the prompt (e.g. "Round Robin needs Pro"). */
+  /** Optional contextual reason for the prompt (e.g. "Americano needs Pro"). */
   reason?: string;
 }) {
   const { pro, trialUsed, startTrial } = useEntitlementsStore();
+  const nativeBilling = isIAPAvailable();
   const trialDays = trialDaysRemaining();
   const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | 'redeem' | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -127,8 +127,8 @@ export function PaywallModal({
               You're on the free trial, {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.
             </p>
           )}
-          <p style={{ color: 'var(--text-2)', fontSize: 13 }}>
-            All formats and cloud sync are unlocked.
+          <p style={{ color: 'var(--text-2)', fontSize: 15, lineHeight: 1.55 }}>
+            King of the Court, Americano and cloud sync are unlocked.
           </p>
           <div className="modal-actions">
             <button className="btn primary" onClick={onClose}>
@@ -147,7 +147,7 @@ export function PaywallModal({
       <div className="modal paywall-modal">
         <h2>Unlock everything with Pro</h2>
         {reason && (
-          <p style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 600 }}>{reason}</p>
+          <p style={{ color: 'var(--accent)', fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>{reason}</p>
         )}
         <ul className="paywall-features">
           {FEATURES.map((f) => (
@@ -158,23 +158,27 @@ export function PaywallModal({
           ))}
         </ul>
 
-        {!trialUsed ? (
-          <button
-            className="btn full primary lg"
-            onClick={() => {
-              startTrial();
-              onClose();
-            }}
-          >
-            Start 7-day free trial
-          </button>
-        ) : (
-          <p style={{ color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>
-            You've already used the free trial on this device.
-          </p>
+        {!nativeBilling && (
+          !trialUsed ? (
+            <button
+              className="btn full primary lg"
+              onClick={() => {
+                startTrial();
+                onClose();
+              }}
+            >
+              Start 7-day free trial
+            </button>
+          ) : (
+            <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
+              You've already used the free trial on this device.
+            </p>
+          )
         )}
 
-        <div className="paywall-divider"><span>or subscribe</span></div>
+        <div className="paywall-divider">
+          <span>{nativeBilling ? 'choose a plan — 7 days free' : 'or subscribe'}</span>
+        </div>
 
         <div className="paywall-plans">
           <button
@@ -184,7 +188,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Monthly
-              <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 2 }}>Auto-renews monthly</span>
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews monthly' : 'Auto-renews monthly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('monthly')}</span>
           </button>
@@ -195,19 +199,19 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Annual <span className="paywall-plan-badge">save 33%</span>
-              <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 2 }}>Auto-renews yearly</span>
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews yearly' : 'Auto-renews yearly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('annual')}</span>
           </button>
         </div>
 
         {purchaseError && (
-          <div style={{ color: 'var(--red)', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+          <div style={{ color: 'var(--red)', fontSize: 14, textAlign: 'center', marginTop: 4 }}>
             {purchaseError}
           </div>
         )}
         {!isIAPAvailable() && (
-          <div style={{ color: 'var(--text-2)', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+          <div style={{ color: 'var(--text-2)', fontSize: 13, textAlign: 'center', marginTop: 4 }}>
             Subscribe in the iOS or Android app to unlock.
           </div>
         )}
@@ -228,15 +232,16 @@ export function PaywallModal({
 
         <p
           style={{
-            fontSize: 10,
+            fontSize: 12,
             color: 'var(--text-2)',
             textAlign: 'center',
             marginTop: 10,
             lineHeight: 1.5,
           }}
         >
-          Pro Monthly and Pro Annual are auto-renewable subscriptions. Payment is
-          charged to your Apple ID at confirmation of purchase. Each renews
+          Eligible new subscribers receive a 7-day free trial. Pro Monthly and
+          Pro Annual are auto-renewable subscriptions. Payment is charged to
+          your Apple ID at confirmation of purchase. Each renews
           automatically unless cancelled at least 24 hours before the end of the
           current period; your account is charged within 24 hours before renewal.
           Manage or cancel anytime in your App Store account settings.
@@ -248,7 +253,7 @@ export function PaywallModal({
             justifyContent: 'center',
             gap: 6,
             marginTop: 8,
-            fontSize: 11,
+            fontSize: 12,
           }}
         >
           <button
@@ -288,4 +293,3 @@ export function PaywallModal({
     </Portal>
   );
 }
-
