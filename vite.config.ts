@@ -20,6 +20,10 @@ export default defineConfig({
       manifest: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // The prompt sends SKIP_WAITING. Claim the already-open PWA window
+        // after activation so Workbox emits its controlling event and the
+        // visible app can reload under the new worker.
+        clientsClaim: true,
         // Single-page-app fallback for navigation requests (HashRouter, so
         // every entry point is the index.html anyway).
         navigateFallback: 'index.html',

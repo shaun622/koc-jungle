@@ -24,11 +24,26 @@ export function UpdatePrompt() {
 
   // Auto-dismiss the offline-ready toast after a short delay
   const [autoHide, setAutoHide] = useState(false);
+  const [updating, setUpdating] = useState(false);
   useEffect(() => {
     if (!offlineReady) return;
     const id = setTimeout(() => setAutoHide(true), 5000);
     return () => clearTimeout(id);
   }, [offlineReady]);
+
+  function applyUpdate() {
+    if (updating) return;
+    setUpdating(true);
+
+    // The current installed worker may predate clientsClaim, so keep an
+    // explicit reload fallback as well as Workbox's controlling-event reload.
+    // Event state is persisted before this prompt is shown.
+    const reload = () => window.location.reload();
+    window.setTimeout(reload, 2500);
+    void updateServiceWorker()
+      .then(() => window.setTimeout(reload, 350))
+      .catch(reload);
+  }
 
   if (needRefresh) {
     return (
@@ -39,12 +54,14 @@ export function UpdatePrompt() {
         </div>
         <button
           className="btn primary sm"
-          onClick={() => updateServiceWorker(true)}
+          disabled={updating}
+          onClick={applyUpdate}
         >
-          Refresh
+          {updating ? 'Updating…' : 'Refresh'}
         </button>
         <button
           className="btn ghost sm"
+          disabled={updating}
           onClick={() => setNeedRefresh(false)}
         >
           Later
