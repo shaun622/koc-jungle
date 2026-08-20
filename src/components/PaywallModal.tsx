@@ -128,7 +128,9 @@ export function PaywallModal({
             </p>
           )}
           <p style={{ color: 'var(--text-2)', fontSize: 15, lineHeight: 1.55 }}>
-            King of the Court, Americano and cloud sync are unlocked.
+            {nativeBilling
+              ? 'King of the Court, Americano and cloud sync are unlocked.'
+              : 'Pro is currently included free in the PWA. King of the Court, Americano and cloud sync are unlocked.'}
           </p>
           <div className="modal-actions">
             <button className="btn primary" onClick={onClose}>

@@ -22,6 +22,7 @@ import {
 } from '@/store/templates';
 import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
 import { useAuth } from '@/hooks/useAuth';
+import { isIAPAvailable } from '@/lib/iap';
 import { useThemeStore } from '@/store/theme';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
@@ -78,6 +79,7 @@ export function HomeScreen() {
 
   const auth = useAuth();
   const pro = useEntitlementsStore((s) => s.pro);
+  const nativeBilling = isIAPAvailable();
   const themePref = useThemeStore((s) => s.preference);
   const cycleTheme = useThemeStore((s) => s.cyclePreference);
 
@@ -170,7 +172,9 @@ export function HomeScreen() {
         <div className="home-section">
           <div className="home-section-title">
             {event ? 'Start a new event' : 'Choose a format'}
-            <span className="pro-chip">{pro ? 'PRO ACTIVE' : '7-DAY FREE TRIAL'}</span>
+            <span className="pro-chip">
+              {!nativeBilling ? 'PRO INCLUDED' : pro ? 'PRO ACTIVE' : '7-DAY FREE TRIAL'}
+            </span>
           </div>
           <div className="home-modes">
             <ModeCard
@@ -208,7 +212,7 @@ export function HomeScreen() {
             className={'btn ' + (pro ? '' : 'paywall-cta')}
             onClick={() => setPaywall({ reason: pro ? '' : 'Unlock the full toolkit.' })}
           >
-            {pro ? '👑 Manage Pro' : '👑 Get Pro'}
+            {!nativeBilling ? '👑 Pro included' : pro ? '👑 Manage Pro' : '👑 Get Pro'}
           </button>
           {auth.cloudEnabled && (
             <button

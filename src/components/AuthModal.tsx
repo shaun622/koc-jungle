@@ -18,8 +18,9 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 const MANAGE_SUBS_URL = 'https://apps.apple.com/account/subscriptions';
 
-function subscriptionLabel(pro: boolean, trialDays: number): string {
+function subscriptionLabel(pro: boolean, trialDays: number, nativeBilling: boolean): string {
   if (pro) {
+    if (!nativeBilling) return 'Pro included on PWA';
     return trialDays > 0
       ? `Free trial, ${trialDays} day${trialDays === 1 ? '' : 's'} left`
       : 'Pro subscription active';
@@ -79,7 +80,9 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="account-row">
               <span className="account-row-label">Subscription</span>
-              <span className="account-row-value">{subscriptionLabel(pro, trialDaysRemaining())}</span>
+              <span className="account-row-value">
+                {subscriptionLabel(pro, trialDaysRemaining(), isIAPAvailable())}
+              </span>
             </div>
           </div>
 

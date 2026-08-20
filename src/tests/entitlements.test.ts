@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
+import { initIAP, isIAPAvailable } from '@/lib/iap';
 
 describe('trial entitlements', () => {
   beforeEach(() => {
@@ -35,5 +36,16 @@ describe('trial entitlements', () => {
     expect(useEntitlementsStore.getState().trialUsed).toBe(true);
     expect(isFormatLocked('koc')).toBe(true);
     expect(isFormatLocked('americano')).toBe(true);
+  });
+
+  it('temporarily includes Pro in the web PWA without changing native billing', async () => {
+    expect(isIAPAvailable()).toBe(false);
+
+    await initIAP();
+
+    expect(useEntitlementsStore.getState().pro).toBe(true);
+    expect(useEntitlementsStore.getState().trialEndsAt).toBeUndefined();
+    expect(isFormatLocked('koc')).toBe(false);
+    expect(isFormatLocked('americano')).toBe(false);
   });
 });

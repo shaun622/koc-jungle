@@ -2,9 +2,8 @@
  * In-App Purchase wrapper for native Capacitor builds.
  *
  * Two layers:
- *  - Web (PWA, including koc-jungle.pages.dev): IAP is a no-op. A
- *    local preview trial is available, while purchases are directed to
- *    the native app.
+ *  - Web (PWA, including koc-jungle.pages.dev): Pro is temporarily
+ *    included at no charge while the native store release is prepared.
  *  - Native (Capacitor iOS / Android): wires through RevenueCat which
  *    talks to StoreKit / Google Billing. The seven-day trial is the
  *    store-managed introductory offer, never a local entitlement.
@@ -62,7 +61,12 @@ let currentAppUserId: string | null = null;
  * ready). No-op on web.
  */
 export async function initIAP(): Promise<void> {
-  if (!isIAPAvailable()) return;
+  if (!isIAPAvailable()) {
+    // Temporary PWA-only access. Capacitor native builds never enter this
+    // branch, so iOS / Android continue to require RevenueCat entitlement.
+    useEntitlementsStore.getState().setPro(true);
+    return;
+  }
   const { Purchases, LOG_LEVEL } = await import('@revenuecat/purchases-capacitor');
   const platform = Capacitor.getPlatform();
   const apiKey =
