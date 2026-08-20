@@ -228,6 +228,29 @@ export function buildSignupUrl(publicSlug: string): string {
   return `${base.replace(/\/$/, '')}/#/signup/${publicSlug}`;
 }
 
+export function isPublicSignupPath(pathname: string): boolean {
+  return pathname.startsWith('/signup/');
+}
+
+export async function copySignupLink(publicSlug: string): Promise<void> {
+  const url = buildSignupUrl(publicSlug);
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(url);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = url;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('Could not copy the link. Select the address and copy it manually.');
+}
+
 export async function shareSignupLink(signup: SignupEvent): Promise<void> {
   const url = buildSignupUrl(signup.publicSlug);
   const text = `${signup.title}\n${signup.venue ? `${signup.venue}\n` : ''}Register your team or join the waiting list:`;

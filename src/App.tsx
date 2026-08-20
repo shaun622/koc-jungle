@@ -27,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useApplyTheme } from '@/hooks/useApplyTheme';
 import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
 import { logInIAP, logOutIAP } from '@/lib/iap';
+import { isPublicSignupPath } from '@/lib/signups';
 import { useEntitlementsStore } from '@/store/entitlements';
 import type { EventStatus } from '@/types/domain';
 
@@ -57,6 +58,11 @@ function RouteGate() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Public registration must always win over the locally saved operator
+    // event. Otherwise opening a shared link on an organiser's device can
+    // redirect to that device's current or previous event screen.
+    if (isPublicSignupPath(location.pathname)) return;
+
     if (!event) {
       // No event: the home screen is the launch pad. Also allow the static
       // format guide (/help) so the menu's "Format guide" actually opens it
@@ -64,8 +70,7 @@ function RouteGate() {
       const noEventOk =
         location.pathname === '/home' ||
         location.pathname === '/display' ||
-        location.pathname === '/help' ||
-        location.pathname.startsWith('/signup/');
+        location.pathname === '/help';
       if (!noEventOk) {
         navigate('/home', { replace: true });
       }

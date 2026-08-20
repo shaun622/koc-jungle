@@ -5010,6 +5010,12 @@ button {
   gap: 10px;
 }
 .signup-admin-form .signup-wide { grid-column: 1 / -1; }
+.signup-admin-form .setup-help {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .signup-textarea { min-height: 70px; resize: vertical; line-height: 1.45; }
 .signup-admin-actions {
   display: flex;
@@ -5017,9 +5023,15 @@ button {
   gap: 8px;
   margin-top: 12px;
 }
+.signup-admin-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-top: 12px;
+}
 .signup-admin-link {
   display: block;
-  margin-top: 12px;
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 9px;
   color: var(--cyan);
@@ -5027,7 +5039,7 @@ button {
   border: 1px solid var(--line-soft);
   font-size: 12px;
   line-height: 1.35;
-  word-break: break-all;
+  text-overflow: ellipsis;
 }
 .signup-admin-summary {
   display: grid;
@@ -5250,6 +5262,8 @@ button {
 @media (max-width: 760px) {
   .signup-admin-form { grid-template-columns: 1fr; }
   .signup-admin-form .signup-wide { grid-column: auto; }
+  .signup-admin-link-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .signup-admin-link-row > a { grid-column: 1 / -1; text-align: center; }
   .signup-admin-summary { grid-template-columns: 1fr 1fr; }
   .signup-admin-summary > div:last-child { grid-column: 1 / -1; }
   .signup-admin-row { grid-template-columns: 30px minmax(0, 1fr); }

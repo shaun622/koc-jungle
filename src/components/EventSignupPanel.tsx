@@ -4,6 +4,7 @@ import { Icons } from '@/components/Icons';
 import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
+  copySignupLink,
   getOrganizerRegistrations,
   getOwnedSignup,
   registrationPairKey,
@@ -222,7 +223,7 @@ export function EventSignupPanel({
                   <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </div>
                 <div className="setup-field">
-                  <label>Confirmed team spaces</label>
+                  <label>Confirmed team limit</label>
                   <input
                     className="setup-input"
                     type="number"
@@ -231,6 +232,9 @@ export function EventSignupPanel({
                     value={capacity}
                     onChange={(e) => setCapacity(Number(e.target.value))}
                   />
+                  <small className="setup-help">
+                    Change this anytime. Extra teams wait automatically; raising the limit promotes them in order.
+                  </small>
                 </div>
                 <div className="setup-field signup-wide">
                   <label>Event details</label>
@@ -272,12 +276,36 @@ export function EventSignupPanel({
 
               {signup && (
                 <>
-                  <a className="signup-admin-link" href={buildSignupUrl(signup.publicSlug)} target="_blank" rel="noopener noreferrer">
-                    {buildSignupUrl(signup.publicSlug)}
-                  </a>
+                  <div className="signup-admin-link-row">
+                    <input
+                      className="signup-admin-link"
+                      aria-label="Public sign-up link"
+                      readOnly
+                      value={buildSignupUrl(signup.publicSlug)}
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={async () => {
+                        setError(null);
+                        try {
+                          await copySignupLink(signup.publicSlug);
+                          setMessage('Sign-up link copied.');
+                        } catch (err) {
+                          setError((err as Error).message);
+                        }
+                      }}
+                    >
+                      Copy link
+                    </button>
+                    <a className="btn" href={buildSignupUrl(signup.publicSlug)} target="_blank" rel="noopener noreferrer">
+                      Open page
+                    </a>
+                  </div>
                   <div className="signup-admin-summary">
                     <div><strong>{confirmed.length}</strong><span>Confirmed / {signup.capacityTeams}</span></div>
-                    <div><strong>{waitlisted.length}</strong><span>Waiting</span></div>
+                    <div><strong>{waitlisted.length}</strong><span>Waiting list</span></div>
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
