@@ -5,14 +5,18 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
   copySignupLink,
+  deleteSignupTemplate,
   getOrganizerRegistrations,
   getOwnedSignup,
+  getSignupTemplates,
   registrationPairKey,
   saveSignupEvent,
+  saveSignupTemplate,
   setSignupOpen,
   shareSignupLink,
   type SignupEvent,
   type SignupRegistration,
+  type SignupTemplate,
 } from '@/lib/signups';
 import type { EventState, Team } from '@/types/domain';
 
@@ -43,6 +47,41 @@ function formatWhen(startsAt: string | null, endsAt: string | null): string {
   return `${day} · ${startTime}${endTime ? `–${endTime}` : ''}`;
 }
 
+function templateSchedule(startsAt: string, endsAt: string): {
+  startsWeekday: number | null;
+  startsTime: string;
+  durationMinutes: number | null;
+} {
+  if (!startsAt) return { startsWeekday: null, startsTime: '', durationMinutes: null };
+  const start = new Date(startsAt);
+  const end = endsAt ? new Date(endsAt) : null;
+  const duration = end && end > start ? Math.round((end.getTime() - start.getTime()) / 60_000) : null;
+  return {
+    startsWeekday: start.getDay(),
+    startsTime: startsAt.slice(11, 16),
+    durationMinutes: duration,
+  };
+}
+
+function nextTemplateSchedule(template: SignupTemplate): { startsAt: string; endsAt: string } {
+  if (template.startsWeekday === null || !template.startsTime) {
+    return { startsAt: '', endsAt: '' };
+  }
+  const [hours, minutes] = template.startsTime.split(':').map(Number);
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(hours, minutes, 0, 0);
+  start.setDate(start.getDate() + ((template.startsWeekday - start.getDay() + 7) % 7));
+  if (start <= now) start.setDate(start.getDate() + 7);
+  const end = template.durationMinutes
+    ? new Date(start.getTime() + template.durationMinutes * 60_000)
+    : null;
+  return {
+    startsAt: inputDateTime(start.toISOString()),
+    endsAt: end ? inputDateTime(end.toISOString()) : '',
+  };
+}
+
 export function EventSignupPanel({
   event,
   expectedTeams,
@@ -71,6 +110,10 @@ export function EventSignupPanel({
   const [capacity, setCapacity] = useState(expectedTeams);
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
+  const [templates, setTemplates] = useState<SignupTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   const refreshRegistrations = useCallback(async (signupId: string) => {
     const rows = await getOrganizerRegistrations(signupId);
@@ -104,6 +147,17 @@ export function EventSignupPanel({
   }, [auth.user, event.id, expanded, refreshRegistrations]);
 
   useEffect(() => {
+    if (!auth.user || !expanded) return;
+    let cancelled = false;
+    void getSignupTemplates(auth.user.id)
+      .then((rows) => !cancelled && setTemplates(rows))
+      .catch((err: Error) => !cancelled && setError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user, expanded]);
+
+  useEffect(() => {
     if (!signup || !expanded) return;
     const timer = window.setInterval(() => {
       void refreshRegistrations(signup.id).catch(() => undefined);
@@ -120,6 +174,76 @@ export function EventSignupPanel({
   const importable = confirmed.filter(
     (registration) => !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
   );
+
+  function applyTemplate(templateId: string) {
+    setSelectedTemplateId(templateId);
+    const template = templates.find((row) => row.id === templateId);
+    if (!template) return;
+    const schedule = nextTemplateSchedule(template);
+    setTemplateName(template.name);
+    setTitle(template.title);
+    setVenue(template.venue);
+    setCapacity(template.capacityTeams);
+    setStartsAt(schedule.startsAt);
+    setEndsAt(schedule.endsAt);
+    setDetails(template.details);
+    setPrizes(template.prizes);
+    setMessage(`${template.name} loaded. Check the date, then update the sign-up page.`);
+    setError(null);
+  }
+
+  async function saveCurrentTemplate() {
+    if (!auth.user) return;
+    if (!templateName.trim()) {
+      setError('Give this template a name, such as Monday Night.');
+      return;
+    }
+    const schedule = templateSchedule(startsAt, endsAt);
+    setTemplateSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const row = await saveSignupTemplate({
+        ownerUserId: auth.user.id,
+        name: templateName,
+        title,
+        venue,
+        capacityTeams: Math.max(1, Math.min(128, capacity)),
+        details,
+        prizes,
+        ...schedule,
+      });
+      setTemplates((current) =>
+        [...current.filter((template) => template.id !== row.id && template.name !== row.name), row]
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setSelectedTemplateId(row.id);
+      setTemplateName(row.name);
+      setMessage(`${row.name} template saved.`);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  async function removeSelectedTemplate() {
+    const selected = templates.find((template) => template.id === selectedTemplateId);
+    if (!selected || !window.confirm(`Delete the ${selected.name} template?`)) return;
+    setTemplateSaving(true);
+    setError(null);
+    try {
+      await deleteSignupTemplate(selected.id);
+      setTemplates((current) => current.filter((template) => template.id !== selected.id));
+      setSelectedTemplateId('');
+      setTemplateName('');
+      setMessage(`${selected.name} template deleted.`);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
 
   async function save() {
     if (!auth.user) return;
@@ -205,6 +329,44 @@ export function EventSignupPanel({
             <div className="signup-admin-empty">Loading online sign-up…</div>
           ) : (
             <>
+              <div className="signup-template-panel">
+                <div className="signup-template-heading">
+                  <strong>Saved sign-up templates</strong>
+                  <small>Selecting one fills the form and schedules its next matching weekday.</small>
+                </div>
+                <div className="signup-template-controls">
+                  <select
+                    className="setup-input"
+                    aria-label="Saved sign-up template"
+                    value={selectedTemplateId}
+                    onChange={(event) => applyTemplate(event.target.value)}
+                  >
+                    <option value="">{templates.length ? 'Select a template…' : 'No templates saved yet'}</option>
+                    {templates.map((template) => (
+                      <option value={template.id} key={template.id}>{template.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="setup-input"
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Template name, e.g. Monday Night"
+                    aria-label="Template name"
+                  />
+                  <button className="btn" type="button" disabled={templateSaving} onClick={saveCurrentTemplate}>
+                    {templateSaving ? 'Saving…' : 'Save template'}
+                  </button>
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    disabled={!selectedTemplateId || templateSaving}
+                    onClick={removeSelectedTemplate}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+
               <div className="signup-admin-form">
                 <div className="setup-field signup-wide">
                   <label>Public event title</label>

@@ -28,6 +28,20 @@ export interface SignupRegistration {
   createdAt: string;
 }
 
+export interface SignupTemplate {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  title: string;
+  venue: string;
+  capacityTeams: number;
+  details: string;
+  prizes: string;
+  startsWeekday: number | null;
+  startsTime: string;
+  durationMinutes: number | null;
+}
+
 export interface PublicSignup {
   event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId'>;
   registrations: SignupRegistration[];
@@ -44,6 +58,8 @@ export interface SaveSignupInput {
   details: string;
   prizes: string;
 }
+
+export interface SaveSignupTemplateInput extends Omit<SignupTemplate, 'id'> {}
 
 interface SignupEventRow {
   id: string;
@@ -69,6 +85,20 @@ interface SignupRegistrationRow {
   contact: string;
   status: SignupRegistration['status'];
   created_at: string;
+}
+
+interface SignupTemplateRow {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  title: string;
+  venue: string | null;
+  capacity_teams: number;
+  details: string | null;
+  prizes: string | null;
+  starts_weekday: number | null;
+  starts_time: string | null;
+  duration_minutes: number | null;
 }
 
 function mapEvent(row: SignupEventRow): SignupEvent {
@@ -102,6 +132,22 @@ function mapRegistration(row: SignupRegistrationRow, position: number): SignupRe
   };
 }
 
+function mapTemplate(row: SignupTemplateRow): SignupTemplate {
+  return {
+    id: row.id,
+    ownerUserId: row.owner_user_id,
+    name: row.name,
+    title: row.title,
+    venue: row.venue ?? '',
+    capacityTeams: row.capacity_teams,
+    details: row.details ?? '',
+    prizes: row.prizes ?? '',
+    startsWeekday: row.starts_weekday,
+    startsTime: row.starts_time?.slice(0, 5) ?? '',
+    durationMinutes: row.duration_minutes,
+  };
+}
+
 function requireSupabase() {
   if (!supabase) throw new Error('Online sign-up is not configured yet.');
   return supabase;
@@ -120,6 +166,49 @@ export async function getOwnedSignup(
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data ? mapEvent(data as SignupEventRow) : null;
+}
+
+export async function getSignupTemplates(ownerUserId: string): Promise<SignupTemplate[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('signup_templates')
+    .select('*')
+    .eq('owner_user_id', ownerUserId)
+    .order('name', { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as SignupTemplateRow[]).map(mapTemplate);
+}
+
+export async function saveSignupTemplate(input: SaveSignupTemplateInput): Promise<SignupTemplate> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('signup_templates')
+    .upsert(
+      {
+        owner_user_id: input.ownerUserId,
+        name: input.name.trim(),
+        title: input.title.trim(),
+        venue: input.venue.trim(),
+        capacity_teams: input.capacityTeams,
+        details: input.details.trim(),
+        prizes: input.prizes.trim(),
+        starts_weekday: input.startsWeekday,
+        starts_time: input.startsTime || null,
+        duration_minutes: input.durationMinutes,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'owner_user_id,name' },
+    )
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return mapTemplate(data as SignupTemplateRow);
+}
+
+export async function deleteSignupTemplate(id: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.from('signup_templates').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEvent> {
@@ -225,11 +314,16 @@ export function buildSignupUrl(publicSlug: string): string {
     base = `${window.location.origin}${window.location.pathname}`;
   }
   if (!base) base = 'https://koc-jungle.pages.dev/';
-  return `${base.replace(/\/$/, '')}/#/signup/${publicSlug}`;
+  return `${base.replace(/\/$/, '')}/signup/${publicSlug}`;
 }
 
 export function isPublicSignupPath(pathname: string): boolean {
   return pathname.startsWith('/signup/');
+}
+
+export function publicSignupHashFromPath(pathname: string, search = ''): string | null {
+  const match = pathname.match(/^\/signup\/([0-9a-f-]+)\/?$/i);
+  return match ? `#/signup/${match[1]}${search}` : null;
 }
 
 export async function copySignupLink(publicSlug: string): Promise<void> {

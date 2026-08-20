@@ -5004,6 +5004,27 @@ button {
   line-height: 1.55;
 }
 .signup-admin-empty p { margin: 0 0 12px; }
+.signup-template-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel) 76%, var(--bg));
+}
+.signup-template-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+.signup-template-heading strong { font-size: 14px; }
+.signup-template-heading small { color: var(--text-2); font-size: 11px; line-height: 1.4; text-align: right; }
+.signup-template-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) auto auto;
+  gap: 8px;
+}
 .signup-admin-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5260,6 +5281,11 @@ button {
 .signup-public-error > div { width: 62px; height: 62px; margin: auto; }
 
 @media (max-width: 760px) {
+  .signup-template-heading { display: block; }
+  .signup-template-heading small { display: block; margin-top: 3px; text-align: left; }
+  .signup-template-controls { grid-template-columns: 1fr 1fr; }
+  .signup-template-controls > select,
+  .signup-template-controls > input { grid-column: 1 / -1; }
   .signup-admin-form { grid-template-columns: 1fr; }
   .signup-admin-form .signup-wide { grid-column: auto; }
   .signup-admin-link-row { grid-template-columns: minmax(0, 1fr) auto; }
