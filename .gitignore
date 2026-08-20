@@ -4,6 +4,7 @@ dist-ssr
 *.local
 *.tsbuildinfo
 .vite
+supabase/.temp/
 
 # Editor
 .vscode/*

@@ -16,6 +16,7 @@ import { LeaderboardScreen } from '@/routes/LeaderboardScreen';
 import { DisplayScreen } from '@/routes/DisplayScreen';
 import { HelpScreen } from '@/routes/HelpScreen';
 import { HomeScreen } from '@/routes/HomeScreen';
+import { PublicSignupScreen } from '@/routes/PublicSignupScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { MobileTabBar } from '@/components/MobileTabBar';
@@ -63,7 +64,8 @@ function RouteGate() {
       const noEventOk =
         location.pathname === '/home' ||
         location.pathname === '/display' ||
-        location.pathname === '/help';
+        location.pathname === '/help' ||
+        location.pathname.startsWith('/signup/');
       if (!noEventOk) {
         navigate('/home', { replace: true });
       }
@@ -159,6 +161,7 @@ export function App() {
       <CloudSyncGate />
       <RouteGate />
       <Routes>
+        <Route path="/signup/:slug" element={<PublicSignupScreen />} />
         <Route path="/display" element={<DisplayScreen />} />
         <Route path="/home" element={<HomeScreen />} />
         <Route element={<OperatorShell />}>

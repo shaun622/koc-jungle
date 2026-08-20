@@ -26,6 +26,7 @@ import { ShareCard } from '@/components/ShareCard';
 import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
 import { cropImageFileToAvatar } from '@/utils/avatar';
+import { EventSignupPanel } from '@/components/EventSignupPanel';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -338,6 +339,12 @@ export function SetupScreen() {
         <div className="setup-sub">
           Each team is a fixed pair of two named players. Leave team name blank to auto-label.
         </div>
+        <EventSignupPanel
+          event={event}
+          expectedTeams={expectedTeams}
+          teams={teams}
+          onAddTeam={addTeam}
+        />
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
             <strong>Mid-event edits.</strong> Editing a player name is a safe substitution. The
