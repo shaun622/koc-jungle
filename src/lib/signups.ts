@@ -25,6 +25,7 @@ export interface SignupRegistration {
   playerOne: string;
   playerTwo: string;
   contact?: string;
+  playerTwoContact?: string;
   status: 'confirmed' | 'waitlisted' | 'cancelled';
   position: number;
   createdAt: string;
@@ -87,8 +88,9 @@ interface SignupRegistrationRow {
   signup_event_id: string;
   team_name: string | null;
   player_one: string;
-  player_two: string;
+  player_two: string | null;
   contact: string;
+  player_two_contact: string | null;
   status: SignupRegistration['status'];
   created_at: string;
 }
@@ -132,8 +134,9 @@ function mapRegistration(row: SignupRegistrationRow, position: number): SignupRe
     signupEventId: row.signup_event_id,
     teamName: row.team_name ?? '',
     playerOne: row.player_one,
-    playerTwo: row.player_two,
+    playerTwo: row.player_two ?? '',
     contact: row.contact,
+    playerTwoContact: row.player_two_contact ?? undefined,
     status: row.status,
     position,
     createdAt: row.created_at,
@@ -280,8 +283,16 @@ export async function getOrganizerRegistrations(
     .neq('status', 'cancelled')
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
+  const rows = ((data ?? []) as SignupRegistrationRow[]).sort((a, b) => {
+    const statusOrder = { confirmed: 0, waitlisted: 1, cancelled: 2 };
+    const statusDifference = statusOrder[a.status] - statusOrder[b.status];
+    if (statusDifference) return statusDifference;
+    const pairDifference = Number(Boolean(b.player_two?.trim())) - Number(Boolean(a.player_two?.trim()));
+    if (pairDifference) return pairDifference;
+    return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+  });
   const counters = { confirmed: 0, waitlisted: 0, cancelled: 0 };
-  return ((data ?? []) as SignupRegistrationRow[]).map((row) => {
+  return rows.map((row) => {
     counters[row.status] += 1;
     return mapRegistration(row, counters[row.status]);
   });
@@ -321,6 +332,31 @@ export async function registerPublicTeam(input: {
   return data as {
     registrationId: string;
     cancelToken: string;
+    status: 'confirmed' | 'waitlisted';
+    position: number;
+  };
+}
+
+export async function joinPublicSingle(input: {
+  accountSlug?: string;
+  publicSlug: string;
+  registrationId: string;
+  playerName: string;
+  contact: string;
+}): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted'; position: number }> {
+  const client = requireSupabase();
+  const slugArgs = input.accountSlug
+    ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
+    : { p_share_slug: input.publicSlug };
+  const { data, error } = await client.rpc('join_public_single', {
+    ...slugArgs,
+    p_registration_id: input.registrationId,
+    p_player_two: input.playerName.trim(),
+    p_contact: input.contact.trim(),
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    registrationId: string;
     status: 'confirmed' | 'waitlisted';
     position: number;
   };
@@ -401,7 +437,7 @@ export async function copySignupLink(signup: SignupEvent): Promise<void> {
 
 export async function shareSignupLink(signup: SignupEvent): Promise<void> {
   const url = buildSignupUrl(signup.eventSlug, signup.accountSlug);
-  const text = `${signup.title}\n${signup.venue ? `${signup.venue}\n` : ''}Register your team or join the waiting list:`;
+  const text = `${signup.title}\n${signup.venue ? `${signup.venue}\n` : ''}Register as a pair or solo player:`;
   if (Capacitor.isNativePlatform()) {
     const { Share } = await import('@capacitor/share');
     await Share.share({ title: signup.title, text, url });
@@ -419,4 +455,12 @@ export function registrationPairKey(playerOne: string, playerTwo: string): strin
     .map((name) => name.trim().toLocaleLowerCase())
     .sort()
     .join('|');
+}
+
+export function signupRegistrationPlayerCount(registration: Pick<SignupRegistration, 'playerTwo'>): number {
+  return registration.playerTwo.trim() ? 2 : 1;
+}
+
+export function signupPlayerCount(registrations: Array<Pick<SignupRegistration, 'playerTwo'>>): number {
+  return registrations.reduce((total, registration) => total + signupRegistrationPlayerCount(registration), 0);
 }

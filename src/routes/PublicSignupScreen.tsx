@@ -4,7 +4,9 @@ import { BrandLogo } from '@/components/BrandLogo';
 import {
   cancelPublicRegistration,
   getPublicSignup,
+  joinPublicSingle,
   registerPublicTeam,
+  signupPlayerCount,
   type PublicSignup,
   type SignupRegistration,
 } from '@/lib/signups';
@@ -20,7 +22,8 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
-function teamLabel(registration: SignupRegistration): string {
+function registrationLabel(registration: SignupRegistration): string {
+  if (!registration.playerTwo) return registration.playerOne;
   return registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
@@ -37,7 +40,11 @@ export function PublicSignupScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ status: 'confirmed' | 'waitlisted'; position: number } | null>(null);
+  const [result, setResult] = useState<{
+    status: 'confirmed' | 'waitlisted';
+    position: number;
+    kind: 'solo' | 'pair' | 'joined';
+  } | null>(null);
   const [cancelToken, setCancelToken] = useState<string | null>(() => {
     const fromUrl = searchParams.get('manage');
     if (fromUrl) return fromUrl;
@@ -48,12 +55,15 @@ export function PublicSignupScreen() {
     }
   });
   const [confirmCancel, setConfirmCancel] = useState(false);
-
+  const [signupMode, setSignupMode] = useState<'pair' | 'solo'>('pair');
   const [teamName, setTeamName] = useState('');
   const [playerOne, setPlayerOne] = useState('');
   const [playerTwo, setPlayerTwo] = useState('');
   const [contact, setContact] = useState('');
   const [website, setWebsite] = useState('');
+  const [joinTarget, setJoinTarget] = useState<SignupRegistration | null>(null);
+  const [joinName, setJoinName] = useState('');
+  const [joinContact, setJoinContact] = useState('');
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -86,8 +96,10 @@ export function PublicSignupScreen() {
 
   async function register() {
     if (!data || website) return;
-    if (!playerOne.trim() || !playerTwo.trim() || !contact.trim()) {
-      setError('Enter both player names and a WhatsApp number or email.');
+    if (!playerOne.trim() || !contact.trim() || (signupMode === 'pair' && !playerTwo.trim())) {
+      setError(signupMode === 'pair'
+        ? 'Enter both player names and a WhatsApp number or email.'
+        : 'Enter your name and a WhatsApp number or email.');
       return;
     }
     setSubmitting(true);
@@ -96,9 +108,9 @@ export function PublicSignupScreen() {
       const registered = await registerPublicTeam({
         accountSlug: accountSlug || undefined,
         publicSlug: slug,
-        teamName,
+        teamName: signupMode === 'pair' ? teamName : '',
         playerOne,
-        playerTwo,
+        playerTwo: signupMode === 'pair' ? playerTwo : '',
         contact,
       });
       try {
@@ -107,11 +119,49 @@ export function PublicSignupScreen() {
         // The private cancellation token is also kept in component state.
       }
       setCancelToken(registered.cancelToken);
-      setResult({ status: registered.status, position: registered.position });
+      setResult({ status: registered.status, position: registered.position, kind: signupMode });
       setTeamName('');
       setPlayerOne('');
       setPlayerTwo('');
       setContact('');
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function startJoin(registration: SignupRegistration) {
+    setJoinTarget(registration);
+    setJoinName('');
+    setJoinContact('');
+    setResult(null);
+    setError(null);
+    window.setTimeout(() => {
+      document.querySelector('.signup-public-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
+  async function joinPlayer() {
+    if (!joinTarget || !joinName.trim() || !joinContact.trim()) {
+      setError('Enter your name and a WhatsApp number or email.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const joined = await joinPublicSingle({
+        accountSlug: accountSlug || undefined,
+        publicSlug: slug,
+        registrationId: joinTarget.id,
+        playerName: joinName,
+        contact: joinContact,
+      });
+      setJoinTarget(null);
+      setJoinName('');
+      setJoinContact('');
+      setResult({ status: joined.status, position: joined.position, kind: 'joined' });
       await refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -157,7 +207,34 @@ export function PublicSignupScreen() {
 
   const confirmed = data.registrations.filter((registration) => registration.status === 'confirmed');
   const waitlisted = data.registrations.filter((registration) => registration.status === 'waitlisted');
-  const spaces = Math.max(0, data.event.capacityTeams - confirmed.length);
+  const confirmedPlayers = signupPlayerCount(confirmed);
+  const waitlistedPlayers = signupPlayerCount(waitlisted);
+  const spaces = Math.max(0, data.event.capacityTeams - confirmedPlayers);
+  const registrationsOpen = data.event.isOpen;
+
+  function rosterRow(registration: SignupRegistration, waiting = false) {
+    const isPair = Boolean(registration.playerTwo);
+    return (
+      <div className="signup-public-team" key={registration.id}>
+        <span className={'signup-public-position ' + (waiting ? 'waiting' : '')}>{registration.position}</span>
+        <span>
+          <strong>{registrationLabel(registration)}</strong>
+          {isPair && registration.teamName && <small>{registration.playerOne} & {registration.playerTwo}</small>}
+          {!isPair && <small>Solo player looking for a partner</small>}
+        </span>
+        <span className="signup-public-row-actions">
+          <span className={'signup-public-status ' + (waiting ? 'waiting' : 'confirmed')}>
+            {isPair ? (waiting ? 'PAIR · WAITING' : 'PAIR · CONFIRMED') : 'NEEDS PARTNER'}
+          </span>
+          {!isPair && registrationsOpen && (
+            <button className="btn signup-public-join" type="button" onClick={() => startJoin(registration)}>
+              Join
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <main className="signup-public">
@@ -174,8 +251,8 @@ export function PublicSignupScreen() {
           {data.event.venue && <span>{data.event.venue}</span>}
         </div>
         <div className={'signup-public-availability ' + (spaces > 0 ? 'open' : 'waiting')}>
-          <strong>{spaces > 0 ? `${spaces} team space${spaces === 1 ? '' : 's'} left` : 'Event full'}</strong>
-          <span>{spaces > 0 ? 'Register now for a confirmed place.' : 'New registrations join the waiting list automatically.'}</span>
+          <strong>{spaces > 0 ? `${spaces} player space${spaces === 1 ? '' : 's'} left` : 'Confirmed places full'}</strong>
+          <span>{spaces > 0 ? 'Register as a pair or solo player.' : 'New sign-ups join the waiting list automatically.'}</span>
         </div>
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}
         {data.event.prizes && (
@@ -191,77 +268,101 @@ export function PublicSignupScreen() {
           <div className="signup-public-section-head">
             <div>
               <span>LIVE LIST</span>
-              <h2>Teams</h2>
+              <h2>Players</h2>
             </div>
-            <strong>{confirmed.length}/{data.event.capacityTeams}</strong>
+            <strong>{confirmedPlayers}/{data.event.capacityTeams}</strong>
           </div>
+          <p className="signup-public-priority-note">Pairs have priority. Solo players can be joined by another player here.</p>
 
           <div className="signup-public-list">
-            {confirmed.map((registration) => (
-              <div className="signup-public-team" key={registration.id}>
-                <span className="signup-public-position">{registration.position}</span>
-                <span>
-                  <strong>{teamLabel(registration)}</strong>
-                  {registration.teamName && <small>{registration.playerOne} & {registration.playerTwo}</small>}
-                </span>
-                <span className="signup-public-status confirmed">CONFIRMED</span>
-              </div>
-            ))}
-            {confirmed.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
+            {confirmed.map((registration) => rosterRow(registration))}
+            {confirmed.length === 0 && <div className="signup-public-empty">No confirmed players yet.</div>}
           </div>
 
           <div className="signup-public-waiting-head">
             <span>WAITING LIST</span>
-            <strong>{waitlisted.length}</strong>
+            <strong>{waitlistedPlayers} player{waitlistedPlayers === 1 ? '' : 's'}</strong>
           </div>
           <div className="signup-public-list waiting">
-            {waitlisted.map((registration) => (
-              <div className="signup-public-team" key={registration.id}>
-                <span className="signup-public-position waiting">{registration.position}</span>
-                <span><strong>{teamLabel(registration)}</strong></span>
-                <span className="signup-public-status waiting">WAITING</span>
-              </div>
-            ))}
+            {waitlisted.map((registration) => rosterRow(registration, true))}
             {waitlisted.length === 0 && <div className="signup-public-empty">Nobody waiting.</div>}
           </div>
         </section>
 
         <section className="signup-public-card signup-public-form-card">
-          {result ? (
+          {joinTarget ? (
+            <>
+              <div className="signup-public-section-head">
+                <div>
+                  <span>MAKE A PAIR</span>
+                  <h2>Join {joinTarget.playerOne}</h2>
+                </div>
+              </div>
+              <div className="signup-public-form">
+                <label>
+                  <span>Your name</span>
+                  <input value={joinName} onChange={(e) => setJoinName(e.target.value)} autoComplete="name" />
+                </label>
+                <label>
+                  <span>Your WhatsApp number or email</span>
+                  <input value={joinContact} onChange={(e) => setJoinContact(e.target.value)} autoComplete="email" placeholder="Kept private" />
+                </label>
+                <button className="btn primary full lg" type="button" disabled={submitting} onClick={joinPlayer}>
+                  {submitting ? 'Joining…' : `Join ${joinTarget.playerOne}`}
+                </button>
+                <button className="btn ghost full" type="button" disabled={submitting} onClick={() => setJoinTarget(null)}>Back</button>
+                <p className="signup-public-private">You will become a pair. Your contact is visible only to the organiser.</p>
+              </div>
+            </>
+          ) : result ? (
             <div className={'signup-public-result ' + result.status}>
               <span>{result.status === 'confirmed' ? '✓' : result.position}</span>
               <h2>{result.status === 'confirmed' ? 'You’re confirmed!' : 'You’re on the waiting list'}</h2>
               <p>
                 {result.status === 'confirmed'
-                  ? 'Your team is now on the live confirmed list.'
-                  : `You are waiting-list position ${result.position}. If a team cancels, the list promotes automatically.`}
+                  ? result.kind === 'solo'
+                    ? 'You are confirmed as a solo player. Another player can join you from the live list.'
+                    : 'Your pair is now on the live confirmed list.'
+                  : `You are waiting-list position ${result.position}. The list updates automatically when places change.`}
               </p>
-              <button className="btn full" type="button" onClick={() => setResult(null)}>Register another team</button>
+              <button className="btn full" type="button" onClick={() => setResult(null)}>Add another sign-up</button>
             </div>
           ) : (
             <>
               <div className="signup-public-section-head">
                 <div>
                   <span>NO ACCOUNT NEEDED</span>
-                  <h2>{spaces > 0 ? 'Register your team' : 'Join the waiting list'}</h2>
+                  <h2>{spaces > 0 ? 'Register to play' : 'Join the waiting list'}</h2>
                 </div>
               </div>
               {!data.event.isOpen ? (
                 <div className="signup-public-closed">Registrations are currently closed by the organiser.</div>
               ) : (
                 <div className="signup-public-form">
+                  <div className="signup-public-mode" role="group" aria-label="Sign-up type">
+                    <button className={signupMode === 'pair' ? 'active' : ''} type="button" onClick={() => setSignupMode('pair')}>
+                      Sign up as a pair
+                    </button>
+                    <button className={signupMode === 'solo' ? 'active' : ''} type="button" onClick={() => setSignupMode('solo')}>
+                      Sign up solo
+                    </button>
+                  </div>
+                  {signupMode === 'pair' && (
+                    <label>
+                      <span>Pair name <small>optional</small></span>
+                      <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Smashers" />
+                    </label>
+                  )}
                   <label>
-                    <span>Team name <small>optional</small></span>
-                    <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Smashers" />
-                  </label>
-                  <label>
-                    <span>Player one</span>
+                    <span>{signupMode === 'pair' ? 'Player one' : 'Your name'}</span>
                     <input value={playerOne} onChange={(e) => setPlayerOne(e.target.value)} autoComplete="name" />
                   </label>
-                  <label>
-                    <span>Player two</span>
-                    <input value={playerTwo} onChange={(e) => setPlayerTwo(e.target.value)} autoComplete="name" />
-                  </label>
+                  {signupMode === 'pair' && (
+                    <label>
+                      <span>Player two</span>
+                      <input value={playerTwo} onChange={(e) => setPlayerTwo(e.target.value)} autoComplete="name" />
+                    </label>
+                  )}
                   <label>
                     <span>WhatsApp number or email</span>
                     <input value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" placeholder="Kept private" />
@@ -271,9 +372,11 @@ export function PublicSignupScreen() {
                     <input value={website} onChange={(e) => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
                   </label>
                   <button className="btn primary full lg" type="button" disabled={submitting} onClick={register}>
-                    {submitting ? 'Registering…' : spaces > 0 ? 'Confirm my team' : 'Join waiting list'}
+                    {submitting ? 'Registering…' : signupMode === 'pair' ? 'Register our pair' : 'Register me'}
                   </button>
-                  <p className="signup-public-private">Your contact is visible only to the organiser and is never shown on this page.</p>
+                  <p className="signup-public-private">
+                    Pairs have priority over solo players. Contact details are visible only to the organiser.
+                  </p>
                 </div>
               )}
             </>
@@ -287,7 +390,7 @@ export function PublicSignupScreen() {
                 </button>
               ) : (
                 <div>
-                  <p>Remove your team? The first waiting team may be promoted.</p>
+                  <p>Remove your registration? The confirmed list will update automatically.</p>
                   <button className="btn danger" type="button" disabled={submitting} onClick={cancelRegistration}>Yes, cancel</button>
                   <button className="btn ghost" type="button" onClick={() => setConfirmCancel(false)}>Keep my place</button>
                 </div>

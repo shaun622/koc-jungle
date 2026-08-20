@@ -17,6 +17,7 @@ import {
   saveSignupTemplate,
   setSignupOpen,
   shareSignupLink,
+  signupPlayerCount,
   type SignupEvent,
   type SignupRegistration,
   type SignupTemplate,
@@ -111,7 +112,7 @@ export function EventSignupPanel({
   const [venue, setVenue] = useState(event.venue ?? '');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
-  const [capacity, setCapacity] = useState(expectedTeams);
+  const [capacity, setCapacity] = useState(expectedTeams * 2);
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
   const [templates, setTemplates] = useState<SignupTemplate[]>([]);
@@ -135,7 +136,7 @@ export function EventSignupPanel({
     setVenue(event.venue ?? '');
     setStartsAt('');
     setEndsAt('');
-    setCapacity(expectedTeams);
+    setCapacity(expectedTeams * 2);
     setDetails('');
     setPrizes('');
     setSelectedTemplateId('');
@@ -190,12 +191,15 @@ export function EventSignupPanel({
 
   const confirmed = registrations.filter((r) => r.status === 'confirmed');
   const waitlisted = registrations.filter((r) => r.status === 'waitlisted');
+  const confirmedPlayers = signupPlayerCount(confirmed);
+  const waitlistedPlayers = signupPlayerCount(waitlisted);
   const existingPairs = useMemo(
     () => new Set(teams.map((team) => registrationPairKey(team.players[0].name, team.players[1].name))),
     [teams],
   );
   const importable = confirmed.filter(
-    (registration) => !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
+    (registration) => registration.playerTwo
+      && !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
   );
 
   function applyTemplate(templateId: string) {
@@ -333,11 +337,11 @@ export function EventSignupPanel({
       <button className="signup-admin-toggle" type="button" onClick={() => setExpanded(!expanded)}>
         <span className="signup-admin-toggle-icon"><Icons.List className="icon" /></span>
         <span>
-          <strong>Online team sign-up</strong>
-          <small>One live link for confirmed teams and the waiting list.</small>
+          <strong>Online player sign-up</strong>
+          <small>One live link for pairs, solo players and the waiting list.</small>
         </span>
         <span className="signup-admin-toggle-meta">
-          {signup ? `${confirmed.length}/${signup.capacityTeams}` : 'SET UP'}
+          {signup ? `${confirmedPlayers}/${signup.capacityTeams}` : 'SET UP'}
         </span>
       </button>
 
@@ -426,7 +430,7 @@ export function EventSignupPanel({
                   <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </div>
                 <div className="setup-field">
-                  <label>Confirmed team limit</label>
+                  <label>Confirmed player limit</label>
                   <input
                     className="setup-input"
                     type="number"
@@ -436,7 +440,7 @@ export function EventSignupPanel({
                     onChange={(e) => setCapacity(Number(e.target.value))}
                   />
                   <small className="setup-help">
-                    Change this anytime. Extra teams wait automatically; raising the limit promotes them in order.
+                    A pair uses two places and a solo uses one. Pairs have priority over solos; extra players wait automatically.
                   </small>
                 </div>
                 <div className="setup-field signup-wide">
@@ -507,8 +511,8 @@ export function EventSignupPanel({
                     </a>
                   </div>
                   <div className="signup-admin-summary">
-                    <div><strong>{confirmed.length}</strong><span>Confirmed / {signup.capacityTeams}</span></div>
-                    <div><strong>{waitlisted.length}</strong><span>Waiting list</span></div>
+                    <div><strong>{confirmedPlayers}</strong><span>Confirmed players / {signup.capacityTeams}</span></div>
+                    <div><strong>{waitlistedPlayers}</strong><span>Players waiting</span></div>
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
@@ -520,10 +524,21 @@ export function EventSignupPanel({
                             {registration.status === 'confirmed' ? registration.position : `W${registration.position}`}
                           </span>
                           <span>
-                            <strong>{registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`}</strong>
-                            <small>{registration.playerOne} · {registration.playerTwo}</small>
+                            <strong>
+                              {registration.playerTwo
+                                ? registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`
+                                : registration.playerOne}
+                            </strong>
+                            <small>
+                              {registration.playerTwo
+                                ? `${registration.playerOne} · ${registration.playerTwo}`
+                                : 'Solo · looking for partner'}
+                            </small>
                           </span>
-                          <span className="signup-contact">{registration.contact}</span>
+                          <span className="signup-contact">
+                            {registration.contact}
+                            {registration.playerTwoContact ? ` · ${registration.playerTwoContact}` : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -532,7 +547,7 @@ export function EventSignupPanel({
                   <button className="btn full" type="button" disabled={importable.length === 0} onClick={importTeams}>
                     {importable.length > 0
                       ? `Add ${importable.length} confirmed team${importable.length === 1 ? '' : 's'} to event`
-                      : 'Confirmed teams are already in the event'}
+                      : 'No new confirmed pairs ready to add'}
                   </button>
                 </>
               )}

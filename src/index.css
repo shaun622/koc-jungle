@@ -5234,6 +5234,12 @@ button {
 .signup-public-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .signup-public-section-head h2 { margin: 4px 0 0; font-size: 23px; }
 .signup-public-section-head > strong { color: #9eff3d; font-size: 20px; }
+.signup-public-priority-note {
+  margin: -5px 0 14px;
+  color: #8fa8b5;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .signup-public-list { border: 1px solid #143448; border-radius: 12px; overflow: hidden; }
 .signup-public-team {
   display: grid;
@@ -5264,10 +5270,38 @@ button {
 .signup-public-status { padding: 4px 7px; border-radius: 999px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .12em; }
 .signup-public-status.confirmed { color: #9eff3d; background: rgba(158, 255, 61, .09); }
 .signup-public-status.waiting { color: #ffb72e; background: rgba(255, 183, 46, .09); }
+.signup-public-row-actions { display: grid; justify-items: end; gap: 6px; }
+.signup-public-join { min-height: 32px; padding: 5px 12px; color: #061007; background: #9eff3d; border-color: #9eff3d; }
 .signup-public-waiting-head { display: flex; justify-content: space-between; margin: 19px 2px 8px; }
 .signup-public-waiting-head strong { color: #ffb72e; }
 .signup-public-empty { padding: 16px; color: #7894a2; font-size: 13px; font-style: italic; }
 .signup-public-form { display: grid; gap: 12px; }
+.signup-public-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid #1b4054;
+  border-radius: 12px;
+  background: #04151f;
+}
+.signup-public-mode button {
+  min-height: 42px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #8fa8b5;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.signup-public-mode button.active {
+  color: #061007;
+  border-color: #9eff3d;
+  background: #9eff3d;
+}
 .signup-public-form label > span { display: block; margin-bottom: 5px; color: #9db1bc; font-size: 12px; font-weight: 700; }
 .signup-public-form label small { color: #65818f; font-weight: 500; }
 .signup-public-form input {
@@ -5324,7 +5358,7 @@ button {
   .signup-admin-toggle { grid-template-columns: 36px minmax(0, 1fr); }
   .signup-admin-toggle-meta { grid-column: 2; }
   .signup-public-team { grid-template-columns: 31px minmax(0, 1fr); }
-  .signup-public-status { grid-column: 2; justify-self: start; }
+  .signup-public-row-actions { grid-column: 2; justify-items: start; }
   .signup-public-meta { display: grid; }
 }
 
