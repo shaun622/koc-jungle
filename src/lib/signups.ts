@@ -16,6 +16,7 @@ export interface SignupEvent {
   details: string;
   prizes: string;
   isOpen: boolean;
+  autoAddPairs: boolean;
 }
 
 export interface SignupRegistration {
@@ -43,10 +44,11 @@ export interface SignupTemplate {
   startsWeekday: number | null;
   startsTime: string;
   durationMinutes: number | null;
+  autoAddPairs: boolean;
 }
 
 export interface PublicSignup {
-  event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId'>;
+  event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId' | 'autoAddPairs'>;
   registrations: SignupRegistration[];
 }
 
@@ -61,6 +63,7 @@ export interface SaveSignupInput {
   capacityTeams: number;
   details: string;
   prizes: string;
+  autoAddPairs: boolean;
 }
 
 export interface SaveSignupTemplateInput extends Omit<SignupTemplate, 'id'> {}
@@ -81,6 +84,7 @@ interface SignupEventRow {
   details: string | null;
   prizes: string | null;
   is_open: boolean;
+  auto_add_pairs: boolean;
 }
 
 interface SignupRegistrationRow {
@@ -107,6 +111,7 @@ interface SignupTemplateRow {
   starts_weekday: number | null;
   starts_time: string | null;
   duration_minutes: number | null;
+  auto_add_pairs: boolean;
 }
 
 function mapEvent(row: SignupEventRow): SignupEvent {
@@ -125,6 +130,7 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     details: row.details ?? '',
     prizes: row.prizes ?? '',
     isOpen: row.is_open,
+    autoAddPairs: row.auto_add_pairs ?? true,
   };
 }
 
@@ -156,6 +162,7 @@ function mapTemplate(row: SignupTemplateRow): SignupTemplate {
     startsWeekday: row.starts_weekday,
     startsTime: row.starts_time?.slice(0, 5) ?? '',
     durationMinutes: row.duration_minutes,
+    autoAddPairs: row.auto_add_pairs ?? true,
   };
 }
 
@@ -220,6 +227,7 @@ export async function saveSignupTemplate(input: SaveSignupTemplateInput): Promis
         starts_weekday: input.startsWeekday,
         starts_time: input.startsTime || null,
         duration_minutes: input.durationMinutes,
+        auto_add_pairs: input.autoAddPairs,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'owner_user_id,name' },
@@ -253,6 +261,7 @@ export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEve
         capacity_teams: input.capacityTeams,
         details: input.details.trim(),
         prizes: input.prizes.trim(),
+        auto_add_pairs: input.autoAddPairs,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'owner_user_id,source_event_id' },

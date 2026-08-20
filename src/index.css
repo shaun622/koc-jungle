@@ -5060,6 +5060,48 @@ button {
   font-size: 11px;
   line-height: 1.45;
 }
+.signup-import-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: var(--bg);
+}
+.signup-import-mode button {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-2);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.signup-import-mode button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+}
+.signup-import-mode button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+  background: color-mix(in srgb, var(--green) 8%, var(--panel));
+}
+.signup-import-mode strong,
+.signup-import-mode small {
+  display: block;
+}
+.signup-import-mode strong {
+  font-size: 13px;
+}
+.signup-import-mode small {
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
 .signup-textarea { min-height: 70px; resize: vertical; line-height: 1.45; }
 .signup-admin-actions {
   display: flex;
@@ -5145,6 +5187,19 @@ button {
 }
 .signup-position.waitlisted { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, var(--bg)); }
 .signup-contact { color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+.signup-auto-status {
+  display: grid;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--green) 25%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--green) 5%, var(--bg));
+}
+.signup-auto-status strong { color: color-mix(in srgb, var(--green) 64%, white); font-size: 13px; }
+.signup-auto-status span { color: var(--text-2); font-size: 12px; line-height: 1.4; }
+.signup-auto-status.paused { border-color: color-mix(in srgb, var(--amber) 28%, var(--line)); background: color-mix(in srgb, var(--amber) 5%, var(--bg)); }
+.signup-auto-status.paused strong { color: var(--amber); }
 .signup-message {
   margin-top: 10px;
   padding: 10px 12px;

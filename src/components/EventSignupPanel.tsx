@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthModal } from '@/components/AuthModal';
 import { Icons } from '@/components/Icons';
 import { useAuth } from '@/hooks/useAuth';
@@ -113,10 +113,12 @@ export function EventSignupPanel({
   const [endsAt, setEndsAt] = useState('');
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
+  const [autoAddPairs, setAutoAddPairs] = useState(true);
   const [templates, setTemplates] = useState<SignupTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
+  const lastAutoImportSignature = useRef('');
 
   const refreshRegistrations = useCallback(async (signupId: string) => {
     const rows = await getOrganizerRegistrations(signupId);
@@ -124,7 +126,7 @@ export function EventSignupPanel({
   }, []);
 
   useEffect(() => {
-    if (!auth.user || !expanded) return;
+    if (!auth.user) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -136,6 +138,7 @@ export function EventSignupPanel({
     setEndsAt('');
     setDetails('');
     setPrizes('');
+    setAutoAddPairs(true);
     setSelectedTemplateId('');
     setTemplateName('');
     void Promise.all([
@@ -157,6 +160,7 @@ export function EventSignupPanel({
             capacityTeams: expectedTeams,
             details: row.details,
             prizes: row.prizes,
+            autoAddPairs: row.autoAddPairs,
           });
           if (cancelled) return;
           setMessage(`Confirmed team limit synced to ${expectedTeams}. Extra registrations will wait.`);
@@ -174,6 +178,7 @@ export function EventSignupPanel({
         setEndsAt(inputDateTime(currentRow.endsAt));
         setDetails(currentRow.details);
         setPrizes(currentRow.prizes);
+        setAutoAddPairs(currentRow.autoAddPairs);
         await refreshRegistrations(currentRow.id);
       })
       .catch((err: Error) => !cancelled && setError(err.message))
@@ -181,7 +186,7 @@ export function EventSignupPanel({
     return () => {
       cancelled = true;
     };
-  }, [auth.user, event.id, event.name, event.venue, expanded, expectedTeams, refreshRegistrations]);
+  }, [auth.user, event.id, event.name, event.venue, expectedTeams, refreshRegistrations]);
 
   useEffect(() => {
     if (!auth.user || !expanded) return;
@@ -195,23 +200,50 @@ export function EventSignupPanel({
   }, [auth.user, expanded]);
 
   useEffect(() => {
-    if (!signup || !expanded) return;
+    if (!signup || (!expanded && !(autoAddPairs && event.status === 'setup'))) return;
     const timer = window.setInterval(() => {
       void refreshRegistrations(signup.id).catch(() => undefined);
     }, 8_000);
     return () => window.clearInterval(timer);
-  }, [expanded, refreshRegistrations, signup]);
+  }, [autoAddPairs, event.status, expanded, refreshRegistrations, signup]);
 
-  const confirmed = registrations.filter((r) => r.status === 'confirmed');
-  const waitlisted = registrations.filter((r) => r.status === 'waitlisted');
+  const confirmed = useMemo(
+    () => registrations.filter((registration) => registration.status === 'confirmed'),
+    [registrations],
+  );
+  const waitlisted = useMemo(
+    () => registrations.filter((registration) => registration.status === 'waitlisted'),
+    [registrations],
+  );
   const existingPairs = useMemo(
     () => new Set(teams.map((team) => registrationPairKey(team.players[0].name, team.players[1].name))),
     [teams],
   );
-  const importable = confirmed.filter(
-    (registration) => registration.playerTwo
-      && !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
+  const importable = useMemo(
+    () => confirmed.filter(
+      (registration) => registration.playerTwo
+        && !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
+    ),
+    [confirmed, existingPairs],
   );
+
+  useEffect(() => {
+    const signature = importable.map((registration) => registration.id).join('|');
+    if (!signature) {
+      lastAutoImportSignature.current = '';
+      return;
+    }
+    if (!autoAddPairs || event.status !== 'setup' || lastAutoImportSignature.current === signature) return;
+    lastAutoImportSignature.current = signature;
+    onAddTeams(importable.map((registration) => ({
+      name: registration.teamName || undefined,
+      player1: registration.playerOne,
+      player2: registration.playerTwo,
+    })));
+    setMessage(
+      `Auto-added ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players).`,
+    );
+  }, [autoAddPairs, event.status, importable, onAddTeams]);
 
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
@@ -225,6 +257,7 @@ export function EventSignupPanel({
     setEndsAt(schedule.endsAt);
     setDetails(template.details);
     setPrizes(template.prizes);
+    setAutoAddPairs(template.autoAddPairs);
     setMessage(`${template.name} loaded. Check the date, then update the sign-up page.`);
     setError(null);
   }
@@ -248,6 +281,7 @@ export function EventSignupPanel({
         capacityTeams: expectedTeams,
         details,
         prizes,
+        autoAddPairs,
         ...schedule,
       });
       setTemplates((current) =>
@@ -307,6 +341,7 @@ export function EventSignupPanel({
         capacityTeams: expectedTeams,
         details,
         prizes,
+        autoAddPairs,
       });
       setSignup(row);
       setAccountSlug(row.accountSlug);
@@ -333,10 +368,10 @@ export function EventSignupPanel({
 
   function importTeams() {
     onAddTeams(importable.map((registration) => ({
-        name: registration.teamName || undefined,
-        player1: registration.playerOne,
-        player2: registration.playerTwo,
-      })));
+      name: registration.teamName || undefined,
+      player1: registration.playerOne,
+      player2: registration.playerTwo,
+    })));
     setMessage(
       `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,
     );
@@ -452,6 +487,32 @@ export function EventSignupPanel({
                   </small>
                 </div>
                 <div className="setup-field signup-wide">
+                  <label>Confirmed pairs</label>
+                  <div className="signup-import-mode" role="group" aria-label="Confirmed pair import mode">
+                    <button
+                      type="button"
+                      className={autoAddPairs ? 'active' : ''}
+                      aria-pressed={autoAddPairs}
+                      onClick={() => setAutoAddPairs(true)}
+                    >
+                      <strong>Auto-add</strong>
+                      <small>Add complete pairs to the tournament as they sign up</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={!autoAddPairs ? 'active' : ''}
+                      aria-pressed={!autoAddPairs}
+                      onClick={() => setAutoAddPairs(false)}
+                    >
+                      <strong>Manual review</strong>
+                      <small>Keep the review button before adding pairs</small>
+                    </button>
+                  </div>
+                  <small className="setup-help">
+                    Saved with this sign-up page and its template. Solo players wait until they form a pair.
+                  </small>
+                </div>
+                <div className="setup-field signup-wide">
                   <label>Event details</label>
                   <textarea className="setup-input signup-textarea" value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Level, inclusions, arrival time…" />
                 </div>
@@ -552,11 +613,26 @@ export function EventSignupPanel({
                     </div>
                   )}
 
-                  <button className="btn full" type="button" disabled={importable.length === 0} onClick={importTeams}>
-                    {importable.length > 0
-                      ? `Add ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) to tournament`
-                      : 'No new confirmed pairs ready to add'}
-                  </button>
+                  {autoAddPairs && event.status === 'setup' ? (
+                    <div className="signup-auto-status">
+                      <strong>Auto-add is on</strong>
+                      <span>Complete confirmed pairs are added automatically. Solo players wait until they have a partner.</span>
+                    </div>
+                  ) : (
+                    <>
+                      {autoAddPairs && event.status !== 'setup' && (
+                        <div className="signup-auto-status paused">
+                          <strong>Auto-add is paused</strong>
+                          <span>The tournament has started, so late pairs need a manual review before joining.</span>
+                        </div>
+                      )}
+                      <button className="btn full" type="button" disabled={importable.length === 0} onClick={importTeams}>
+                        {importable.length > 0
+                          ? `Add ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) to tournament`
+                          : 'No new confirmed pairs ready to add'}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </>
