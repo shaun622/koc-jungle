@@ -6,7 +6,6 @@ import {
   getPublicSignup,
   joinPublicSingle,
   registerPublicTeam,
-  signupPlayerCount,
   type PublicSignup,
   type SignupRegistration,
 } from '@/lib/signups';
@@ -207,9 +206,7 @@ export function PublicSignupScreen() {
 
   const confirmed = data.registrations.filter((registration) => registration.status === 'confirmed');
   const waitlisted = data.registrations.filter((registration) => registration.status === 'waitlisted');
-  const confirmedPlayers = signupPlayerCount(confirmed);
-  const waitlistedPlayers = signupPlayerCount(waitlisted);
-  const spaces = Math.max(0, data.event.capacityTeams - confirmedPlayers);
+  const spaces = Math.max(0, data.event.capacityTeams - confirmed.length);
   const registrationsOpen = data.event.isOpen;
 
   function rosterRow(registration: SignupRegistration, waiting = false) {
@@ -251,8 +248,8 @@ export function PublicSignupScreen() {
           {data.event.venue && <span>{data.event.venue}</span>}
         </div>
         <div className={'signup-public-availability ' + (spaces > 0 ? 'open' : 'waiting')}>
-          <strong>{spaces > 0 ? `${spaces} player space${spaces === 1 ? '' : 's'} left` : 'Confirmed places full'}</strong>
-          <span>{spaces > 0 ? 'Register as a pair or solo player.' : 'New sign-ups join the waiting list automatically.'}</span>
+          <strong>{spaces > 0 ? `${spaces} team space${spaces === 1 ? '' : 's'} left` : 'Confirmed teams full'}</strong>
+          <span>{spaces > 0 ? 'Register as a pair or solo player.' : 'New registrations join the waiting list automatically.'}</span>
         </div>
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}
         {data.event.prizes && (
@@ -268,20 +265,20 @@ export function PublicSignupScreen() {
           <div className="signup-public-section-head">
             <div>
               <span>LIVE LIST</span>
-              <h2>Players</h2>
+              <h2>Teams</h2>
             </div>
-            <strong>{confirmedPlayers}/{data.event.capacityTeams}</strong>
+            <strong>{confirmed.length}/{data.event.capacityTeams}</strong>
           </div>
           <p className="signup-public-priority-note">Pairs have priority. Solo players can be joined by another player here.</p>
 
           <div className="signup-public-list">
             {confirmed.map((registration) => rosterRow(registration))}
-            {confirmed.length === 0 && <div className="signup-public-empty">No confirmed players yet.</div>}
+            {confirmed.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
           </div>
 
           <div className="signup-public-waiting-head">
             <span>WAITING LIST</span>
-            <strong>{waitlistedPlayers} player{waitlistedPlayers === 1 ? '' : 's'}</strong>
+            <strong>{waitlisted.length}</strong>
           </div>
           <div className="signup-public-list waiting">
             {waitlisted.map((registration) => rosterRow(registration, true))}

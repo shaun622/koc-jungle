@@ -4,7 +4,6 @@ import {
   normaliseSignupLinkPart,
   publicSignupHashFromPath,
   registrationPairKey,
-  signupPlayerCount,
 } from '@/lib/signups';
 
 describe('public event sign-up helpers', () => {
@@ -14,14 +13,6 @@ describe('public event sign-up helpers', () => {
 
   it('matches the same player pair regardless of order or case', () => {
     expect(registrationPairKey(' Kriss ', 'Alex')).toBe(registrationPairKey('alex', 'KRISS'));
-  });
-
-  it('counts player capacity for a mix of pairs and solo registrations', () => {
-    expect(signupPlayerCount([
-      { playerTwo: 'Alex' },
-      { playerTwo: '' },
-      { playerTwo: '  Kriss  ' },
-    ])).toBe(5);
   });
 
   it('builds a direct-path share link for reliable PWA navigation', () => {

@@ -334,10 +334,10 @@ export function SetupScreen() {
 
       <div className="setup-col">
         <h2 className="setup-h">
-          Pairs ({teams.length} / {expectedTeams})
+          Teams ({teams.length} / {expectedTeams})
         </h2>
         <div className="setup-sub">
-          Each tournament entry is a fixed pair. Solo online sign-ups can find a partner before you add them here.
+          Each team is a fixed pair. Solo online sign-ups can find a partner before you add them here.
         </div>
         <EventSignupPanel
           event={event}

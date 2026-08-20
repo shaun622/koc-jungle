@@ -456,11 +456,3 @@ export function registrationPairKey(playerOne: string, playerTwo: string): strin
     .sort()
     .join('|');
 }
-
-export function signupRegistrationPlayerCount(registration: Pick<SignupRegistration, 'playerTwo'>): number {
-  return registration.playerTwo.trim() ? 2 : 1;
-}
-
-export function signupPlayerCount(registrations: Array<Pick<SignupRegistration, 'playerTwo'>>): number {
-  return registrations.reduce((total, registration) => total + signupRegistrationPlayerCount(registration), 0);
-}

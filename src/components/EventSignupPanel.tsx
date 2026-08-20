@@ -17,7 +17,6 @@ import {
   saveSignupTemplate,
   setSignupOpen,
   shareSignupLink,
-  signupPlayerCount,
   type SignupEvent,
   type SignupRegistration,
   type SignupTemplate,
@@ -112,7 +111,6 @@ export function EventSignupPanel({
   const [venue, setVenue] = useState(event.venue ?? '');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
-  const [capacity, setCapacity] = useState(expectedTeams * 2);
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
   const [templates, setTemplates] = useState<SignupTemplate[]>([]);
@@ -136,7 +134,6 @@ export function EventSignupPanel({
     setVenue(event.venue ?? '');
     setStartsAt('');
     setEndsAt('');
-    setCapacity(expectedTeams * 2);
     setDetails('');
     setPrizes('');
     setSelectedTemplateId('');
@@ -147,21 +144,37 @@ export function EventSignupPanel({
     ])
       .then(async ([row, savedAccountSlug]) => {
         if (cancelled) return;
-        setSignup(row);
+        let currentRow = row;
+        if (row && row.capacityTeams !== expectedTeams) {
+          currentRow = await saveSignupEvent({
+            ownerUserId: row.ownerUserId,
+            sourceEventId: row.sourceEventId,
+            accountSlug: row.accountSlug,
+            title: row.title,
+            venue: row.venue,
+            startsAt: row.startsAt,
+            endsAt: row.endsAt,
+            capacityTeams: expectedTeams,
+            details: row.details,
+            prizes: row.prizes,
+          });
+          if (cancelled) return;
+          setMessage(`Confirmed team limit synced to ${expectedTeams}. Extra registrations will wait.`);
+        }
+        setSignup(currentRow);
         setAccountSlug(
-          row?.accountSlug
+          currentRow?.accountSlug
           || savedAccountSlug
           || defaultSignupAccountSlug(auth.user?.email, auth.user?.id ?? ''),
         );
-        if (!row) return;
-        setTitle(row.title);
-        setVenue(row.venue);
-        setStartsAt(inputDateTime(row.startsAt));
-        setEndsAt(inputDateTime(row.endsAt));
-        setCapacity(row.capacityTeams);
-        setDetails(row.details);
-        setPrizes(row.prizes);
-        await refreshRegistrations(row.id);
+        if (!currentRow) return;
+        setTitle(currentRow.title);
+        setVenue(currentRow.venue);
+        setStartsAt(inputDateTime(currentRow.startsAt));
+        setEndsAt(inputDateTime(currentRow.endsAt));
+        setDetails(currentRow.details);
+        setPrizes(currentRow.prizes);
+        await refreshRegistrations(currentRow.id);
       })
       .catch((err: Error) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
@@ -191,8 +204,6 @@ export function EventSignupPanel({
 
   const confirmed = registrations.filter((r) => r.status === 'confirmed');
   const waitlisted = registrations.filter((r) => r.status === 'waitlisted');
-  const confirmedPlayers = signupPlayerCount(confirmed);
-  const waitlistedPlayers = signupPlayerCount(waitlisted);
   const existingPairs = useMemo(
     () => new Set(teams.map((team) => registrationPairKey(team.players[0].name, team.players[1].name))),
     [teams],
@@ -210,7 +221,6 @@ export function EventSignupPanel({
     setTemplateName(template.name);
     setTitle(template.title);
     setVenue(template.venue);
-    setCapacity(template.capacityTeams);
     setStartsAt(schedule.startsAt);
     setEndsAt(schedule.endsAt);
     setDetails(template.details);
@@ -235,7 +245,7 @@ export function EventSignupPanel({
         name: templateName,
         title,
         venue,
-        capacityTeams: Math.max(1, Math.min(128, capacity)),
+        capacityTeams: expectedTeams,
         details,
         prizes,
         ...schedule,
@@ -294,7 +304,7 @@ export function EventSignupPanel({
         venue,
         startsAt: toIso(startsAt),
         endsAt: toIso(endsAt),
-        capacityTeams: Math.max(1, Math.min(128, capacity)),
+        capacityTeams: expectedTeams,
         details,
         prizes,
       });
@@ -337,11 +347,11 @@ export function EventSignupPanel({
       <button className="signup-admin-toggle" type="button" onClick={() => setExpanded(!expanded)}>
         <span className="signup-admin-toggle-icon"><Icons.List className="icon" /></span>
         <span>
-          <strong>Online player sign-up</strong>
-          <small>One live link for pairs, solo players and the waiting list.</small>
+          <strong>Online team sign-up</strong>
+          <small>One live link for confirmed teams, solo players and the waiting list.</small>
         </span>
         <span className="signup-admin-toggle-meta">
-          {signup ? `${confirmedPlayers}/${signup.capacityTeams}` : 'SET UP'}
+          {signup ? `${confirmed.length}/${expectedTeams}` : 'SET UP'}
         </span>
       </button>
 
@@ -430,17 +440,15 @@ export function EventSignupPanel({
                   <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </div>
                 <div className="setup-field">
-                  <label>Confirmed player limit</label>
+                  <label>Confirmed team limit</label>
                   <input
                     className="setup-input"
                     type="number"
-                    min={1}
-                    max={128}
-                    value={capacity}
-                    onChange={(e) => setCapacity(Number(e.target.value))}
+                    value={expectedTeams}
+                    readOnly
                   />
                   <small className="setup-help">
-                    A pair uses two places and a solo uses one. Pairs have priority over solos; extra players wait automatically.
+                    Matches the tournament setup automatically. Pairs have priority; every extra registration joins the waiting list.
                   </small>
                 </div>
                 <div className="setup-field signup-wide">
@@ -511,8 +519,8 @@ export function EventSignupPanel({
                     </a>
                   </div>
                   <div className="signup-admin-summary">
-                    <div><strong>{confirmedPlayers}</strong><span>Confirmed players / {signup.capacityTeams}</span></div>
-                    <div><strong>{waitlistedPlayers}</strong><span>Players waiting</span></div>
+                    <div><strong>{confirmed.length}</strong><span>Confirmed teams / {expectedTeams}</span></div>
+                    <div><strong>{waitlisted.length}</strong><span>Waiting list</span></div>
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
