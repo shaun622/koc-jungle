@@ -89,12 +89,12 @@ export function EventSignupPanel({
   event,
   expectedTeams,
   teams,
-  onAddTeam,
+  onAddTeams,
 }: {
   event: EventState;
   expectedTeams: number;
   teams: Team[];
-  onAddTeam: (input: { name?: string; player1: string; player2: string }) => void;
+  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string }>) => void;
 }) {
   const auth = useAuth();
   const [expanded, setExpanded] = useState(false);
@@ -332,14 +332,14 @@ export function EventSignupPanel({
   }
 
   function importTeams() {
-    for (const registration of importable) {
-      onAddTeam({
+    onAddTeams(importable.map((registration) => ({
         name: registration.teamName || undefined,
         player1: registration.playerOne,
         player2: registration.playerTwo,
-      });
-    }
-    setMessage(`${importable.length} team${importable.length === 1 ? '' : 's'} added to this event.`);
+      })));
+    setMessage(
+      `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,
+    );
   }
 
   return (
@@ -554,7 +554,7 @@ export function EventSignupPanel({
 
                   <button className="btn full" type="button" disabled={importable.length === 0} onClick={importTeams}>
                     {importable.length > 0
-                      ? `Add ${importable.length} confirmed team${importable.length === 1 ? '' : 's'} to event`
+                      ? `Add ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) to tournament`
                       : 'No new confirmed pairs ready to add'}
                   </button>
                 </>

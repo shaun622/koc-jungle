@@ -47,6 +47,7 @@ interface Actions {
   startTournament: () => void;
 
   addTeam: (input: { name?: string; player1: string; player2: string }) => void;
+  addTeams: (inputs: Array<{ name?: string; player1: string; player2: string }>) => void;
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
   removeTeam: (id: string) => void;
   setPlayerAvatar: (teamId: string, playerIndex: 0 | 1, avatar: PlayerAvatar | undefined) => void;
@@ -265,20 +266,24 @@ export const useEventStore = create<EventStore>()(
 
       loadEvent: (event) => set({ event, lastError: null }),
 
-      addTeam: ({ name, player1, player2 }) => {
+      addTeam: (input) => get().addTeams([input]),
+
+      addTeams: (inputs) => {
         const event = get().event;
         if (!event) return;
-        if (!player1.trim() || !player2.trim()) {
+        if (inputs.length === 0) return;
+        if (inputs.some(({ player1, player2 }) => !player1.trim() || !player2.trim())) {
           set({ lastError: 'Both player names are required.' });
           return;
         }
-        const team: Team = {
+        const createdAt = Date.now();
+        const addedTeams: Team[] = inputs.map(({ name, player1, player2 }, index) => ({
           id: newId(),
           name: name?.trim() || undefined,
           players: [buildPlayer(player1), buildPlayer(player2)],
-          createdAt: Date.now(),
+          createdAt: createdAt + index,
           active: true,
-        };
+        }));
         // Americano/Mexicano freeze their team pool in formatConfig.teams at
         // start. If the operator adds a team mid-event, append it to that pool
         // so it actually joins the next round's schedule (KoC reads the live
@@ -289,9 +294,9 @@ export const useEventStore = create<EventStore>()(
           event.status !== 'setup' &&
           Array.isArray(cfg.teams);
         const formatConfig = joinsPool
-          ? { ...event.formatConfig, teams: [...(cfg.teams as string[]), team.id] }
+          ? { ...event.formatConfig, teams: [...(cfg.teams as string[]), ...addedTeams.map((team) => team.id)] }
           : event.formatConfig;
-        const teams = [...event.teams, team];
+        const teams = [...event.teams, ...addedTeams];
         set({
           event: refreshAmericanoSchedule(
             event,

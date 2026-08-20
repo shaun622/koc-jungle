@@ -26,6 +26,25 @@ describe('Americano mid-event roster corrections', () => {
     useEventStore.getState().resetEvent();
   });
 
+  it('adds every imported pair in one atomic roster update', () => {
+    useEventStore.getState().createEvent('Imported signup teams', 'koc');
+
+    useEventStore.getState().addTeams([
+      { name: 'Team One', player1: 'Alex', player2: 'Kriss' },
+      { name: 'Team Two', player1: 'Tapia', player2: 'Coello' },
+    ]);
+
+    const teams = useEventStore.getState().event?.teams ?? [];
+    expect(teams).toHaveLength(2);
+    expect(teams.map((team) => team.name)).toEqual(['Team One', 'Team Two']);
+    expect(teams.flatMap((team) => team.players.map((player) => player.name))).toEqual([
+      'Alex',
+      'Kriss',
+      'Tapia',
+      'Coello',
+    ]);
+  });
+
   it('fills an empty court when the missing sixth team is added before play starts', () => {
     const store = useEventStore.getState();
     store.createEvent('Americano', 'americano');

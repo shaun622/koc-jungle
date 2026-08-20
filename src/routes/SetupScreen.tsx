@@ -39,6 +39,7 @@ export function SetupScreen() {
   const event = useEventStore((s) => s.event);
   const resetEvent = useEventStore((s) => s.resetEvent);
   const addTeam = useEventStore((s) => s.addTeam);
+  const addTeams = useEventStore((s) => s.addTeams);
   const updateTeam = useEventStore((s) => s.updateTeam);
   const removeTeam = useEventStore((s) => s.removeTeam);
   const renameCourt = useEventStore((s) => s.renameCourt);
@@ -343,7 +344,7 @@ export function SetupScreen() {
           event={event}
           expectedTeams={expectedTeams}
           teams={teams}
-          onAddTeam={addTeam}
+          onAddTeams={addTeams}
         />
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
@@ -685,7 +686,7 @@ function NewTeamForm({
           if (e.key === 'Enter') submit();
         }}
       />
-      <button className="btn primary" disabled={!valid} onClick={submit}>
+      <button className="btn primary team-add-button" disabled={!valid} onClick={submit}>
         + Add
       </button>
     </div>
