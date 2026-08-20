@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   cancelPublicRegistration,
@@ -29,7 +29,9 @@ function storageKey(slug: string): string {
 }
 
 export function PublicSignupScreen() {
-  const { slug = '' } = useParams();
+  const { accountSlug = '', slug = '' } = useParams();
+  const navigate = useNavigate();
+  const signupKey = accountSlug ? `${accountSlug}/${slug}` : slug;
   const [searchParams] = useSearchParams();
   const [data, setData] = useState<PublicSignup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export function PublicSignupScreen() {
     const fromUrl = searchParams.get('manage');
     if (fromUrl) return fromUrl;
     try {
-      return localStorage.getItem(storageKey(slug));
+      return localStorage.getItem(storageKey(signupKey));
     } catch {
       return null;
     }
@@ -56,7 +58,7 @@ export function PublicSignupScreen() {
   const refresh = useCallback(async () => {
     if (!slug) return;
     try {
-      const next = await getPublicSignup(slug);
+      const next = await getPublicSignup(slug, accountSlug || undefined);
       setData(next);
       setError(null);
     } catch (err) {
@@ -64,7 +66,7 @@ export function PublicSignupScreen() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [accountSlug, slug]);
 
   useEffect(() => {
     void refresh();
@@ -77,6 +79,11 @@ export function PublicSignupScreen() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (accountSlug || !data?.event.accountSlug || !data.event.eventSlug) return;
+    navigate(`/signup/${data.event.accountSlug}/${data.event.eventSlug}`, { replace: true });
+  }, [accountSlug, data, navigate]);
+
   async function register() {
     if (!data || website) return;
     if (!playerOne.trim() || !playerTwo.trim() || !contact.trim()) {
@@ -87,6 +94,7 @@ export function PublicSignupScreen() {
     setError(null);
     try {
       const registered = await registerPublicTeam({
+        accountSlug: accountSlug || undefined,
         publicSlug: slug,
         teamName,
         playerOne,
@@ -94,7 +102,7 @@ export function PublicSignupScreen() {
         contact,
       });
       try {
-        localStorage.setItem(storageKey(slug), registered.cancelToken);
+        localStorage.setItem(storageKey(signupKey), registered.cancelToken);
       } catch {
         // The private cancellation token is also kept in component state.
       }
@@ -117,9 +125,9 @@ export function PublicSignupScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      await cancelPublicRegistration(slug, cancelToken);
+      await cancelPublicRegistration(slug, cancelToken, accountSlug || undefined);
       try {
-        localStorage.removeItem(storageKey(slug));
+        localStorage.removeItem(storageKey(signupKey));
       } catch {
         // Ignore unavailable storage; cancellation already succeeded.
       }

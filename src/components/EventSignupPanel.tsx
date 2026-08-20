@@ -5,11 +5,14 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
   copySignupLink,
+  defaultSignupAccountSlug,
   deleteSignupTemplate,
   getOrganizerRegistrations,
   getOwnedSignup,
+  getSignupAccountSlug,
   getSignupTemplates,
   registrationPairKey,
+  normaliseSignupLinkPart,
   saveSignupEvent,
   saveSignupTemplate,
   setSignupOpen,
@@ -104,6 +107,7 @@ export function EventSignupPanel({
   const [error, setError] = useState<string | null>(null);
 
   const [title, setTitle] = useState(event.name);
+  const [accountSlug, setAccountSlug] = useState('organiser');
   const [venue, setVenue] = useState(event.venue ?? '');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
@@ -125,10 +129,29 @@ export function EventSignupPanel({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void getOwnedSignup(auth.user.id, event.id)
-      .then(async (row) => {
+    setSignup(null);
+    setRegistrations([]);
+    setTitle(event.name);
+    setVenue(event.venue ?? '');
+    setStartsAt('');
+    setEndsAt('');
+    setCapacity(expectedTeams);
+    setDetails('');
+    setPrizes('');
+    setSelectedTemplateId('');
+    setTemplateName('');
+    void Promise.all([
+      getOwnedSignup(auth.user.id, event.id),
+      getSignupAccountSlug(auth.user.id),
+    ])
+      .then(async ([row, savedAccountSlug]) => {
         if (cancelled) return;
         setSignup(row);
+        setAccountSlug(
+          row?.accountSlug
+          || savedAccountSlug
+          || defaultSignupAccountSlug(auth.user?.email, auth.user?.id ?? ''),
+        );
         if (!row) return;
         setTitle(row.title);
         setVenue(row.venue);
@@ -144,7 +167,7 @@ export function EventSignupPanel({
     return () => {
       cancelled = true;
     };
-  }, [auth.user, event.id, expanded, refreshRegistrations]);
+  }, [auth.user, event.id, event.name, event.venue, expanded, expectedTeams, refreshRegistrations]);
 
   useEffect(() => {
     if (!auth.user || !expanded) return;
@@ -251,6 +274,10 @@ export function EventSignupPanel({
       setError('Give the event a name first.');
       return;
     }
+    if (!accountSlug.trim()) {
+      setError('Give the account link a name first.');
+      return;
+    }
     setSaving(true);
     setMessage(null);
     setError(null);
@@ -258,6 +285,7 @@ export function EventSignupPanel({
       const row = await saveSignupEvent({
         ownerUserId: auth.user.id,
         sourceEventId: event.id,
+        accountSlug,
         title,
         venue,
         startsAt: toIso(startsAt),
@@ -267,6 +295,7 @@ export function EventSignupPanel({
         prizes,
       });
       setSignup(row);
+      setAccountSlug(row.accountSlug);
       await refreshRegistrations(row.id);
       setMessage(signup ? 'Sign-up page updated.' : 'Sign-up page is live. Share the link with every group.');
     } catch (err) {
@@ -369,6 +398,18 @@ export function EventSignupPanel({
 
               <div className="signup-admin-form">
                 <div className="setup-field signup-wide">
+                  <label>Account link name</label>
+                  <input
+                    className="setup-input"
+                    value={accountSlug}
+                    onChange={(e) => setAccountSlug(normaliseSignupLinkPart(e.target.value, ''))}
+                    placeholder="jungle-padel"
+                  />
+                  <small className="setup-help">
+                    Your links start with signup/{accountSlug || 'account-name'}/
+                  </small>
+                </div>
+                <div className="setup-field signup-wide">
                   <label>Public event title</label>
                   <input className="setup-input" value={title} onChange={(e) => setTitle(e.target.value)} />
                 </div>
@@ -443,7 +484,7 @@ export function EventSignupPanel({
                       className="signup-admin-link"
                       aria-label="Public sign-up link"
                       readOnly
-                      value={buildSignupUrl(signup.publicSlug)}
+                      value={buildSignupUrl(signup.eventSlug, signup.accountSlug)}
                       onFocus={(event) => event.currentTarget.select()}
                     />
                     <button
@@ -452,7 +493,7 @@ export function EventSignupPanel({
                       onClick={async () => {
                         setError(null);
                         try {
-                          await copySignupLink(signup.publicSlug);
+                          await copySignupLink(signup);
                           setMessage('Sign-up link copied.');
                         } catch (err) {
                           setError((err as Error).message);
@@ -461,7 +502,7 @@ export function EventSignupPanel({
                     >
                       Copy link
                     </button>
-                    <a className="btn" href={buildSignupUrl(signup.publicSlug)} target="_blank" rel="noopener noreferrer">
+                    <a className="btn" href={buildSignupUrl(signup.eventSlug, signup.accountSlug)} target="_blank" rel="noopener noreferrer">
                       Open page
                     </a>
                   </div>

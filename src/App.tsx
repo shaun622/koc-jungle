@@ -166,6 +166,7 @@ export function App() {
       <CloudSyncGate />
       <RouteGate />
       <Routes>
+        <Route path="/signup/:accountSlug/:slug" element={<PublicSignupScreen />} />
         <Route path="/signup/:slug" element={<PublicSignupScreen />} />
         <Route path="/display" element={<DisplayScreen />} />
         <Route path="/home" element={<HomeScreen />} />

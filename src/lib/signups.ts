@@ -6,6 +6,8 @@ export interface SignupEvent {
   ownerUserId: string;
   sourceEventId: string;
   publicSlug: string;
+  accountSlug: string;
+  eventSlug: string;
   title: string;
   venue: string;
   startsAt: string | null;
@@ -50,6 +52,7 @@ export interface PublicSignup {
 export interface SaveSignupInput {
   ownerUserId: string;
   sourceEventId: string;
+  accountSlug: string;
   title: string;
   venue: string;
   startsAt: string | null;
@@ -67,6 +70,8 @@ interface SignupEventRow {
   source_event_id: string;
   public_slug: string;
   friendly_slug: string | null;
+  account_slug: string | null;
+  event_slug: string | null;
   title: string;
   venue: string | null;
   starts_at: string | null;
@@ -108,6 +113,8 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     ownerUserId: row.owner_user_id,
     sourceEventId: row.source_event_id,
     publicSlug: row.friendly_slug || row.public_slug,
+    accountSlug: row.account_slug || 'organiser',
+    eventSlug: row.event_slug || row.friendly_slug || row.public_slug,
     title: row.title,
     venue: row.venue ?? '',
     startsAt: row.starts_at,
@@ -169,6 +176,20 @@ export async function getOwnedSignup(
   return data ? mapEvent(data as SignupEventRow) : null;
 }
 
+export async function getSignupAccountSlug(ownerUserId: string): Promise<string | null> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('signup_events')
+    .select('account_slug')
+    .eq('owner_user_id', ownerUserId)
+    .not('account_slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.account_slug as string | undefined) ?? null;
+}
+
 export async function getSignupTemplates(ownerUserId: string): Promise<SignupTemplate[]> {
   const client = requireSupabase();
   const { data, error } = await client
@@ -214,12 +235,14 @@ export async function deleteSignupTemplate(id: string): Promise<void> {
 
 export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEvent> {
   const client = requireSupabase();
+  const accountSlug = normaliseSignupLinkPart(input.accountSlug, 'organiser');
   const { data, error } = await client
     .from('signup_events')
     .upsert(
       {
         owner_user_id: input.ownerUserId,
         source_event_id: input.sourceEventId,
+        account_slug: accountSlug,
         title: input.title.trim(),
         venue: input.venue.trim(),
         starts_at: input.startsAt,
@@ -264,15 +287,19 @@ export async function getOrganizerRegistrations(
   });
 }
 
-export async function getPublicSignup(publicSlug: string): Promise<PublicSignup> {
+export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
   const client = requireSupabase();
-  const { data, error } = await client.rpc('get_public_signup', { p_share_slug: publicSlug });
+  const args = accountSlug
+    ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
+    : { p_share_slug: publicSlug };
+  const { data, error } = await client.rpc('get_public_signup', args);
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
   return data as PublicSignup;
 }
 
 export async function registerPublicTeam(input: {
+  accountSlug?: string;
   publicSlug: string;
   teamName: string;
   playerOne: string;
@@ -280,8 +307,11 @@ export async function registerPublicTeam(input: {
   contact: string;
 }): Promise<{ registrationId: string; cancelToken: string; status: 'confirmed' | 'waitlisted'; position: number }> {
   const client = requireSupabase();
+  const slugArgs = input.accountSlug
+    ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
+    : { p_share_slug: input.publicSlug };
   const { data, error } = await client.rpc('register_public_team', {
-    p_share_slug: input.publicSlug,
+    ...slugArgs,
     p_team_name: input.teamName.trim(),
     p_player_one: input.playerOne.trim(),
     p_player_two: input.playerTwo.trim(),
@@ -299,23 +329,42 @@ export async function registerPublicTeam(input: {
 export async function cancelPublicRegistration(
   publicSlug: string,
   cancelToken: string,
+  accountSlug?: string,
 ): Promise<void> {
   const client = requireSupabase();
+  const slugArgs = accountSlug
+    ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
+    : { p_share_slug: publicSlug };
   const { error } = await client.rpc('cancel_public_registration', {
-    p_share_slug: publicSlug,
+    ...slugArgs,
     p_cancel_token: cancelToken,
   });
   if (error) throw new Error(error.message);
 }
 
-export function buildSignupUrl(publicSlug: string): string {
+export function normaliseSignupLinkPart(value: string, fallback = 'event'): string {
+  const normalised = value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return normalised || fallback;
+}
+
+export function defaultSignupAccountSlug(email: string | undefined, userId: string): string {
+  return normaliseSignupLinkPart(email?.split('@')[0] || `organiser-${userId.slice(0, 6)}`, 'organiser');
+}
+
+export function buildSignupUrl(publicSlug: string, accountSlug?: string): string {
   const configured = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim();
   let base = configured || '';
   if (!base && typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)) {
     base = `${window.location.origin}${window.location.pathname}`;
   }
   if (!base) base = 'https://koc-jungle.pages.dev/';
-  return `${base.replace(/\/$/, '')}/signup/${publicSlug}`;
+  const signupPath = accountSlug ? `${accountSlug}/${publicSlug}` : publicSlug;
+  return `${base.replace(/\/$/, '')}/signup/${signupPath}`;
 }
 
 export function isPublicSignupPath(pathname: string): boolean {
@@ -323,12 +372,16 @@ export function isPublicSignupPath(pathname: string): boolean {
 }
 
 export function publicSignupHashFromPath(pathname: string, search = ''): string | null {
-  const match = pathname.match(/^\/signup\/([a-z0-9][a-z0-9-]{0,119})\/?$/i);
-  return match ? `#/signup/${match[1]}${search}` : null;
+  const match = pathname.match(
+    /^\/signup\/([a-z0-9][a-z0-9-]{0,79})(?:\/([a-z0-9][a-z0-9-]{0,119}))?\/?$/i,
+  );
+  if (!match) return null;
+  const route = match[2] ? `${match[1]}/${match[2]}` : match[1];
+  return `#/signup/${route}${search}`;
 }
 
-export async function copySignupLink(publicSlug: string): Promise<void> {
-  const url = buildSignupUrl(publicSlug);
+export async function copySignupLink(signup: SignupEvent): Promise<void> {
+  const url = buildSignupUrl(signup.eventSlug, signup.accountSlug);
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(url);
     return;
@@ -347,7 +400,7 @@ export async function copySignupLink(publicSlug: string): Promise<void> {
 }
 
 export async function shareSignupLink(signup: SignupEvent): Promise<void> {
-  const url = buildSignupUrl(signup.publicSlug);
+  const url = buildSignupUrl(signup.eventSlug, signup.accountSlug);
   const text = `${signup.title}\n${signup.venue ? `${signup.venue}\n` : ''}Register your team or join the waiting list:`;
   if (Capacitor.isNativePlatform()) {
     const { Share } = await import('@capacitor/share');
