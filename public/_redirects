@@ -1,4 +1,4 @@
-/signup/assets/* /assets/:splat 200
+/signup/assets/* /assets/:splat 302
 /signup/icons/* /icons/:splat 200
 /signup/manifest.webmanifest /manifest.webmanifest 200
 /signup/favicon-32.png /favicon-32.png 200
