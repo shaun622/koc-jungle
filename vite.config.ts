@@ -45,7 +45,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: './',
+  // Public signup pages are opened at /signup/<slug>. Absolute asset URLs keep
+  // those direct entry points from trying to load /signup/assets/* and showing
+  // a blank screen. Capacitor serves the bundle from its own origin root too.
+  base: '/',
   test: {
     globals: true,
     environment: 'jsdom',

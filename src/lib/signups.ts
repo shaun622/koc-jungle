@@ -66,6 +66,7 @@ interface SignupEventRow {
   owner_user_id: string;
   source_event_id: string;
   public_slug: string;
+  friendly_slug: string | null;
   title: string;
   venue: string | null;
   starts_at: string | null;
@@ -106,7 +107,7 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     id: row.id,
     ownerUserId: row.owner_user_id,
     sourceEventId: row.source_event_id,
-    publicSlug: row.public_slug,
+    publicSlug: row.friendly_slug || row.public_slug,
     title: row.title,
     venue: row.venue ?? '',
     startsAt: row.starts_at,
@@ -265,7 +266,7 @@ export async function getOrganizerRegistrations(
 
 export async function getPublicSignup(publicSlug: string): Promise<PublicSignup> {
   const client = requireSupabase();
-  const { data, error } = await client.rpc('get_public_signup', { p_slug: publicSlug });
+  const { data, error } = await client.rpc('get_public_signup', { p_share_slug: publicSlug });
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
   return data as PublicSignup;
@@ -280,7 +281,7 @@ export async function registerPublicTeam(input: {
 }): Promise<{ registrationId: string; cancelToken: string; status: 'confirmed' | 'waitlisted'; position: number }> {
   const client = requireSupabase();
   const { data, error } = await client.rpc('register_public_team', {
-    p_slug: input.publicSlug,
+    p_share_slug: input.publicSlug,
     p_team_name: input.teamName.trim(),
     p_player_one: input.playerOne.trim(),
     p_player_two: input.playerTwo.trim(),
@@ -301,7 +302,7 @@ export async function cancelPublicRegistration(
 ): Promise<void> {
   const client = requireSupabase();
   const { error } = await client.rpc('cancel_public_registration', {
-    p_slug: publicSlug,
+    p_share_slug: publicSlug,
     p_cancel_token: cancelToken,
   });
   if (error) throw new Error(error.message);
@@ -322,7 +323,7 @@ export function isPublicSignupPath(pathname: string): boolean {
 }
 
 export function publicSignupHashFromPath(pathname: string, search = ''): string | null {
-  const match = pathname.match(/^\/signup\/([0-9a-f-]+)\/?$/i);
+  const match = pathname.match(/^\/signup\/([a-z0-9][a-z0-9-]{0,119})\/?$/i);
   return match ? `#/signup/${match[1]}${search}` : null;
 }
 
