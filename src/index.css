@@ -957,6 +957,25 @@ button {
   min-height: 0;
 }
 
+/* When the larger organiser sign-up editor is open in the fixed-height
+   landscape layout, scroll the whole teams column instead of shrinking and
+   clipping the editor above the mid-event banner. */
+@media (orientation: landscape) and (min-width: 769px) {
+  .setup-col:has(.signup-admin.expanded) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .setup-col:has(.signup-admin.expanded) .signup-admin {
+    flex: 0 0 auto;
+  }
+  .setup-col:has(.signup-admin.expanded) .setup-list {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
 /* iPad / tablet portrait: the 2-column setup is cramped, so stack it into
    one wide scrollable column. Landscape (which looks great) and phones
    (handled by the <=768 rule) are untouched. */
@@ -4146,7 +4165,7 @@ button {
 /* PWA update / offline-ready toast */
 .pwa-toast {
   position: fixed;
-  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   z-index: 60;
   display: flex;
@@ -6461,6 +6480,12 @@ button {
    Mobile / narrow viewport (< 768px)
    ========================================================================== */
 @media (max-width: 768px) {
+  .pwa-toast {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
   html,
   body {
     overflow: auto;
