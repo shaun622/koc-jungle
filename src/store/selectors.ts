@@ -14,6 +14,12 @@ export function teamLabelShort(team: Team): string {
   return `${team.players[0].name} & ${team.players[1].name}`;
 }
 
+/** Player names only, for two-line scoreboards where the custom team name is
+ * already rendered as the smaller label above it. */
+export function teamPlayersLabel(team: Team): string {
+  return `${team.players[0].name} & ${team.players[1].name}`;
+}
+
 export function currentRound(event: EventState | null): MainRound | null {
   if (!event || event.rounds.length === 0) return null;
   return event.rounds[event.rounds.length - 1];

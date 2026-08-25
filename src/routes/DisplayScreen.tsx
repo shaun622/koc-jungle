@@ -7,6 +7,7 @@ import {
   rankMovements,
   teamLabelShort,
   teamNameFor,
+  teamPlayersLabel,
 } from '@/store/selectors';
 import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
@@ -925,7 +926,7 @@ function TvLiveCanvas({
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
-                {centreA ? teamLabelShort(centreA) : 'TBD'}
+                {centreA ? teamPlayersLabel(centreA) : 'TBD'}
               </div>
             </div>
             <div className="tv-centre-scores">
@@ -961,7 +962,7 @@ function TvLiveCanvas({
               {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
-                {centreB ? teamLabelShort(centreB) : 'TBD'}
+                {centreB ? teamPlayersLabel(centreB) : 'TBD'}
               </div>
             </div>
             <div />
@@ -1219,7 +1220,7 @@ function TvCourtCard({
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
+            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
           </div>
         </div>
         <ScoreCell
@@ -1235,7 +1236,7 @@ function TvCourtCard({
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
+            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
           </div>
         </div>
         <ScoreCell
@@ -1496,7 +1497,7 @@ function TvBetweenCanvas({
               {centreA && <TeamAvatars players={centreA.players} size="md" />}
               {centreA?.name && <div className="tv-centre-team-label">{centreA.name}</div>}
               <div className="tv-centre-team-name">
-                {centreA ? teamLabelShort(centreA) : 'TBD'}
+                {centreA ? teamPlayersLabel(centreA) : 'TBD'}
               </div>
               {isKoc && centreA && (
                 <MovementChip
@@ -1512,7 +1513,7 @@ function TvBetweenCanvas({
               {centreB && <TeamAvatars players={centreB.players} size="md" />}
               {centreB?.name && <div className="tv-centre-team-label">{centreB.name}</div>}
               <div className="tv-centre-team-name">
-                {centreB ? teamLabelShort(centreB) : 'TBD'}
+                {centreB ? teamPlayersLabel(centreB) : 'TBD'}
               </div>
               {isKoc && centreB && (
                 <MovementChip
@@ -1629,7 +1630,7 @@ function TvBetweenCourtCard({
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
+            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
           </div>
         </div>
         {showMovement && teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
@@ -1639,7 +1640,7 @@ function TvBetweenCourtCard({
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
           <div className="tv-court-team-text">
             {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
+            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
           </div>
         </div>
         {showMovement && teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
