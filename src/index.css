@@ -1133,17 +1133,11 @@ button {
 }
 .roster-share-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
 }
 .roster-share-actions .btn { justify-content: center; text-align: center; }
-.roster-whatsapp-button {
-  color: #dff7e8;
-  border-color: #347d51;
-  background: #205c3a;
-}
-.roster-whatsapp-button:hover { background: #277047; }
 .setup-court-row {
   display: grid;
   grid-template-columns: 22px 32px 1fr 110px auto;

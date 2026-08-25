@@ -4,7 +4,6 @@ import { Portal } from '@/components/Portal';
 import {
   copyRosterText,
   shareRosterText,
-  whatsappRosterUrl,
 } from '@/utils/rosterShare';
 
 export function RosterShareModal({
@@ -48,7 +47,7 @@ export function RosterShareModal({
           <div className="roster-share-heading">
             <div>
               <h2>Share roster</h2>
-              <p>Preview the message, then share it straight to WhatsApp or copy it.</p>
+              <p>Preview the message, then use your device’s share menu or copy it.</p>
             </div>
             <button className="op-score-btn" type="button" disabled={busy} onClick={onClose} aria-label="Close">
               <Icons.Close className="icon" />
@@ -62,14 +61,11 @@ export function RosterShareModal({
 
           <div className="roster-share-actions">
             <button className="btn primary" type="button" disabled={busy} onClick={() => void run(() => shareRosterText(title, text))}>
-              {busy ? 'Opening…' : 'Share…'}
+              {busy ? 'Sharing…' : 'Share…'}
             </button>
             <button className="btn" type="button" disabled={busy} onClick={() => void run(() => copyRosterText(text))}>
               Copy text
             </button>
-            <a className="btn roster-whatsapp-button" href={whatsappRosterUrl(text)} target="_blank" rel="noopener noreferrer">
-              Open WhatsApp
-            </a>
           </div>
         </div>
       </div>
