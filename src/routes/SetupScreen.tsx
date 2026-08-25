@@ -16,6 +16,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useEventStore } from '@/store/eventStore';
+import { useAuth } from '@/hooks/useAuth';
 import { activeTeams } from '@/store/selectors';
 import { getFormat } from '@/logic/formats';
 import { isCentreCourt, type Court, type Player, type QualifierUnit, type Team, type TieRule } from '@/types/domain';
@@ -30,6 +31,9 @@ import { RosterShareModal } from '@/components/RosterShareModal';
 import { buildRosterShareText } from '@/utils/rosterShare';
 import {
   deleteOrganizerRegistration,
+  findSignupRegistrationForTeam,
+  getOrganizerRegistrations,
+  getOwnedSignup,
   registrationPairKey,
   reorderOrganizerRegistrations,
   updateOrganizerRegistration,
@@ -67,6 +71,7 @@ export function SetupScreen() {
   const setFormatConfig = useEventStore((s) => s.setFormatConfig);
   const startTournament = useEventStore((s) => s.startTournament);
   const lastError = useEventStore((s) => s.lastError);
+  const auth = useAuth();
   const navigate = useNavigate();
 
   const [confirmReset, setConfirmReset] = useState(false);
@@ -77,6 +82,7 @@ export function SetupScreen() {
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamActionBusyId, setTeamActionBusyId] = useState<string | null>(null);
   const [teamActionError, setTeamActionError] = useState<string | null>(null);
+  const [refreshRegistrationsVersion, setRefreshRegistrationsVersion] = useState(0);
 
   const requestRemoveTeam = (id: string) => {
     setConfirmRemoveTeamId(id);
@@ -91,29 +97,95 @@ export function SetupScreen() {
   if (!event) return null;
 
   const teams = activeTeams(event);
-  const registrationForTeam = (team: Team): SignupRegistration | undefined => {
-    if (team.signupRegistrationId) {
-      const exact = onlineRegistrations.find((registration) => registration.id === team.signupRegistrationId);
-      if (exact) return exact;
-    }
-    const key = team.signupPairKey
-      ?? registrationPairKey(team.players[0].name, team.players[1].name);
-    return onlineRegistrations.find((registration) =>
-      registration.playerTwo
-      && registrationPairKey(registration.playerOne, registration.playerTwo) === key);
+  const directRegistrationForTeamIn = (team: Team, registrations: SignupRegistration[]) =>
+    findSignupRegistrationForTeam(registrations, {
+      signupRegistrationId: team.signupRegistrationId,
+      signupPairKey: team.signupPairKey,
+      playerOne: team.players[0].name,
+      playerTwo: team.players[1].name,
+    });
+  const registrationForTeamIn = (team: Team, registrations: SignupRegistration[]) => {
+    const direct = directRegistrationForTeamIn(team, registrations);
+    if (direct) return direct;
+
+    // Legacy imported teams (created before signupRegistrationId existed) may
+    // already have been renamed locally, so names are no longer enough to
+    // identify their public row. Preserve any exact matches first, then pair
+    // the remaining local roster and confirmed online rows in their original
+    // display order. Saving the next edit records the stable id permanently.
+    const claimedRegistrationIds = new Set(
+      teams
+        .map((candidate) => directRegistrationForTeamIn(candidate, registrations)?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const unmatchedTeams = teams.filter((candidate) =>
+      !directRegistrationForTeamIn(candidate, registrations));
+    const availableRegistrations = registrations.filter((registration) =>
+      registration.status === 'confirmed'
+      && Boolean(registration.playerTwo)
+      && !claimedRegistrationIds.has(registration.id));
+    const legacyIndex = unmatchedTeams.findIndex((candidate) => candidate.id === team.id);
+    return legacyIndex >= 0 ? availableRegistrations[legacyIndex] : undefined;
   };
+  const registrationForTeam = (team: Team): SignupRegistration | undefined =>
+    registrationForTeamIn(team, onlineRegistrations);
   const confirmedRegistration = confirmedTeam ? registrationForTeam(confirmedTeam) : undefined;
   const editingTeam = editingTeamId ? teams.find((team) => team.id === editingTeamId) ?? null : null;
+
+  const loadAuthoritativeRegistrations = async (): Promise<{
+    signup: SignupEvent | null;
+    registrations: SignupRegistration[];
+  }> => {
+    let signup = signupDetails;
+    if (auth.user) {
+      signup = await getOwnedSignup(auth.user.id, event.id) ?? signup;
+    }
+    if (!signup) return { signup: null, registrations: [] };
+    const registrations = await getOrganizerRegistrations(signup.id);
+    setSignupDetails(signup);
+    setOnlineRegistrations(registrations);
+    return { signup, registrations };
+  };
+
+  const resolveRegistrationForTeam = async (team: Team): Promise<{
+    signup: SignupEvent | null;
+    registration?: SignupRegistration;
+  }> => {
+    const authoritative = await loadAuthoritativeRegistrations();
+    return {
+      signup: authoritative.signup,
+      registration: registrationForTeamIn(team, authoritative.registrations),
+    };
+  };
+
+  const openTeamEdit = async (teamId: string) => {
+    const team = teams.find((row) => row.id === teamId);
+    if (!team) return;
+    setTeamActionBusyId(teamId);
+    setTeamActionError(null);
+    try {
+      await resolveRegistrationForTeam(team);
+      setEditingTeamId(teamId);
+    } catch (err) {
+      setTeamActionError((err as Error).message);
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
 
   const removeSelectedTeam = async () => {
     if (!confirmedTeam) return;
     setTeamActionBusyId(confirmedTeam.id);
     setTeamActionError(null);
     try {
-      if (confirmedRegistration) {
-        await deleteOrganizerRegistration(confirmedRegistration.id);
+      const { signup, registration } = await resolveRegistrationForTeam(confirmedTeam);
+      if (registration) {
+        await deleteOrganizerRegistration(registration.id);
         setOnlineRegistrations((current) =>
-          current.filter((registration) => registration.id !== confirmedRegistration.id));
+          current.filter((row) => row.id !== registration.id));
+        setRefreshRegistrationsVersion((version) => version + 1);
+      } else if (signup && (confirmedTeam.signupRegistrationId || confirmedTeam.signupPairKey)) {
+        throw new Error('This team is linked to the public sign-up but its server record could not be found. Refresh and try again.');
       }
       removeTeam(confirmedTeam.id);
       setConfirmRemoveTeamId(null);
@@ -131,12 +203,13 @@ export function SetupScreen() {
     contact: string;
   }) => {
     if (!editingTeam) return;
-    const registration = registrationForTeam(editingTeam);
     setTeamActionBusyId(editingTeam.id);
     setTeamActionError(null);
     try {
+      const { signup, registration } = await resolveRegistrationForTeam(editingTeam);
       if (registration) {
-        await updateOrganizerRegistration(registration.id, draft);
+        const contact = draft.contact.trim() || registration.contact || '';
+        await updateOrganizerRegistration(registration.id, { ...draft, contact });
         setOnlineRegistrations((current) => current.map((row) =>
           row.id === registration.id
             ? {
@@ -144,9 +217,12 @@ export function SetupScreen() {
                 teamName: draft.teamName.trim(),
                 playerOne: draft.playerOne.trim(),
                 playerTwo: draft.playerTwo.trim(),
-                contact: draft.contact.trim(),
+                contact,
               }
             : row));
+        setRefreshRegistrationsVersion((version) => version + 1);
+      } else if (signup && (editingTeam.signupRegistrationId || editingTeam.signupPairKey)) {
+        throw new Error('This team is linked to the public sign-up but its server record could not be found. Refresh and try again.');
       }
       updateTeam(editingTeam.id, {
         name: draft.teamName,
@@ -166,23 +242,24 @@ export function SetupScreen() {
   };
 
   const moveTeams = async (orderedIds: string[]) => {
-    reorderTeams(orderedIds);
-    const registrationIds = orderedIds
-      .map((id) => teams.find((team) => team.id === id))
-      .map((team) => team ? registrationForTeam(team)?.id : undefined)
-      .filter((id): id is string => Boolean(id));
-    const signupEventId = onlineRegistrations.find((registration) =>
-      registrationIds.includes(registration.id))?.signupEventId;
-    if (!signupEventId || registrationIds.length < 2) return;
     setTeamActionBusyId('reorder');
     setTeamActionError(null);
     try {
-      await reorderOrganizerRegistrations(signupEventId, registrationIds);
-      const ranks = new Map(registrationIds.map((id, index) => [id, index + 1]));
-      setOnlineRegistrations((current) => current.map((registration) => ({
-        ...registration,
-        organizerRank: ranks.get(registration.id) ?? registration.organizerRank,
-      })));
+      const { signup, registrations } = await loadAuthoritativeRegistrations();
+      const registrationIds = orderedIds
+        .map((id) => teams.find((team) => team.id === id))
+        .map((team) => team ? registrationForTeamIn(team, registrations)?.id : undefined)
+        .filter((id): id is string => Boolean(id));
+      if (signup && registrationIds.length >= 2) {
+        await reorderOrganizerRegistrations(signup.id, registrationIds);
+        const ranks = new Map(registrationIds.map((id, index) => [id, index + 1]));
+        setOnlineRegistrations((current) => current.map((registration) => ({
+          ...registration,
+          organizerRank: ranks.get(registration.id) ?? registration.organizerRank,
+        })));
+        setRefreshRegistrationsVersion((version) => version + 1);
+      }
+      reorderTeams(orderedIds);
     } catch (err) {
       setTeamActionError((err as Error).message);
     } finally {
@@ -452,7 +529,7 @@ export function SetupScreen() {
           teams={teams}
           onAddTeams={addTeams}
           onRegistrationsChange={setOnlineRegistrations}
-          registrationsSnapshot={onlineRegistrations}
+          refreshRegistrationsVersion={refreshRegistrationsVersion}
           onSignupChange={setSignupDetails}
         />
         {event.status !== 'setup' && (
@@ -474,10 +551,7 @@ export function SetupScreen() {
           canReorder={event.status === 'setup'}
           busyId={teamActionBusyId}
           onReorder={(ids) => void moveTeams(ids)}
-          onEdit={(teamId) => {
-            setTeamActionError(null);
-            setEditingTeamId(teamId);
-          }}
+          onEdit={(teamId) => void openTeamEdit(teamId)}
           onRemove={requestRemoveTeam}
           onAvatarUpload={(teamId, playerIndex, dataUrl) =>
             setPlayerAvatar(teamId, playerIndex, { photoDataUrl: dataUrl })}

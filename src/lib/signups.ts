@@ -33,6 +33,13 @@ export interface SignupRegistration {
   organizerRank?: number | null;
 }
 
+export interface SignupTeamIdentity {
+  signupRegistrationId?: string;
+  signupPairKey?: string;
+  playerOne: string;
+  playerTwo: string;
+}
+
 export interface SignupTemplate {
   id: string;
   ownerUserId: string;
@@ -512,4 +519,23 @@ export function registrationPairKey(playerOne: string, playerTwo: string): strin
     .map((name) => name.trim().toLocaleLowerCase())
     .sort()
     .join('|');
+}
+
+/** Match a local organiser roster team to its authoritative online row.
+ * The stored registration id wins. The original pair key deliberately comes
+ * next so a locally renamed team can still find the older public row and push
+ * the organiser's edit to it. */
+export function findSignupRegistrationForTeam(
+  registrations: SignupRegistration[],
+  team: SignupTeamIdentity,
+): SignupRegistration | undefined {
+  if (team.signupRegistrationId) {
+    const exact = registrations.find((registration) => registration.id === team.signupRegistrationId);
+    if (exact) return exact;
+  }
+  const pairKey = team.signupPairKey
+    ?? registrationPairKey(team.playerOne, team.playerTwo);
+  return registrations.find((registration) =>
+    registration.playerTwo
+    && registrationPairKey(registration.playerOne, registration.playerTwo) === pairKey);
 }

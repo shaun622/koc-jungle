@@ -91,7 +91,7 @@ export function EventSignupPanel({
   teams,
   onAddTeams,
   onRegistrationsChange,
-  registrationsSnapshot,
+  refreshRegistrationsVersion,
   onSignupChange,
 }: {
   event: EventState;
@@ -99,7 +99,7 @@ export function EventSignupPanel({
   teams: Team[];
   onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
   onRegistrationsChange?: (registrations: SignupRegistration[]) => void;
-  registrationsSnapshot?: SignupRegistration[];
+  refreshRegistrationsVersion?: number;
   onSignupChange?: (signup: SignupEvent | null) => void;
 }) {
   const auth = useAuth();
@@ -134,10 +134,6 @@ export function EventSignupPanel({
   useEffect(() => {
     onRegistrationsChange?.(registrations);
   }, [onRegistrationsChange, registrations]);
-
-  useEffect(() => {
-    if (registrationsSnapshot) setRegistrations(registrationsSnapshot);
-  }, [registrationsSnapshot]);
 
   useEffect(() => {
     onSignupChange?.(signup);
@@ -224,6 +220,11 @@ export function EventSignupPanel({
     }, 8_000);
     return () => window.clearInterval(timer);
   }, [autoAddPairs, event.status, expanded, refreshRegistrations, signup]);
+
+  useEffect(() => {
+    if (!signup || !refreshRegistrationsVersion) return;
+    void refreshRegistrations(signup.id).catch((err: Error) => setError(err.message));
+  }, [refreshRegistrations, refreshRegistrationsVersion, signup]);
 
   const confirmed = useMemo(
     () => registrations.filter((registration) => registration.status === 'confirmed'),

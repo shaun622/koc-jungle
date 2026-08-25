@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
-  cancelPublicRegistration,
   getPublicSignup,
   joinPublicSingle,
   registerPublicTeam,
@@ -26,15 +25,9 @@ function registrationLabel(registration: SignupRegistration): string {
   return registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
-function storageKey(slug: string): string {
-  return `koc-signup-registration-${slug}`;
-}
-
 export function PublicSignupScreen() {
   const { accountSlug = '', slug = '' } = useParams();
   const navigate = useNavigate();
-  const signupKey = accountSlug ? `${accountSlug}/${slug}` : slug;
-  const [searchParams] = useSearchParams();
   const [data, setData] = useState<PublicSignup | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -44,16 +37,6 @@ export function PublicSignupScreen() {
     position: number;
     kind: 'solo' | 'pair' | 'joined';
   } | null>(null);
-  const [cancelToken, setCancelToken] = useState<string | null>(() => {
-    const fromUrl = searchParams.get('manage');
-    if (fromUrl) return fromUrl;
-    try {
-      return localStorage.getItem(storageKey(signupKey));
-    } catch {
-      return null;
-    }
-  });
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [signupMode, setSignupMode] = useState<'pair' | 'solo'>('pair');
   const [teamName, setTeamName] = useState('');
   const [playerOne, setPlayerOne] = useState('');
@@ -112,12 +95,6 @@ export function PublicSignupScreen() {
         playerTwo: signupMode === 'pair' ? playerTwo : '',
         contact,
       });
-      try {
-        localStorage.setItem(storageKey(signupKey), registered.cancelToken);
-      } catch {
-        // The private cancellation token is also kept in component state.
-      }
-      setCancelToken(registered.cancelToken);
       setResult({ status: registered.status, position: registered.position, kind: signupMode });
       setTeamName('');
       setPlayerOne('');
@@ -161,28 +138,6 @@ export function PublicSignupScreen() {
       setJoinName('');
       setJoinContact('');
       setResult({ status: joined.status, position: joined.position, kind: 'joined' });
-      await refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function cancelRegistration() {
-    if (!cancelToken) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await cancelPublicRegistration(slug, cancelToken, accountSlug || undefined);
-      try {
-        localStorage.removeItem(storageKey(signupKey));
-      } catch {
-        // Ignore unavailable storage; cancellation already succeeded.
-      }
-      setCancelToken(null);
-      setResult(null);
-      setConfirmCancel(false);
       await refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -322,6 +277,7 @@ export function PublicSignupScreen() {
                     : 'Your pair is now on the live confirmed list.'
                   : `You are waiting-list position ${result.position}. The list updates automatically when places change.`}
               </p>
+              <p className="signup-public-private">Need to change or cancel it? Message the organiser. Only the organiser can edit the live list.</p>
               <button className="btn full" type="button" onClick={() => setResult(null)}>Add another sign-up</button>
             </div>
           ) : (
@@ -372,28 +328,13 @@ export function PublicSignupScreen() {
                     {submitting ? 'Registering…' : signupMode === 'pair' ? 'Register our pair' : 'Register me'}
                   </button>
                   <p className="signup-public-private">
-                    Pairs have priority over solo players. Contact details are visible only to the organiser.
+                    Pairs have priority over solo players. Contact details are visible only to the organiser. To change or cancel a registration, message the organiser.
                   </p>
                 </div>
               )}
             </>
           )}
 
-          {cancelToken && (
-            <div className="signup-public-cancel">
-              {!confirmCancel ? (
-                <button type="button" className="signup-public-text-button" onClick={() => setConfirmCancel(true)}>
-                  Cancel my registration
-                </button>
-              ) : (
-                <div>
-                  <p>Remove your registration? The confirmed list will update automatically.</p>
-                  <button className="btn danger" type="button" disabled={submitting} onClick={cancelRegistration}>Yes, cancel</button>
-                  <button className="btn ghost" type="button" onClick={() => setConfirmCancel(false)}>Keep my place</button>
-                </div>
-              )}
-            </div>
-          )}
           {error && <div className="signup-message error">{error}</div>}
         </section>
       </div>
