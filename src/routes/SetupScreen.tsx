@@ -22,17 +22,18 @@ import { isCentreCourt, type Court, type Player, type QualifierUnit, type Team, 
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
-import { ShareCard } from '@/components/ShareCard';
 import { Avatar } from '@/components/Avatar';
-import { captureAndShare } from '@/utils/shareCard';
 import { cropImageFileToAvatar } from '@/utils/avatar';
 import { EventSignupPanel } from '@/components/EventSignupPanel';
 import { Portal } from '@/components/Portal';
+import { RosterShareModal } from '@/components/RosterShareModal';
+import { buildRosterShareText } from '@/utils/rosterShare';
 import {
   deleteOrganizerRegistration,
   registrationPairKey,
   reorderOrganizerRegistrations,
   updateOrganizerRegistration,
+  type SignupEvent,
   type SignupRegistration,
 } from '@/lib/signups';
 
@@ -70,13 +71,12 @@ export function SetupScreen() {
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
-  const [sharingRoster, setSharingRoster] = useState(false);
-  const [rosterShareError, setRosterShareError] = useState<string | null>(null);
+  const [rosterShareOpen, setRosterShareOpen] = useState(false);
+  const [signupDetails, setSignupDetails] = useState<SignupEvent | null>(null);
   const [onlineRegistrations, setOnlineRegistrations] = useState<SignupRegistration[]>([]);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamActionBusyId, setTeamActionBusyId] = useState<string | null>(null);
   const [teamActionError, setTeamActionError] = useState<string | null>(null);
-  const rosterShareRef = useRef<HTMLDivElement>(null);
 
   const requestRemoveTeam = (id: string) => {
     setConfirmRemoveTeamId(id);
@@ -453,6 +453,7 @@ export function SetupScreen() {
           onAddTeams={addTeams}
           onRegistrationsChange={setOnlineRegistrations}
           registrationsSnapshot={onlineRegistrations}
+          onSignupChange={setSignupDetails}
         />
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
@@ -488,30 +489,11 @@ export function SetupScreen() {
         <div className="setup-actions">
           <button
             className="btn"
-            disabled={sharingRoster || teams.length === 0}
-            onClick={async () => {
-              if (!rosterShareRef.current) return;
-              setSharingRoster(true);
-              setRosterShareError(null);
-              try {
-                const r = await captureAndShare(rosterShareRef.current, {
-                  filename: `koc-${event.name.replace(/[^a-z0-9-_]+/gi, '-')}-roster.png`,
-                  shareTitle: `${event.name} lineup`,
-                  shareText: 'Tonight\'s padel lineup 🎾',
-                });
-                if (!r.ok && r.error) setRosterShareError(r.error);
-              } finally {
-                setSharingRoster(false);
-              }
-            }}
+            disabled={teams.length === 0}
+            onClick={() => setRosterShareOpen(true)}
           >
-            {sharingRoster ? 'Generating…' : 'Share roster'}
+            Share roster
           </button>
-          {rosterShareError && (
-            <span style={{ flexBasis: '100%', color: 'var(--red)', fontSize: 14 }}>
-              {rosterShareError}
-            </span>
-          )}
           {event.status !== 'setup' ? (
             <button
               className="btn full primary lg"
@@ -583,8 +565,6 @@ export function SetupScreen() {
         onCancel={() => setConfirmReset(false)}
       />
 
-      <ShareCard ref={rosterShareRef} variant="roster" event={event} />
-
       <ConfirmDialog
         open={!!confirmedTeam}
         title="Remove this team completely?"
@@ -610,6 +590,19 @@ export function SetupScreen() {
           saving={teamActionBusyId === editingTeam.id}
           onSave={saveTeamEdit}
           onClose={() => setEditingTeamId(null)}
+        />
+      )}
+
+      {rosterShareOpen && (
+        <RosterShareModal
+          title={`${signupDetails?.title || event.name} roster`}
+          text={buildRosterShareText({
+            event,
+            teams,
+            signup: signupDetails,
+            registrations: onlineRegistrations,
+          })}
+          onClose={() => setRosterShareOpen(false)}
         />
       )}
     </div>

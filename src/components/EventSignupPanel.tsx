@@ -92,6 +92,7 @@ export function EventSignupPanel({
   onAddTeams,
   onRegistrationsChange,
   registrationsSnapshot,
+  onSignupChange,
 }: {
   event: EventState;
   expectedTeams: number;
@@ -99,6 +100,7 @@ export function EventSignupPanel({
   onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
   onRegistrationsChange?: (registrations: SignupRegistration[]) => void;
   registrationsSnapshot?: SignupRegistration[];
+  onSignupChange?: (signup: SignupEvent | null) => void;
 }) {
   const auth = useAuth();
   const [expanded, setExpanded] = useState(false);
@@ -136,6 +138,10 @@ export function EventSignupPanel({
   useEffect(() => {
     if (registrationsSnapshot) setRegistrations(registrationsSnapshot);
   }, [registrationsSnapshot]);
+
+  useEffect(() => {
+    onSignupChange?.(signup);
+  }, [onSignupChange, signup]);
 
   useEffect(() => {
     if (!auth.user) return;
