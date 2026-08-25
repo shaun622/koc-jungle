@@ -36,6 +36,13 @@ interface Session {
   /** Highest updated_at (ms) we have either pushed or received. Used to
    *  reject stale Realtime echoes of our own writes. */
   lastKnownAt: number;
+  /** True after the operator deliberately clears the current event. While
+   *  set, late pull/realtime responses must not resurrect the cancelled
+   *  event. Creating or loading another event clears this guard. */
+  clearedLocally: boolean;
+  /** Remote cleanup started by cancellation. A newly created event waits for
+   *  this before uploading so a slow delete cannot remove the replacement. */
+  clearPromise: Promise<void> | null;
 }
 
 let active: Session | null = null;
@@ -59,7 +66,7 @@ export function startCloudSync(userId: string): Stop {
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
       .limit(1);
-    if (active?.userId !== userId) return; // user changed mid-fetch
+    if (active?.userId !== userId || active.clearedLocally) return; // user changed or cancelled mid-fetch
     const row = data?.[0];
     if (row?.state) {
       active.lastKnownAt = new Date(row.updated_at as string).getTime();
@@ -84,7 +91,7 @@ export function startCloudSync(userId: string): Stop {
         const next = payload.new as
           | { state: EventState; updated_at: string }
           | null;
-        if (!active || !next?.state) return;
+        if (!active || active.clearedLocally || !next?.state) return;
         const remoteAt = new Date(next.updated_at).getTime();
         if (remoteAt <= active.lastKnownAt) return; // our own echo
         active.lastKnownAt = remoteAt;
@@ -96,12 +103,41 @@ export function startCloudSync(userId: string): Stop {
   // 3. Subscribe to local store changes; debounce 1s; upsert.
   const unsubStore = useEventStore.subscribe((state) => {
     if (!supabase || !active || active.userId !== userId) return;
-    if (!state.event) return;
+    if (!state.event) {
+      if (active.pushTimer) {
+        clearTimeout(active.pushTimer);
+        active.pushTimer = null;
+      }
+      if (active.clearedLocally) return;
+      active.clearedLocally = true;
+      active.lastKnownAt = Math.max(active.lastKnownAt, Date.now());
+      // This app has one active synced event. Older rows are stale snapshots
+      // from replaced events, so remove them too; otherwise the next launch
+      // would pull the previous event after the current row is deleted.
+      const session = active;
+      const clearPromise = clearRemoteEvents(userId);
+      session.clearPromise = clearPromise;
+      void clearPromise.finally(() => {
+        if (active === session && active.clearPromise === clearPromise) {
+          active.clearPromise = null;
+        }
+      });
+      return;
+    }
+    active.clearedLocally = false;
     if (active.pushTimer) clearTimeout(active.pushTimer);
     active.pushTimer = setTimeout(() => void pushOnce(userId, state.event!), PUSH_DEBOUNCE_MS);
   });
 
-  active = { userId, channel, unsubStore, pushTimer: null, lastKnownAt: 0 };
+  active = {
+    userId,
+    channel,
+    unsubStore,
+    pushTimer: null,
+    lastKnownAt: 0,
+    clearedLocally: false,
+    clearPromise: null,
+  };
   return () => stopCloudSync();
 }
 
@@ -125,7 +161,10 @@ export async function flushCloudSync(): Promise<void> {
 }
 
 async function pushOnce(userId: string, event: EventState): Promise<void> {
-  if (!supabase || !active || active.userId !== userId) return;
+  if (!supabase || !active || active.userId !== userId || active.clearedLocally) return;
+  const session = active;
+  if (session.clearPromise) await session.clearPromise;
+  if (!active || active !== session || active.userId !== userId || active.clearedLocally) return;
   const now = Date.now();
   active.lastKnownAt = Math.max(active.lastKnownAt, now);
   const { error } = await supabase.from('events').upsert(
@@ -141,5 +180,18 @@ async function pushOnce(userId: string, event: EventState): Promise<void> {
     // Non-fatal — surface to console; offline writes will retry on the
     // next store change once connectivity returns.
     console.warn('[cloudSync] push failed:', error.message);
+  }
+}
+
+async function clearRemoteEvents(userId: string): Promise<void> {
+  if (!supabase || !active || active.userId !== userId || !active.clearedLocally) return;
+  const { error } = await supabase
+    .from('events')
+    .delete()
+    .eq('user_id', userId);
+  if (error) {
+    // The local cancellation remains authoritative for this session and stale
+    // realtime responses stay blocked. A later cancellation can retry.
+    console.warn('[cloudSync] clear failed:', error.message);
   }
 }
