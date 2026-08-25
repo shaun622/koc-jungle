@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { supabase } from '@/lib/supabase';
+import { publicSupabase, supabase } from '@/lib/supabase';
 
 export interface SignupEvent {
   id: string;
@@ -179,6 +179,11 @@ function mapTemplate(row: SignupTemplateRow): SignupTemplate {
 function requireSupabase() {
   if (!supabase) throw new Error('Online sign-up is not configured yet.');
   return supabase;
+}
+
+function requirePublicSupabase() {
+  if (!publicSupabase) throw new Error('Online sign-up is not configured yet.');
+  return publicSupabase;
 }
 
 export async function getOwnedSignup(
@@ -363,7 +368,7 @@ export async function reorderOrganizerRegistrations(
 }
 
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
-  const client = requireSupabase();
+  const client = requirePublicSupabase();
   const args = accountSlug
     ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
     : { p_share_slug: publicSlug };
@@ -381,7 +386,7 @@ export async function registerPublicTeam(input: {
   playerTwo: string;
   contact: string;
 }): Promise<{ registrationId: string; cancelToken: string; status: 'confirmed' | 'waitlisted'; position: number }> {
-  const client = requireSupabase();
+  const client = requirePublicSupabase();
   const slugArgs = input.accountSlug
     ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
     : { p_share_slug: input.publicSlug };
@@ -408,7 +413,7 @@ export async function joinPublicSingle(input: {
   playerName: string;
   contact: string;
 }): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted'; position: number }> {
-  const client = requireSupabase();
+  const client = requirePublicSupabase();
   const slugArgs = input.accountSlug
     ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
     : { p_share_slug: input.publicSlug };
@@ -431,7 +436,7 @@ export async function cancelPublicRegistration(
   cancelToken: string,
   accountSlug?: string,
 ): Promise<void> {
-  const client = requireSupabase();
+  const client = requirePublicSupabase();
   const slugArgs = accountSlug
     ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
     : { p_share_slug: publicSlug };

@@ -37,6 +37,22 @@ export const supabase: SupabaseClient | null =
       })
     : null;
 
+/**
+ * Public sign-up pages never need the organiser's authenticated session.
+ * Keeping them on the main client makes every anonymous RPC wait for
+ * auth.getSession(), which can be held up by another PWA tab refreshing its
+ * token. A fixed anonymous access token keeps these links independent and a
+ * bounded PostgREST timeout prevents a transient network request from leaving
+ * the page on "Loading event" forever.
+ */
+export const publicSupabase: SupabaseClient | null =
+  url && anonKey
+    ? createClient(url, anonKey, {
+        accessToken: async () => anonKey,
+        db: { timeout: 12_000 },
+      })
+    : null;
+
 export function isCloudConfigured(): boolean {
   return supabase !== null;
 }

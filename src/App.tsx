@@ -97,32 +97,44 @@ function OperatorShell() {
   );
 }
 
-function CloudSyncGate() {
+function OperatorCloudSyncGate() {
   const auth = useAuth();
+  const userId = auth.user?.id ?? null;
 
   // Identify the RevenueCat customer with the signed-in account so Pro
   // follows the user across devices and can be comped by user id from the
   // dashboard. Independent of cloud sync; no-op on web.
   useEffect(() => {
     if (auth.loading) return;
-    if (auth.user) logInIAP(auth.user.id);
+    if (userId) logInIAP(userId);
     else logOutIAP();
-  }, [auth.loading, auth.user]);
+  }, [auth.loading, userId]);
 
   useEffect(() => {
     if (!auth.cloudEnabled || auth.loading) return;
-    if (auth.user) {
-      const stop = startCloudSync(auth.user.id);
+    if (userId) {
+      const stop = startCloudSync(userId);
       return stop;
     }
     stopCloudSync();
-  }, [auth.cloudEnabled, auth.loading, auth.user]);
+  }, [auth.cloudEnabled, auth.loading, userId]);
+  return null;
+}
+
+function CloudSyncGate() {
+  const location = useLocation();
+  if (isPublicSignupPath(location.pathname)) return null;
+  return <OperatorCloudSyncGate />;
+}
+
+function StorageBroadcastGate() {
+  const location = useLocation();
+  useStorageBroadcast(!isPublicSignupPath(location.pathname));
   return null;
 }
 
 export function App() {
   const hydrated = useEventStore((s) => s.hydrated);
-  useStorageBroadcast();
   useApplyTheme();
 
   // Keep the local seven-day trial honest. Check at launch, once a minute
@@ -163,6 +175,7 @@ export function App() {
     <HashRouter>
       <ErrorBanner />
       <UpdatePrompt />
+      <StorageBroadcastGate />
       <CloudSyncGate />
       <RouteGate />
       <Routes>

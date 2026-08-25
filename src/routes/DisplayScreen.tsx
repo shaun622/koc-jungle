@@ -11,7 +11,6 @@ import {
 } from '@/store/selectors';
 import { isCentreCourt, type Court, type Match, type Team } from '@/types/domain';
 import { useTimer } from '@/hooks/useTimer';
-import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import { formatMs, parseDurationInput } from '@/utils/time';
 import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
@@ -44,7 +43,6 @@ interface Movement {
 }
 
 export function DisplayScreen() {
-  useStorageBroadcast();
   useAnnouncements();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);

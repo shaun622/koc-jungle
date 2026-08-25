@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
@@ -25,6 +25,14 @@ function registrationLabel(registration: SignupRegistration): string {
   return registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
+function publicLoadError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/abort|timeout|timed out/i.test(message)) {
+    return 'The event took too long to load. Check your connection and try again.';
+  }
+  return message;
+}
+
 export function PublicSignupScreen() {
   const { accountSlug = '', slug = '' } = useParams();
   const navigate = useNavigate();
@@ -47,26 +55,67 @@ export function PublicSignupScreen() {
   const [joinName, setJoinName] = useState('');
   const [joinContact, setJoinContact] = useState('');
 
-  const refresh = useCallback(async () => {
-    if (!slug) return;
-    try {
-      const next = await getPublicSignup(slug, accountSlug || undefined);
-      setData(next);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
+  const routeKey = `${accountSlug}/${slug}`;
+  const currentRouteKey = useRef(routeKey);
+  currentRouteKey.current = routeKey;
+  const refreshInFlight = useRef<{ key: string; promise: Promise<void> } | null>(null);
+
+  const refresh = useCallback((): Promise<void> => {
+    const requestKey = `${accountSlug}/${slug}`;
+    if (!slug) {
+      setError('This sign-up link is incomplete.');
       setLoading(false);
+      return Promise.resolve();
     }
+
+    const existing = refreshInFlight.current;
+    if (existing?.key === requestKey) return existing.promise;
+
+    const request = (async () => {
+      try {
+        const next = await getPublicSignup(slug, accountSlug || undefined);
+        if (currentRouteKey.current !== requestKey) return;
+        setData(next);
+        setError(null);
+      } catch (err) {
+        if (currentRouteKey.current !== requestKey) return;
+        setError(publicLoadError(err));
+      } finally {
+        if (currentRouteKey.current === requestKey) setLoading(false);
+      }
+    })();
+
+    refreshInFlight.current = { key: requestKey, promise: request };
+    void request.finally(() => {
+      if (refreshInFlight.current?.promise === request) refreshInFlight.current = null;
+    });
+    return request;
   }, [accountSlug, slug]);
 
+  const refreshAfterMutation = useCallback(async (): Promise<void> => {
+    const existing = refreshInFlight.current;
+    if (existing?.key === routeKey) await existing.promise;
+    await refresh();
+  }, [refresh, routeKey]);
+
   useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 8_000);
+    let cancelled = false;
+    let timer: number | null = null;
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const poll = async () => {
+      await refresh();
+      if (!cancelled) timer = window.setTimeout(() => void poll(), 8_000);
+    };
+
+    void poll();
     const onVisible = () => !document.hidden && void refresh();
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.clearInterval(timer);
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [refresh]);
@@ -100,7 +149,7 @@ export function PublicSignupScreen() {
       setPlayerOne('');
       setPlayerTwo('');
       setContact('');
-      await refresh();
+      await refreshAfterMutation();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -138,7 +187,7 @@ export function PublicSignupScreen() {
       setJoinName('');
       setJoinContact('');
       setResult({ status: joined.status, position: joined.position, kind: 'joined' });
-      await refresh();
+      await refreshAfterMutation();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -154,6 +203,17 @@ export function PublicSignupScreen() {
           <BrandLogo />
           <h1>Sign-up unavailable</h1>
           <p>{error ?? 'This link could not be found.'}</p>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              void refresh();
+            }}
+          >
+            Try again
+          </button>
         </div>
       </main>
     );

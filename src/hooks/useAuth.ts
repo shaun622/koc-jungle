@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { flushCloudSync } from '@/store/cloudSync';
 
 export interface AuthState {
   user: User | null;
@@ -70,7 +71,11 @@ export function useAuth(): AuthState & {
 
     async signOut() {
       if (!supabase) return;
-      await supabase.auth.signOut();
+      try {
+        await flushCloudSync();
+      } finally {
+        await supabase.auth.signOut();
+      }
     },
 
     async deleteAccount() {

@@ -20,6 +20,10 @@ create index if not exists events_updated_idx on public.events (user_id, updated
 -- Row Level Security: every user only sees / writes their own events.
 alter table public.events enable row level security;
 
+-- Realtime DELETE payloads need the former user_id as well as the primary
+-- key so the per-user subscription filter can deliver cancellations.
+alter table public.events replica identity full;
+
 drop policy if exists "events_select_own" on public.events;
 create policy "events_select_own"
   on public.events for select

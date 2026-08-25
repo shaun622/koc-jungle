@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { flushCloudSync } from '@/store/cloudSync';
 
 /**
  * Listens for a fresh service-worker version and prompts the operator to
@@ -35,14 +36,21 @@ export function UpdatePrompt() {
     if (updating) return;
     setUpdating(true);
 
-    // The current installed worker may predate clientsClaim, so keep an
-    // explicit reload fallback as well as Workbox's controlling-event reload.
-    // Event state is persisted before this prompt is shown.
-    const reload = () => window.location.reload();
-    window.setTimeout(reload, 2500);
-    void updateServiceWorker()
-      .then(() => window.setTimeout(reload, 350))
-      .catch(reload);
+    // Workbox reloads when the new worker actually takes control. Its update
+    // promise resolves as soon as SKIP_WAITING is sent, so reloading a few
+    // hundred milliseconds later can still serve the old worker. Flush first,
+    // then keep only a conservative fallback for older installed workers.
+    void (async () => {
+      const reload = () => window.location.reload();
+      const fallback = window.setTimeout(reload, 8_000);
+      try {
+        await flushCloudSync();
+        await updateServiceWorker();
+      } catch {
+        window.clearTimeout(fallback);
+        reload();
+      }
+    })();
   }
 
   if (needRefresh) {
