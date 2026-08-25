@@ -94,7 +94,7 @@ export function EventSignupPanel({
   event: EventState;
   expectedTeams: number;
   teams: Team[];
-  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string }>) => void;
+  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string }>) => void;
 }) {
   const auth = useAuth();
   const [expanded, setExpanded] = useState(false);
@@ -226,24 +226,30 @@ export function EventSignupPanel({
     ),
     [confirmed, existingPairs],
   );
+  const autoImportable = useMemo(() => {
+    const ignored = new Set(event.settings.ignoredAutoSignupPairKeys ?? []);
+    return importable.filter((registration) =>
+      !ignored.has(registrationPairKey(registration.playerOne, registration.playerTwo)));
+  }, [event.settings.ignoredAutoSignupPairKeys, importable]);
 
   useEffect(() => {
-    const signature = importable.map((registration) => registration.id).join('|');
+    const signature = autoImportable.map((registration) => registration.id).join('|');
     if (!signature) {
       lastAutoImportSignature.current = '';
       return;
     }
     if (!autoAddPairs || event.status !== 'setup' || lastAutoImportSignature.current === signature) return;
     lastAutoImportSignature.current = signature;
-    onAddTeams(importable.map((registration) => ({
+    onAddTeams(autoImportable.map((registration) => ({
       name: registration.teamName || undefined,
       player1: registration.playerOne,
       player2: registration.playerTwo,
+      signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
     })));
     setMessage(
-      `Auto-added ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players).`,
+      `Auto-added ${autoImportable.length} confirmed pair${autoImportable.length === 1 ? '' : 's'} (${autoImportable.length * 2} players).`,
     );
-  }, [autoAddPairs, event.status, importable, onAddTeams]);
+  }, [autoAddPairs, autoImportable, event.status, onAddTeams]);
 
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
@@ -371,6 +377,7 @@ export function EventSignupPanel({
       name: registration.teamName || undefined,
       player1: registration.playerOne,
       player2: registration.playerTwo,
+      signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
     })));
     setMessage(
       `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,

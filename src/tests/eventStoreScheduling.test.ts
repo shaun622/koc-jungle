@@ -45,6 +45,28 @@ describe('Americano mid-event roster corrections', () => {
     ]);
   });
 
+  it('keeps a deleted online pair out of Auto-add until it is manually restored', () => {
+    useEventStore.getState().createEvent('Imported signup teams', 'koc');
+    const signupPairKey = 'coello|tapia';
+
+    useEventStore.getState().addTeams([
+      { name: 'The Smasher', player1: 'Tapia', player2: 'Coello', signupPairKey },
+    ]);
+    const teamId = useEventStore.getState().event!.teams[0].id;
+    useEventStore.getState().removeTeam(teamId);
+
+    let event = useEventStore.getState().event!;
+    expect(event.teams).toHaveLength(0);
+    expect(event.settings.ignoredAutoSignupPairKeys).toContain(signupPairKey);
+
+    useEventStore.getState().addTeams([
+      { name: 'The Smasher', player1: 'Tapia', player2: 'Coello', signupPairKey },
+    ]);
+    event = useEventStore.getState().event!;
+    expect(event.teams).toHaveLength(1);
+    expect(event.settings.ignoredAutoSignupPairKeys).not.toContain(signupPairKey);
+  });
+
   it('fills an empty court when the missing sixth team is added before play starts', () => {
     const store = useEventStore.getState();
     store.createEvent('Americano', 'americano');

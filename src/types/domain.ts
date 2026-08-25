@@ -31,6 +31,9 @@ export interface Team {
   players: [Player, Player];
   createdAt: number;
   active: boolean;
+  /** Stable player-pair key for a team imported from online sign-up. This lets
+   *  a deliberate roster removal stay removed instead of Auto-add restoring it. */
+  signupPairKey?: string;
   /** Operator-set total that overrides the match-derived points on the
    *  standings — used to correct a wrong score after the event. */
   pointsOverride?: number;
@@ -114,6 +117,9 @@ export interface EventSettings {
   /** Target number: points/games to play to, or minutes when unit is
    *  'time'. Default 16 (points). */
   qualifierTarget?: number;
+  /** Online sign-up pairs the organiser deliberately removed from the roster.
+   *  Manual review can add one back, which clears it from this list. */
+  ignoredAutoSignupPairKeys?: string[];
 }
 
 export interface PendingAssignment {

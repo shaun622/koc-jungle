@@ -27,6 +27,13 @@ import { validateAssignments, validateQualifierScore } from '@/logic/validation'
 import { getFormat } from '@/logic/formats';
 import { hapticTick } from '@/lib/haptics';
 
+function rosterPairKey(playerOne: string, playerTwo: string): string {
+  return [playerOne, playerTwo]
+    .map((name) => name.trim().toLocaleLowerCase())
+    .sort()
+    .join('|');
+}
+
 export const STORAGE_KEY = 'koc-event-v1';
 
 interface State {
@@ -46,8 +53,8 @@ interface Actions {
   /** Start a non-qualifier format (e.g. Round Robin) directly into round 1. */
   startTournament: () => void;
 
-  addTeam: (input: { name?: string; player1: string; player2: string }) => void;
-  addTeams: (inputs: Array<{ name?: string; player1: string; player2: string }>) => void;
+  addTeam: (input: { name?: string; player1: string; player2: string; signupPairKey?: string }) => void;
+  addTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string }>) => void;
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
   removeTeam: (id: string) => void;
   setPlayerAvatar: (teamId: string, playerIndex: 0 | 1, avatar: PlayerAvatar | undefined) => void;
@@ -277,12 +284,13 @@ export const useEventStore = create<EventStore>()(
           return;
         }
         const createdAt = Date.now();
-        const addedTeams: Team[] = inputs.map(({ name, player1, player2 }, index) => ({
+        const addedTeams: Team[] = inputs.map(({ name, player1, player2, signupPairKey }, index) => ({
           id: newId(),
           name: name?.trim() || undefined,
           players: [buildPlayer(player1), buildPlayer(player2)],
           createdAt: createdAt + index,
           active: true,
+          signupPairKey,
         }));
         // Americano/Mexicano freeze their team pool in formatConfig.teams at
         // start. If the operator adds a team mid-event, append it to that pool
@@ -297,9 +305,18 @@ export const useEventStore = create<EventStore>()(
           ? { ...event.formatConfig, teams: [...(cfg.teams as string[]), ...addedTeams.map((team) => team.id)] }
           : event.formatConfig;
         const teams = [...event.teams, ...addedTeams];
+        const restoredPairKeys = new Set(
+          inputs.map(({ player1, player2, signupPairKey }) =>
+            signupPairKey ?? rosterPairKey(player1, player2)),
+        );
+        const ignoredAutoSignupPairKeys = (event.settings.ignoredAutoSignupPairKeys ?? [])
+          .filter((key) => !restoredPairKeys.has(key));
         set({
           event: refreshAmericanoSchedule(
-            event,
+            {
+              ...event,
+              settings: { ...event.settings, ignoredAutoSignupPairKeys },
+            },
             teams,
             formatConfig as Record<string, unknown>,
           ),
@@ -328,12 +345,22 @@ export const useEventStore = create<EventStore>()(
       removeTeam: (id) => {
         const event = get().event;
         if (!event) return;
+        const removedTeam = event.teams.find((team) => team.id === id);
+        const removedPairKey = removedTeam
+          ? removedTeam.signupPairKey
+            ?? rosterPairKey(removedTeam.players[0].name, removedTeam.players[1].name)
+          : null;
+        const ignoredAutoSignupPairKeys = removedPairKey
+          ? Array.from(new Set([...(event.settings.ignoredAutoSignupPairKeys ?? []), removedPairKey]))
+          : event.settings.ignoredAutoSignupPairKeys;
+        const settings = { ...event.settings, ignoredAutoSignupPairKeys };
         if (event.status === 'setup') {
-          set({ event: { ...event, teams: event.teams.filter((t) => t.id !== id) } });
+          set({ event: { ...event, settings, teams: event.teams.filter((t) => t.id !== id) } });
         } else {
           set({
             event: {
               ...event,
+              settings,
               teams: event.teams.map((t) => (t.id === id ? { ...t, active: false } : t)),
             },
           });
