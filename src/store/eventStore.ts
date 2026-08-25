@@ -53,10 +53,11 @@ interface Actions {
   /** Start a non-qualifier format (e.g. Round Robin) directly into round 1. */
   startTournament: () => void;
 
-  addTeam: (input: { name?: string; player1: string; player2: string; signupPairKey?: string }) => void;
-  addTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string }>) => void;
-  updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string }) => void;
+  addTeam: (input: { name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }) => void;
+  addTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
+  updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string; signupPairKey?: string; signupRegistrationId?: string }) => void;
   removeTeam: (id: string) => void;
+  reorderTeams: (orderedIds: string[]) => void;
   setPlayerAvatar: (teamId: string, playerIndex: 0 | 1, avatar: PlayerAvatar | undefined) => void;
   setPointsOverride: (teamId: string, value: number | undefined) => void;
 
@@ -284,13 +285,14 @@ export const useEventStore = create<EventStore>()(
           return;
         }
         const createdAt = Date.now();
-        const addedTeams: Team[] = inputs.map(({ name, player1, player2, signupPairKey }, index) => ({
+        const addedTeams: Team[] = inputs.map(({ name, player1, player2, signupPairKey, signupRegistrationId }, index) => ({
           id: newId(),
           name: name?.trim() || undefined,
           players: [buildPlayer(player1), buildPlayer(player2)],
           createdAt: createdAt + index,
           active: true,
           signupPairKey,
+          signupRegistrationId,
         }));
         // Americano/Mexicano freeze their team pool in formatConfig.teams at
         // start. If the operator adds a team mid-event, append it to that pool
@@ -336,6 +338,10 @@ export const useEventStore = create<EventStore>()(
               patch.player1 !== undefined ? { ...t.players[0], name: patch.player1.trim() } : t.players[0],
               patch.player2 !== undefined ? { ...t.players[1], name: patch.player2.trim() } : t.players[1],
             ],
+            signupPairKey: patch.signupPairKey === undefined ? t.signupPairKey : patch.signupPairKey,
+            signupRegistrationId: patch.signupRegistrationId === undefined
+              ? t.signupRegistrationId
+              : patch.signupRegistrationId,
           };
           return updated;
         });
@@ -365,6 +371,22 @@ export const useEventStore = create<EventStore>()(
             },
           });
         }
+      },
+
+      reorderTeams: (orderedIds) => {
+        const event = get().event;
+        if (!event || orderedIds.length === 0) return;
+        const positions = new Map(orderedIds.map((id, index) => [id, index]));
+        const originalPositions = new Map(event.teams.map((team, index) => [team.id, index]));
+        const teams = event.teams.slice().sort((a, b) => {
+          const aPosition = positions.get(a.id);
+          const bPosition = positions.get(b.id);
+          if (aPosition !== undefined && bPosition !== undefined) return aPosition - bPosition;
+          if (aPosition !== undefined) return -1;
+          if (bPosition !== undefined) return 1;
+          return (originalPositions.get(a.id) ?? 0) - (originalPositions.get(b.id) ?? 0);
+        });
+        set({ event: { ...event, teams } });
       },
 
       setPlayerAvatar: (teamId, playerIndex, avatar) => {

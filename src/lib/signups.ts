@@ -30,6 +30,7 @@ export interface SignupRegistration {
   status: 'confirmed' | 'waitlisted' | 'cancelled';
   position: number;
   createdAt: string;
+  organizerRank?: number | null;
 }
 
 export interface SignupTemplate {
@@ -97,6 +98,7 @@ interface SignupRegistrationRow {
   player_two_contact: string | null;
   status: SignupRegistration['status'];
   created_at: string;
+  organizer_rank?: number | null;
 }
 
 interface SignupTemplateRow {
@@ -146,6 +148,7 @@ function mapRegistration(row: SignupRegistrationRow, position: number): SignupRe
     status: row.status,
     position,
     createdAt: row.created_at,
+    organizerRank: row.organizer_rank ?? null,
   };
 }
 
@@ -298,6 +301,9 @@ export async function getOrganizerRegistrations(
     if (statusDifference) return statusDifference;
     const pairDifference = Number(Boolean(b.player_two?.trim())) - Number(Boolean(a.player_two?.trim()));
     if (pairDifference) return pairDifference;
+    const rankDifference = (a.organizer_rank ?? Number.MAX_SAFE_INTEGER)
+      - (b.organizer_rank ?? Number.MAX_SAFE_INTEGER);
+    if (rankDifference) return rankDifference;
     return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
   });
   const counters = { confirmed: 0, waitlisted: 0, cancelled: 0 };
@@ -305,6 +311,48 @@ export async function getOrganizerRegistrations(
     counters[row.status] += 1;
     return mapRegistration(row, counters[row.status]);
   });
+}
+
+export async function updateOrganizerRegistration(
+  registrationId: string,
+  patch: { teamName: string; playerOne: string; playerTwo: string; contact?: string },
+): Promise<void> {
+  const client = requireSupabase();
+  const values: Record<string, string> = {
+    team_name: patch.teamName.trim(),
+    player_one: patch.playerOne.trim(),
+    player_two: patch.playerTwo.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.contact !== undefined) values.contact = patch.contact.trim();
+  const { error } = await client
+    .from('signup_registrations')
+    .update(values)
+    .eq('id', registrationId)
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteOrganizerRegistration(registrationId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_delete_signup_registration', {
+    p_registration_id: registrationId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function reorderOrganizerRegistrations(
+  signupEventId: string,
+  registrationIds: string[],
+): Promise<void> {
+  if (registrationIds.length === 0) return;
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_reorder_signup_registrations', {
+    p_event_id: signupEventId,
+    p_registration_ids: registrationIds,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {

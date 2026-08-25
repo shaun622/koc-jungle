@@ -1032,7 +1032,7 @@ button {
 }
 .setup-team-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto;
+  grid-template-columns: 24px 26px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -1040,17 +1040,78 @@ button {
   border: 1px solid var(--line-soft);
   border-radius: 10px;
 }
+.setup-team-drag {
+  width: 24px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--text-2);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+.setup-team-drag:hover:not(:disabled) { color: var(--text-0); }
+.setup-team-drag:active:not(:disabled) { cursor: grabbing; }
+.setup-team-drag:disabled { opacity: .3; cursor: default; }
 .setup-team-num {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-2);
   font-weight: 700;
 }
-.setup-team-inputs {
+.setup-team-identity { min-width: 0; }
+.setup-team-identity > strong {
+  display: block;
+  margin: 0 0 5px 4px;
+  color: var(--text-0);
+  font-size: 13px;
+}
+.setup-team-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
+.setup-team-pair .setup-input[readonly] {
+  cursor: default;
+  color: var(--text-0);
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg));
+}
+.setup-team-actions { display: flex; gap: 5px; }
+.setup-team-action {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  color: var(--text-1);
+  background: color-mix(in srgb, var(--panel) 76%, var(--bg));
+  cursor: pointer;
+}
+.setup-team-action .icon { width: 17px; height: 17px; }
+.setup-team-action:hover:not(:disabled) { color: var(--text-0); border-color: var(--line); }
+.setup-team-action.danger:hover:not(:disabled) {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 44%, var(--line));
+  background: color-mix(in srgb, var(--red) 8%, var(--bg));
+}
+.setup-team-action:disabled { opacity: .45; cursor: wait; }
+.edit-team-modal { max-width: 520px; }
+.edit-team-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.edit-team-heading h2 { margin: 0; }
+.edit-team-heading p { margin: 5px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.edit-team-fields { display: grid; gap: 11px; margin-top: 18px; }
+.edit-team-fields label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 700;
+}
+.edit-team-fields label small { color: var(--text-2); font-weight: 500; }
 .setup-court-row {
   display: grid;
   grid-template-columns: 22px 32px 1fr 110px auto;
@@ -6769,15 +6830,12 @@ button {
 
   /* Team row */
   .setup-team-row {
-    grid-template-columns: 28px minmax(0, 1fr) 30px;
+    grid-template-columns: 22px 22px minmax(0, 1fr) auto;
     padding: 10px;
-    gap: 8px;
-  }
-  .setup-team-inputs {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px;
-    min-width: 0;
   }
+  .setup-team-actions { flex-direction: column; }
+  .setup-team-action { width: 34px; height: 34px; }
 
   /* New team form: stack vertically */
   .setup-col > div[style*='grid-template-columns: 1fr 1fr 1fr auto'] {
@@ -7043,7 +7101,7 @@ button {
   .setup-form {
     grid-template-columns: 1fr;
   }
-  .setup-team-inputs {
+  .setup-team-pair {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
@@ -7312,7 +7370,7 @@ button {
 @media (max-width: 600px) {
   /* Stack the two player-name inputs on any phone (not just <=500px) so
      names aren't crammed into ~130px columns. */
-  .setup-team-inputs {
+  .setup-team-pair {
     grid-template-columns: minmax(0, 1fr);
   }
   .display-toolbar {

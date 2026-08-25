@@ -67,6 +67,36 @@ describe('Americano mid-event roster corrections', () => {
     expect(event.settings.ignoredAutoSignupPairKeys).not.toContain(signupPairKey);
   });
 
+  it('reorders teams without losing their online signup identity', () => {
+    useEventStore.getState().createEvent('Ordered signup teams', 'koc');
+    useEventStore.getState().addTeams([
+      {
+        name: 'First',
+        player1: 'Alex',
+        player2: 'Kriss',
+        signupPairKey: 'alex|kriss',
+        signupRegistrationId: 'registration-1',
+      },
+      {
+        name: 'Second',
+        player1: 'Tapia',
+        player2: 'Coello',
+        signupPairKey: 'coello|tapia',
+        signupRegistrationId: 'registration-2',
+      },
+    ]);
+
+    const original = useEventStore.getState().event!.teams;
+    useEventStore.getState().reorderTeams([original[1].id, original[0].id]);
+
+    const reordered = useEventStore.getState().event!.teams;
+    expect(reordered.map((team) => team.name)).toEqual(['Second', 'First']);
+    expect(reordered.map((team) => team.signupRegistrationId)).toEqual([
+      'registration-2',
+      'registration-1',
+    ]);
+  });
+
   it('fills an empty court when the missing sixth team is added before play starts', () => {
     const store = useEventStore.getState();
     store.createEvent('Americano', 'americano');

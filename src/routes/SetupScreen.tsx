@@ -27,6 +27,14 @@ import { Avatar } from '@/components/Avatar';
 import { captureAndShare } from '@/utils/shareCard';
 import { cropImageFileToAvatar } from '@/utils/avatar';
 import { EventSignupPanel } from '@/components/EventSignupPanel';
+import { Portal } from '@/components/Portal';
+import {
+  deleteOrganizerRegistration,
+  registrationPairKey,
+  reorderOrganizerRegistrations,
+  updateOrganizerRegistration,
+  type SignupRegistration,
+} from '@/lib/signups';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -42,6 +50,7 @@ export function SetupScreen() {
   const addTeams = useEventStore((s) => s.addTeams);
   const updateTeam = useEventStore((s) => s.updateTeam);
   const removeTeam = useEventStore((s) => s.removeTeam);
+  const reorderTeams = useEventStore((s) => s.reorderTeams);
   const renameCourt = useEventStore((s) => s.renameCourt);
   const setCourtPoints = useEventStore((s) => s.setCourtPoints);
   const addCourt = useEventStore((s) => s.addCourt);
@@ -63,15 +72,14 @@ export function SetupScreen() {
   const [confirmRemoveTeamId, setConfirmRemoveTeamId] = useState<string | null>(null);
   const [sharingRoster, setSharingRoster] = useState(false);
   const [rosterShareError, setRosterShareError] = useState<string | null>(null);
+  const [onlineRegistrations, setOnlineRegistrations] = useState<SignupRegistration[]>([]);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [teamActionBusyId, setTeamActionBusyId] = useState<string | null>(null);
+  const [teamActionError, setTeamActionError] = useState<string | null>(null);
   const rosterShareRef = useRef<HTMLDivElement>(null);
 
   const requestRemoveTeam = (id: string) => {
-    // Hard-delete during setup is non-destructive. Otherwise confirm.
-    if (event?.status === 'setup') {
-      removeTeam(id);
-    } else {
-      setConfirmRemoveTeamId(id);
-    }
+    setConfirmRemoveTeamId(id);
   };
   const confirmedTeam =
     confirmRemoveTeamId && event
@@ -83,6 +91,104 @@ export function SetupScreen() {
   if (!event) return null;
 
   const teams = activeTeams(event);
+  const registrationForTeam = (team: Team): SignupRegistration | undefined => {
+    if (team.signupRegistrationId) {
+      const exact = onlineRegistrations.find((registration) => registration.id === team.signupRegistrationId);
+      if (exact) return exact;
+    }
+    const key = team.signupPairKey
+      ?? registrationPairKey(team.players[0].name, team.players[1].name);
+    return onlineRegistrations.find((registration) =>
+      registration.playerTwo
+      && registrationPairKey(registration.playerOne, registration.playerTwo) === key);
+  };
+  const confirmedRegistration = confirmedTeam ? registrationForTeam(confirmedTeam) : undefined;
+  const editingTeam = editingTeamId ? teams.find((team) => team.id === editingTeamId) ?? null : null;
+
+  const removeSelectedTeam = async () => {
+    if (!confirmedTeam) return;
+    setTeamActionBusyId(confirmedTeam.id);
+    setTeamActionError(null);
+    try {
+      if (confirmedRegistration) {
+        await deleteOrganizerRegistration(confirmedRegistration.id);
+        setOnlineRegistrations((current) =>
+          current.filter((registration) => registration.id !== confirmedRegistration.id));
+      }
+      removeTeam(confirmedTeam.id);
+      setConfirmRemoveTeamId(null);
+    } catch (err) {
+      setTeamActionError((err as Error).message);
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
+
+  const saveTeamEdit = async (draft: {
+    teamName: string;
+    playerOne: string;
+    playerTwo: string;
+    contact: string;
+  }) => {
+    if (!editingTeam) return;
+    const registration = registrationForTeam(editingTeam);
+    setTeamActionBusyId(editingTeam.id);
+    setTeamActionError(null);
+    try {
+      if (registration) {
+        await updateOrganizerRegistration(registration.id, draft);
+        setOnlineRegistrations((current) => current.map((row) =>
+          row.id === registration.id
+            ? {
+                ...row,
+                teamName: draft.teamName.trim(),
+                playerOne: draft.playerOne.trim(),
+                playerTwo: draft.playerTwo.trim(),
+                contact: draft.contact.trim(),
+              }
+            : row));
+      }
+      updateTeam(editingTeam.id, {
+        name: draft.teamName,
+        player1: draft.playerOne,
+        player2: draft.playerTwo,
+        signupPairKey: registration
+          ? registrationPairKey(draft.playerOne, draft.playerTwo)
+          : editingTeam.signupPairKey,
+        signupRegistrationId: registration?.id ?? editingTeam.signupRegistrationId,
+      });
+      setEditingTeamId(null);
+    } catch (err) {
+      setTeamActionError((err as Error).message);
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
+
+  const moveTeams = async (orderedIds: string[]) => {
+    reorderTeams(orderedIds);
+    const registrationIds = orderedIds
+      .map((id) => teams.find((team) => team.id === id))
+      .map((team) => team ? registrationForTeam(team)?.id : undefined)
+      .filter((id): id is string => Boolean(id));
+    const signupEventId = onlineRegistrations.find((registration) =>
+      registrationIds.includes(registration.id))?.signupEventId;
+    if (!signupEventId || registrationIds.length < 2) return;
+    setTeamActionBusyId('reorder');
+    setTeamActionError(null);
+    try {
+      await reorderOrganizerRegistrations(signupEventId, registrationIds);
+      const ranks = new Map(registrationIds.map((id, index) => [id, index + 1]));
+      setOnlineRegistrations((current) => current.map((registration) => ({
+        ...registration,
+        organizerRank: ranks.get(registration.id) ?? registration.organizerRank,
+      })));
+    } catch (err) {
+      setTeamActionError((err as Error).message);
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
   const format = getFormat(event.format);
   const expectedTeams = event.courts.length * 2;
   const qualifierEnabled = event.settings.qualifierEnabled !== false;
@@ -345,6 +451,8 @@ export function SetupScreen() {
           expectedTeams={expectedTeams}
           teams={teams}
           onAddTeams={addTeams}
+          onRegistrationsChange={setOnlineRegistrations}
+          registrationsSnapshot={onlineRegistrations}
         />
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
@@ -360,45 +468,23 @@ export function SetupScreen() {
           </div>
         )}
         <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
-        <div className="setup-list">
-          {teams.map((team, i) => (
-            <div key={team.id} className="setup-team-row">
-              <div className="setup-team-num">{i + 1}</div>
-              <div className="setup-team-inputs">
-                <PlayerInput
-                  player={team.players[0]}
-                  placeholder="Player A"
-                  onNameChange={(value) => updateTeam(team.id, { player1: value })}
-                  onAvatarUpload={(dataUrl) =>
-                    setPlayerAvatar(team.id, 0, { photoDataUrl: dataUrl })
-                  }
-                  onAvatarClear={() => setPlayerAvatar(team.id, 0, undefined)}
-                />
-                <PlayerInput
-                  player={team.players[1]}
-                  placeholder="Player B"
-                  onNameChange={(value) => updateTeam(team.id, { player2: value })}
-                  onAvatarUpload={(dataUrl) =>
-                    setPlayerAvatar(team.id, 1, { photoDataUrl: dataUrl })
-                  }
-                  onAvatarClear={() => setPlayerAvatar(team.id, 1, undefined)}
-                />
-              </div>
-              <button
-                className="op-score-btn"
-                onClick={() => requestRemoveTeam(team.id)}
-                aria-label="Remove team"
-              >
-                <Icons.Minus className="icon" />
-              </button>
-            </div>
-          ))}
-          {teams.length === 0 && (
-            <div style={{ color: 'var(--text-2)', fontSize: 14, fontStyle: 'italic' }}>
-              No teams yet.
-            </div>
-          )}
-        </div>
+        <SortableTeamList
+          teams={teams}
+          canReorder={event.status === 'setup'}
+          busyId={teamActionBusyId}
+          onReorder={(ids) => void moveTeams(ids)}
+          onEdit={(teamId) => {
+            setTeamActionError(null);
+            setEditingTeamId(teamId);
+          }}
+          onRemove={requestRemoveTeam}
+          onAvatarUpload={(teamId, playerIndex, dataUrl) =>
+            setPlayerAvatar(teamId, playerIndex, { photoDataUrl: dataUrl })}
+          onAvatarClear={(teamId, playerIndex) => setPlayerAvatar(teamId, playerIndex, undefined)}
+        />
+        {teamActionError && (
+          <div className="signup-message error" role="alert">{teamActionError}</div>
+        )}
         <div className="setup-actions">
           <button
             className="btn"
@@ -501,21 +587,264 @@ export function SetupScreen() {
 
       <ConfirmDialog
         open={!!confirmedTeam}
-        title="Remove this team mid-event?"
+        title="Remove this team completely?"
         message={
           confirmedTeam
-            ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be marked inactive, kept for history but skipped in future rotations. Their existing scores stay in the standings. The current round is unaffected; you'll need to drop in a replacement team via the rotation preview before starting the next round.`
+            ? confirmedRegistration
+              ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be removed from this competition and from the public sign-up link. This cannot be undone from the link.`
+              : event.status === 'setup'
+                ? `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be removed from this competition.`
+                : `${confirmedTeam.players[0].name} & ${confirmedTeam.players[1].name} will be marked inactive and skipped in future rotations. Existing scores stay in the standings.`
             : ''
         }
-        confirmLabel="Yes, remove"
+        confirmLabel={teamActionBusyId ? 'Removing…' : 'Remove team'}
         destructive
-        onConfirm={() => {
-          if (confirmRemoveTeamId) removeTeam(confirmRemoveTeamId);
-          setConfirmRemoveTeamId(null);
-        }}
+        onConfirm={() => void removeSelectedTeam()}
         onCancel={() => setConfirmRemoveTeamId(null)}
       />
+
+      {editingTeam && (
+        <EditTeamModal
+          team={editingTeam}
+          registration={registrationForTeam(editingTeam)}
+          saving={teamActionBusyId === editingTeam.id}
+          onSave={saveTeamEdit}
+          onClose={() => setEditingTeamId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function SortableTeamList({
+  teams,
+  canReorder,
+  busyId,
+  onReorder,
+  onEdit,
+  onRemove,
+  onAvatarUpload,
+  onAvatarClear,
+}: {
+  teams: Team[];
+  canReorder: boolean;
+  busyId: string | null;
+  onReorder: (orderedIds: string[]) => void;
+  onEdit: (teamId: string) => void;
+  onRemove: (teamId: string) => void;
+  onAvatarUpload: (teamId: string, playerIndex: 0 | 1, dataUrl: string) => void;
+  onAvatarClear: (teamId: string, playerIndex: 0 | 1) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+  const ids = teams.map((team) => team.id);
+  const handleDragEnd = (dragEvent: DragEndEvent) => {
+    const { active, over } = dragEvent;
+    if (!over || active.id === over.id) return;
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    onReorder(arrayMove(ids, from, to));
+  };
+
+  if (teams.length === 0) {
+    return (
+      <div className="setup-list">
+        <div style={{ color: 'var(--text-2)', fontSize: 14, fontStyle: 'italic' }}>No teams yet.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="setup-list">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          {teams.map((team, index) => (
+            <SortableTeamRow
+              key={team.id}
+              team={team}
+              index={index}
+              canReorder={canReorder && !busyId}
+              busy={busyId === team.id}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              onAvatarUpload={onAvatarUpload}
+              onAvatarClear={onAvatarClear}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+function SortableTeamRow({
+  team,
+  index,
+  canReorder,
+  busy,
+  onEdit,
+  onRemove,
+  onAvatarUpload,
+  onAvatarClear,
+}: {
+  team: Team;
+  index: number;
+  canReorder: boolean;
+  busy: boolean;
+  onEdit: (teamId: string) => void;
+  onRemove: (teamId: string) => void;
+  onAvatarUpload: (teamId: string, playerIndex: 0 | 1, dataUrl: string) => void;
+  onAvatarClear: (teamId: string, playerIndex: 0 | 1) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: team.id,
+    disabled: !canReorder,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.58 : 1,
+    zIndex: isDragging ? 3 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="setup-team-row">
+      <button
+        className="setup-team-drag"
+        type="button"
+        disabled={!canReorder}
+        {...attributes}
+        {...listeners}
+        aria-label={canReorder ? `Move team ${index + 1}` : 'Team order is locked after starting'}
+        title={canReorder ? 'Drag to rearrange team' : 'Order locked'}
+      >
+        <Icons.Drag className="icon" />
+      </button>
+      <div className="setup-team-num">{index + 1}</div>
+      <div className="setup-team-identity">
+        {team.name && <strong>{team.name}</strong>}
+        <div className="setup-team-pair">
+          <PlayerInput
+            player={team.players[0]}
+            placeholder="Player A"
+            readOnly
+            onNameChange={() => undefined}
+            onAvatarUpload={(dataUrl) => onAvatarUpload(team.id, 0, dataUrl)}
+            onAvatarClear={() => onAvatarClear(team.id, 0)}
+          />
+          <PlayerInput
+            player={team.players[1]}
+            placeholder="Player B"
+            readOnly
+            onNameChange={() => undefined}
+            onAvatarUpload={(dataUrl) => onAvatarUpload(team.id, 1, dataUrl)}
+            onAvatarClear={() => onAvatarClear(team.id, 1)}
+          />
+        </div>
+      </div>
+      <div className="setup-team-actions">
+        <button
+          type="button"
+          className="setup-team-action"
+          disabled={busy}
+          onClick={() => onEdit(team.id)}
+          aria-label="Edit team"
+          title="Edit team"
+        >
+          <Icons.Edit className="icon" />
+        </button>
+        <button
+          type="button"
+          className="setup-team-action danger"
+          disabled={busy}
+          onClick={() => onRemove(team.id)}
+          aria-label="Remove team completely"
+          title="Remove team completely"
+        >
+          <Icons.Trash className="icon" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditTeamModal({
+  team,
+  registration,
+  saving,
+  onSave,
+  onClose,
+}: {
+  team: Team;
+  registration?: SignupRegistration;
+  saving: boolean;
+  onSave: (draft: { teamName: string; playerOne: string; playerTwo: string; contact: string }) => void;
+  onClose: () => void;
+}) {
+  const [teamName, setTeamName] = useState(team.name ?? '');
+  const [playerOne, setPlayerOne] = useState(team.players[0].name);
+  const [playerTwo, setPlayerTwo] = useState(team.players[1].name);
+  const [contact, setContact] = useState(registration?.contact ?? '');
+  const valid = playerOne.trim().length > 0
+    && playerTwo.trim().length > 0
+    && (!registration || contact.trim().length >= 3);
+
+  useEffect(() => {
+    const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === 'Escape' && !saving) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose, saving]);
+
+  return (
+    <Portal>
+      <div className="modal-backdrop" onClick={() => !saving && onClose()}>
+        <div className="modal edit-team-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="edit-team-heading">
+            <div>
+              <h2>Edit team</h2>
+              <p>{registration ? 'Changes also update the public sign-up link.' : 'This is a local tournament team.'}</p>
+            </div>
+            <button className="op-score-btn" type="button" disabled={saving} onClick={onClose} aria-label="Close">
+              <Icons.Close className="icon" />
+            </button>
+          </div>
+          <div className="edit-team-fields">
+            <label>
+              <span>Team name <small>optional</small></span>
+              <input className="setup-input" value={teamName} onChange={(event) => setTeamName(event.target.value)} />
+            </label>
+            <label>
+              <span>Player one</span>
+              <input className="setup-input" value={playerOne} onChange={(event) => setPlayerOne(event.target.value)} />
+            </label>
+            <label>
+              <span>Player two</span>
+              <input className="setup-input" value={playerTwo} onChange={(event) => setPlayerTwo(event.target.value)} />
+            </label>
+            {registration && (
+              <label>
+                <span>WhatsApp number or email <small>kept private</small></span>
+                <input className="setup-input" value={contact} onChange={(event) => setContact(event.target.value)} />
+              </label>
+            )}
+          </div>
+          <div className="modal-actions">
+            <button className="btn" type="button" disabled={saving} onClick={onClose}>Cancel</button>
+            <button
+              className="btn primary"
+              type="button"
+              disabled={!valid || saving}
+              onClick={() => onSave({ teamName, playerOne, playerTwo, contact })}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Portal>
   );
 }
 
@@ -525,12 +854,14 @@ function PlayerInput({
   onNameChange,
   onAvatarUpload,
   onAvatarClear,
+  readOnly = false,
 }: {
   player: Player;
   placeholder: string;
   onNameChange: (value: string) => void;
   onAvatarUpload: (dataUrl: string) => void;
   onAvatarClear: () => void;
+  readOnly?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -575,6 +906,7 @@ function PlayerInput({
         value={player.name}
         onChange={(e) => onNameChange(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
       />
       {hasPhoto && (
         <button

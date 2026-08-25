@@ -34,6 +34,9 @@ export interface Team {
   /** Stable player-pair key for a team imported from online sign-up. This lets
    *  a deliberate roster removal stay removed instead of Auto-add restoring it. */
   signupPairKey?: string;
+  /** Source row for an online sign-up team, used to keep organiser edits,
+   *  deletion and ordering in sync with the public sign-up page. */
+  signupRegistrationId?: string;
   /** Operator-set total that overrides the match-derived points on the
    *  standings — used to correct a wrong score after the event. */
   pointsOverride?: number;

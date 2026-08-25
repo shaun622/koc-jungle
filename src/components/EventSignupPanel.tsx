@@ -90,11 +90,15 @@ export function EventSignupPanel({
   expectedTeams,
   teams,
   onAddTeams,
+  onRegistrationsChange,
+  registrationsSnapshot,
 }: {
   event: EventState;
   expectedTeams: number;
   teams: Team[];
-  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string }>) => void;
+  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
+  onRegistrationsChange?: (registrations: SignupRegistration[]) => void;
+  registrationsSnapshot?: SignupRegistration[];
 }) {
   const auth = useAuth();
   const [expanded, setExpanded] = useState(false);
@@ -124,6 +128,14 @@ export function EventSignupPanel({
     const rows = await getOrganizerRegistrations(signupId);
     setRegistrations(rows);
   }, []);
+
+  useEffect(() => {
+    onRegistrationsChange?.(registrations);
+  }, [onRegistrationsChange, registrations]);
+
+  useEffect(() => {
+    if (registrationsSnapshot) setRegistrations(registrationsSnapshot);
+  }, [registrationsSnapshot]);
 
   useEffect(() => {
     if (!auth.user) return;
@@ -245,6 +257,7 @@ export function EventSignupPanel({
       player1: registration.playerOne,
       player2: registration.playerTwo,
       signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
+      signupRegistrationId: registration.id,
     })));
     setMessage(
       `Auto-added ${autoImportable.length} confirmed pair${autoImportable.length === 1 ? '' : 's'} (${autoImportable.length * 2} players).`,
@@ -378,6 +391,7 @@ export function EventSignupPanel({
       player1: registration.playerOne,
       player2: registration.playerTwo,
       signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
+      signupRegistrationId: registration.id,
     })));
     setMessage(
       `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,
