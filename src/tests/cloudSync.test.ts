@@ -1,4 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+import { cleanup, render } from '@testing-library/react';
 
 const cloud = vi.hoisted(() => {
   type QueryResult = {
@@ -111,7 +113,15 @@ import {
   stopCloudSync,
 } from '@/store/cloudSync';
 import { useEventStore } from '@/store/eventStore';
+import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
 import type { EventState } from '@/types/domain';
+
+const BROADCAST_KEY = 'koc-event-broadcast-v2';
+
+function StorageBroadcastHarness() {
+  useStorageBroadcast();
+  return null;
+}
 
 function eventFixture(name: string, courtCount = 3): EventState {
   useEventStore.getState().createEvent(name, 'koc');
@@ -137,6 +147,7 @@ describe('cloud sync conflict protection', () => {
   });
 
   afterEach(() => {
+    cleanup();
     stopCloudSync();
     vi.useRealTimers();
   });
@@ -264,6 +275,31 @@ describe('cloud sync conflict protection', () => {
     expect(useEventStore.getState().event).toBeNull();
     expect(cloud.upserts).toHaveLength(0);
     expect(cloud.clears.length).toBeGreaterThan(0);
+  });
+
+  it('persists explicit cross-tab cancellation scope before cloud sync restarts', async () => {
+    const current = eventFixture('Pre-restart cross-tab cancellation');
+    useEventStore.getState().loadEvent(current);
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
+      error: null,
+    });
+    await settle();
+    stopCloudSync();
+
+    expect(applyStorageBroadcast(null)).toBe(true);
+    cloud.reset();
+    startCloudSync('user-1');
+    await settle();
+
+    expect(cloud.deleteFilters.at(-1)).toEqual({ user_id: 'user-1' });
+    cloud.resolveInitial({
+      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:01:00.000Z' }],
+      error: null,
+    });
+    await settle();
+    expect(useEventStore.getState().event).toBeNull();
   });
 
   it('lets a newer cross-tab edit invalidate a pending stale initial pull', async () => {
@@ -424,6 +460,66 @@ describe('cloud sync conflict protection', () => {
     expect(useEventStore.getState().event?.id).toBe(replacement.id);
   });
 
+  it('keeps a remote scoped delete scoped after restart before replacement arrives', async () => {
+    const original = eventFixture('Restarted remote original');
+    const replacement = eventFixture('Restarted remote replacement');
+    useEventStore.getState().loadEvent(original);
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
+      error: null,
+    });
+    await settle();
+
+    let resolveOldClear: (result: { error: null }) => void = () => undefined;
+    cloud.setClearImpl(() => new Promise((resolve) => {
+      resolveOldClear = resolve;
+    }));
+    cloud.emitRemote({ eventType: 'DELETE', old: { id: original.id }, new: {} });
+    await settle();
+    expect(useEventStore.getState().event).toBeNull();
+    stopCloudSync();
+
+    cloud.reset();
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: replacement.id, state: replacement, updated_at: '2026-08-25T12:00:30.000Z' }],
+      error: null,
+    });
+    await settle();
+    expect(useEventStore.getState().event?.id).toBe(replacement.id);
+
+    resolveOldClear({ error: null });
+    await settle();
+    expect(cloud.deleteFilters.at(-1)).toEqual({
+      user_id: 'user-1',
+      id: original.id,
+    });
+    expect(useEventStore.getState().event?.id).toBe(replacement.id);
+  });
+
+  it('does not rebroadcast a cloud-origin scoped delete as explicit cancellation', async () => {
+    const current = eventFixture('Cloud-origin delete');
+    useEventStore.getState().loadEvent(current);
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
+      error: null,
+    });
+    await settle();
+    render(createElement(StorageBroadcastHarness));
+
+    const sentinel = JSON.stringify({
+      version: { at: Date.now(), source: 'existing-tab' },
+      event: current,
+    });
+    localStorage.setItem(BROADCAST_KEY, sentinel);
+    cloud.emitRemote({ eventType: 'DELETE', old: { id: current.id }, new: {} });
+
+    expect(useEventStore.getState().event).toBeNull();
+    expect(localStorage.getItem(BROADCAST_KEY)).toBe(sentinel);
+  });
+
   it('finishes account-wide cleanup despite multiple realtime delete echoes', async () => {
     const current = eventFixture('Clear-all current');
     const replacement = eventFixture('After clear-all');
@@ -505,6 +601,47 @@ describe('cloud sync conflict protection', () => {
       },
     });
     expect(useEventStore.getState().event?.id).toBe(remoteAfterward.id);
+  });
+
+  it('serialises a restarted replacement behind the old session clear', async () => {
+    const original = eventFixture('Old session event');
+    const replacement = eventFixture('New session replacement');
+    useEventStore.getState().loadEvent(original);
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
+      error: null,
+    });
+    await settle();
+
+    let resolveOldClear: (result: { error: null }) => void = () => undefined;
+    cloud.setClearImpl(() => new Promise((resolve) => {
+      resolveOldClear = resolve;
+    }));
+    useEventStore.getState().resetEvent();
+    await settle();
+    stopCloudSync();
+
+    cloud.reset();
+    useEventStore.getState().loadEvent(replacement);
+    startCloudSync('user-1');
+    cloud.resolveInitial({
+      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:01:00.000Z' }],
+      error: null,
+    });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(cloud.upserts).toHaveLength(0);
+
+    resolveOldClear({ error: null });
+    await settle();
+    await flushCloudSync();
+    await settle();
+    expect(cloud.upserts.length).toBeGreaterThan(0);
+    expect(cloud.upserts.every(
+      (row) => (row.state as EventState).id === replacement.id,
+    )).toBe(true);
+    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).toContain(replacement.id);
   });
 
   it('does not let an initial pull resurrect a deletion received first', async () => {
@@ -666,6 +803,7 @@ describe('cloud sync conflict protection', () => {
     await settle();
 
     expect(cloud.clears).toContain('account-a');
+    expect(cloud.deleteFilters.at(-1)).toEqual({ user_id: 'account-a' });
     expect(useEventStore.getState().event).toBeNull();
   });
 

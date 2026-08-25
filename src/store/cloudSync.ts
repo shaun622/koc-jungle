@@ -35,6 +35,7 @@ interface LocalMutationMarker {
   eventId: string | null;
   fingerprint: string | null;
   cancelledEventId: string | null;
+  cancelledAll: boolean;
 }
 
 interface Session {
@@ -58,6 +59,10 @@ interface Session {
 }
 
 let active: Session | null = null;
+// A same-user network chain survives route/auth gate restarts in this page.
+// A late delete from the old session must finish before the new session can
+// upload its replacement.
+const remoteQueues = new Map<string, Promise<void>>();
 
 export function startCloudSync(userId: string): Stop {
   if (!supabase) return () => undefined;
@@ -79,7 +84,7 @@ export function startCloudSync(userId: string): Stop {
     localRevision: 0,
     syncedRevision: 0,
     pullGeneration: 0,
-    remoteQueue: Promise.resolve(),
+    remoteQueue: remoteQueues.get(userId) ?? Promise.resolve(),
     clearAllGeneration: 0,
     meta: readSyncMeta(userId),
   };
@@ -103,6 +108,7 @@ export function startCloudSync(userId: string): Stop {
   ) {
     session.meta.tombstoneEventId = localMarker.cancelledEventId;
   }
+  if (localMarker.cancelledAll) session.meta.clearAllPending = true;
   if (
     localAtStart &&
     localMarker.eventId === localAtStart.id &&
@@ -211,7 +217,7 @@ export function startCloudSync(userId: string): Stop {
       session,
       session.meta.tombstoneEventId,
       session.localRevision,
-      session.meta.clearAllPending || !useEventStore.getState().event,
+      session.meta.clearAllPending,
     );
   }
   const local = useEventStore.getState().event;
@@ -318,6 +324,7 @@ async function pullInitialEvent(session: Session): Promise<void> {
   );
   if (wasSynced || session.meta.tombstoneEventId || session.meta.clearAllPending) {
     const tombstoneId = session.meta.tombstoneEventId;
+    const clearedAll = session.meta.clearAllPending;
     if (wasSynced) applyRemoteEvent(session, null, 0);
     if (!tombstoneId || session.meta.lastSyncedEventId === tombstoneId) {
       session.meta.lastSyncedEventId = null;
@@ -328,7 +335,7 @@ async function pullInitialEvent(session: Session): Promise<void> {
     session.meta.tombstoneEventId = null;
     session.meta.clearAllPending = false;
     writeSyncMeta(session.userId, session.meta);
-    clearLocalCancellationMarker(tombstoneId, session.userId);
+    clearLocalCancellationMarker(tombstoneId, session.userId, clearedAll);
   }
 }
 
@@ -368,15 +375,18 @@ export function applyStorageBroadcast(event: EventState | null): boolean {
 
   // A repeated null still retries a durable cancellation if the first tab
   // closed before its network delete completed.
-  if (!event && !current && active) {
-    active.localRevision += 1;
-    active.pullGeneration += 1;
-    beginCancellation(
-      active,
-      active.meta.tombstoneEventId ?? active.meta.lastSyncedEventId,
-      active.localRevision,
-      true,
-    );
+  if (!event && !current) {
+    markLocalEventMutation(null, null);
+    if (active) {
+      active.localRevision += 1;
+      active.pullGeneration += 1;
+      beginCancellation(
+        active,
+        active.meta.tombstoneEventId ?? active.meta.lastSyncedEventId,
+        active.localRevision,
+        true,
+      );
+    }
     return true;
   }
 
@@ -390,13 +400,17 @@ export function applyStorageBroadcast(event: EventState | null): boolean {
   if (
     current === event ||
     (current && event && eventFingerprint(current) === eventFingerprint(event))
-  ) return true;
+  ) {
+    if (event) markLocalEventMutation(event, current);
+    return true;
+  }
 
   if (event && active) {
     // The originating tab owns the cloud write. Mark this as external so a
     // receiving TV/operator tab does not upsert it again, receive that echo
     // over Realtime, and start an endless tab-to-cloud loop.
     const session = active;
+    markLocalEventMutation(event, current);
     cancelPendingPush(session);
     session.pullGeneration += 1;
     session.localRevision += 1;
@@ -423,6 +437,7 @@ export function applyStorageBroadcast(event: EventState | null): boolean {
     return true;
   }
 
+  markLocalEventMutation(event, current);
   useEventStore.setState({ event, lastError: null });
   return true;
 }
@@ -441,7 +456,12 @@ function beginCancellation(
 ): void {
   cancelPendingPush(session);
   session.pullGeneration += 1;
-  session.lastKnownAt = Math.max(Date.now(), session.lastKnownAt + 1);
+  // Only an explicit clear-all establishes a new local-time authority point.
+  // A scoped remote/replacement cleanup must not outrank the E2 row that was
+  // already written just before this device received DELETE(E1).
+  if (clearAll) {
+    session.lastKnownAt = Math.max(Date.now(), session.lastKnownAt + 1);
+  }
   let clearAllGeneration: number | null = null;
   if (clearAll) {
     session.meta.clearAllPending = true;
@@ -482,6 +502,10 @@ function queueClear(
       // old row is ignored meanwhile, so cancellation cannot spring back.
       throw new Error(error.message);
     }
+    // The server operation completed, but a restarted session now owns local
+    // metadata. It is already queued behind this request and will reconcile
+    // its own persisted tombstone/dirty snapshot without stale writes here.
+    if (active !== session) return;
 
     // A scoped delete during E1 -> E2 replacement has not saved E2. Advancing
     // the synced revision here would let a stale E1 Realtime echo overwrite E2
@@ -498,6 +522,7 @@ function queueClear(
     ) {
       session.meta.clearAllPending = false;
       metaChanged = true;
+      clearLocalCancellationMarker(tombstoneAtQueue, session.userId, true);
     }
     if (session.meta.tombstoneEventId === tombstoneAtQueue) {
       session.meta.tombstoneEventId = null;
@@ -517,12 +542,20 @@ function queueClear(
 }
 
 function enqueueRemote(session: Session, operation: () => Promise<void>): void {
-  session.remoteQueue = session.remoteQueue
+  const previous = remoteQueues.get(session.userId) ?? session.remoteQueue;
+  const next = previous
     .catch(() => undefined)
     .then(operation)
     .catch((error) => {
       console.warn('[cloudSync] queued operation failed:', error instanceof Error ? error.message : error);
     });
+  session.remoteQueue = next;
+  remoteQueues.set(session.userId, next);
+  void next.finally(() => {
+    if (remoteQueues.get(session.userId) === next) {
+      remoteQueues.delete(session.userId);
+    }
+  });
 }
 
 async function waitWithTimeout(operation: Promise<void>, timeoutMs: number): Promise<void> {
@@ -580,26 +613,29 @@ async function pushOnce(
 export function markLocalEventMutation(
   event: EventState | null,
   previous: EventState | null,
-): void {
-  if (active?.applyingRemote) return;
+): boolean {
+  if (active?.applyingRemote) return false;
   const ownerUserId = active?.userId ?? readLastUserId();
   const existing = readLocalMutationMarker(ownerUserId);
+  const replacedEventId =
+    event && previous && previous.id !== event.id ? previous.id : null;
   const marker: LocalMutationMarker = event
     ? {
         eventId: event.id,
         fingerprint: eventFingerprint(event),
         cancelledEventId:
-          previous && previous.id !== event.id
-            ? previous.id
-            : existing.cancelledEventId,
+          replacedEventId ?? existing.cancelledEventId,
+        cancelledAll: replacedEventId ? false : existing.cancelledAll,
       }
     : {
         eventId: null,
         fingerprint: null,
         cancelledEventId:
           previous?.id ?? existing.eventId ?? existing.cancelledEventId,
+        cancelledAll: true,
       };
   writeLocalMutationMarker(ownerUserId, marker);
+  return true;
 }
 
 function eventFingerprint(event: EventState): string {
@@ -611,6 +647,7 @@ function readLocalMutationMarker(ownerUserId: string | null): LocalMutationMarke
     eventId: null,
     fingerprint: null,
     cancelledEventId: null,
+    cancelledAll: false,
   };
   try {
     const raw = globalThis.localStorage?.getItem(localMutationKey(ownerUserId));
@@ -620,6 +657,7 @@ function readLocalMutationMarker(ownerUserId: string | null): LocalMutationMarke
       eventId: parsed.eventId ?? null,
       fingerprint: parsed.fingerprint ?? null,
       cancelledEventId: parsed.cancelledEventId ?? null,
+      cancelledAll: parsed.cancelledAll ?? false,
     };
   } catch {
     return empty;
@@ -654,16 +692,21 @@ function clearLocalMutationMarker(event: EventState, userId: string): void {
 function clearLocalCancellationMarker(
   eventId: string | null,
   userId: string,
+  clearAll = false,
 ): void {
-  if (!eventId) return;
   const marker = readLocalMutationMarker(userId);
-  if (marker.cancelledEventId !== eventId) return;
+  if (clearAll) {
+    if (!marker.cancelledAll) return;
+  } else if (!eventId || marker.cancelledEventId !== eventId) {
+    return;
+  }
   marker.cancelledEventId = null;
+  marker.cancelledAll = false;
   writeLocalMutationMarker(userId, marker);
 }
 
 function hasLocalMutation(marker: LocalMutationMarker): boolean {
-  return Boolean(marker.eventId || marker.cancelledEventId);
+  return Boolean(marker.eventId || marker.cancelledEventId || marker.cancelledAll);
 }
 
 function localMutationKey(ownerUserId: string | null): string {

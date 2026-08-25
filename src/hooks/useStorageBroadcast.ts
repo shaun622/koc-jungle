@@ -91,7 +91,10 @@ export function useStorageBroadcast(enabled = true) {
 
     const unsubscribe = useEventStore.subscribe((state, previous) => {
       if (applyingIncoming || state.event === previous.event) return;
-      markLocalEventMutation(state.event, previous.event);
+      // Trusted cloud applies already have their own Realtime origin. Do not
+      // turn a scoped remote DELETE into a plain null broadcast that another
+      // same-origin tab could mistake for an explicit delete-all.
+      if (!markLocalEventMutation(state.event, previous.event)) return;
       const version: Version = {
         at: Math.max(Date.now(), lastSeenVersion.at + 1),
         source: TAB_SOURCE,

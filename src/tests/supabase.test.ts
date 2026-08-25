@@ -20,6 +20,9 @@ describe('Supabase client separation', () => {
     await import('@/lib/supabase');
 
     expect(createClient).toHaveBeenCalledTimes(2);
+    expect(createClient.mock.calls[0][2]).toMatchObject({
+      db: { timeout: 12_000 },
+    });
     const publicOptions = createClient.mock.calls[1][2] as {
       db: { timeout: number };
       accessToken: () => Promise<string | null>;

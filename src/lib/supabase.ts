@@ -34,6 +34,7 @@ export const supabase: SupabaseClient | null =
           // custom URI scheme registered in Info.plist / AndroidManifest.
           storageKey: 'koc-auth',
         },
+        db: { timeout: 12_000 },
       })
     : null;
 
