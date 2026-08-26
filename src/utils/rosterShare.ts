@@ -9,8 +9,7 @@ export interface RosterShareResult {
 }
 
 function numbered(index: number): string {
-  const emoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-  return emoji[index] ?? `${index + 1}.`;
+  return `${index + 1}.`;
 }
 
 function formatSchedule(signup?: SignupEvent | null): string[] {

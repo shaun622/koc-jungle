@@ -87,6 +87,9 @@ describe('plain-text roster sharing', () => {
 
     expect(text).toContain('🎾 MONDAY NIGHT KOC');
     expect(text).toContain('👥 2 of 4 teams confirmed');
+    expect(text).toContain('1. The Smasher');
+    expect(text).toContain('2. Jon & Sven');
+    expect(text).not.toContain('1️⃣');
     expect(text.indexOf('The Smasher')).toBeLessThan(text.indexOf('Jon & Sven'));
     expect(text).toContain('Shaun — looking for a partner');
     expect(text).toContain('The Challengers — Alex & Kriss');
@@ -99,5 +102,15 @@ describe('plain-text roster sharing', () => {
     const text = '🎾 Monday Night\nTapia & Coello';
     const url = whatsappRosterUrl(text);
     expect(url).toBe(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  });
+
+  it('uses plain numbering for double-digit roster positions', () => {
+    const teams = Array.from({ length: 11 }, (_, index) =>
+      team(`team-${index + 1}`, `Team ${index + 1}`, `Player ${index + 1}A`, `Player ${index + 1}B`));
+    const text = buildRosterShareText({ event, teams });
+
+    expect(text).toContain('10. Team 10');
+    expect(text).toContain('11. Team 11');
+    expect(text).not.toContain('🔟');
   });
 });
