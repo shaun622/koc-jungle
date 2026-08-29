@@ -354,6 +354,14 @@ export async function deleteOrganizerRegistration(registrationId: string): Promi
   if (error) throw new Error(error.message);
 }
 
+export async function deleteOrganizerWaitlistedRegistration(registrationId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_delete_waitlisted_signup_registration', {
+    p_registration_id: registrationId,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function reorderOrganizerRegistrations(
   signupEventId: string,
   registrationIds: string[],

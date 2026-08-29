@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthModal } from '@/components/AuthModal';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
 import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
   copySignupLink,
   defaultSignupAccountSlug,
+  deleteOrganizerWaitlistedRegistration,
   deleteSignupTemplate,
   getOrganizerRegistrations,
   getOwnedSignup,
@@ -48,6 +50,12 @@ function formatWhen(startsAt: string | null, endsAt: string | null): string {
   const startTime = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const endTime = end?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `${day} · ${startTime}${endTime ? `–${endTime}` : ''}`;
+}
+
+function registrationLabel(registration: SignupRegistration): string {
+  if (!registration.playerTwo) return registration.playerOne;
+  return registration.teamName?.trim()
+    || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
 function templateSchedule(startsAt: string, endsAt: string): {
@@ -111,6 +119,8 @@ export function EventSignupPanel({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [waitlistDeleteTarget, setWaitlistDeleteTarget] = useState<SignupRegistration | null>(null);
+  const [deletingRegistrationId, setDeletingRegistrationId] = useState<string | null>(null);
 
   const [title, setTitle] = useState(event.name);
   const [accountSlug, setAccountSlug] = useState('organiser');
@@ -125,10 +135,15 @@ export function EventSignupPanel({
   const [templateName, setTemplateName] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
   const lastAutoImportSignature = useRef('');
+  const deletingRegistrationRef = useRef<string | null>(null);
+  const registrationsRefreshVersion = useRef(0);
 
   const refreshRegistrations = useCallback(async (signupId: string) => {
+    const refreshVersion = ++registrationsRefreshVersion.current;
     const rows = await getOrganizerRegistrations(signupId);
-    setRegistrations(rows);
+    if (refreshVersion === registrationsRefreshVersion.current) {
+      setRegistrations(rows);
+    }
   }, []);
 
   useEffect(() => {
@@ -142,6 +157,7 @@ export function EventSignupPanel({
   useEffect(() => {
     if (!auth.user) return;
     let cancelled = false;
+    registrationsRefreshVersion.current += 1;
     setLoading(true);
     setError(null);
     setSignup(null);
@@ -155,6 +171,7 @@ export function EventSignupPanel({
     setAutoAddPairs(true);
     setSelectedTemplateId('');
     setTemplateName('');
+    setWaitlistDeleteTarget(null);
     void Promise.all([
       getOwnedSignup(auth.user.id, event.id),
       getSignupAccountSlug(auth.user.id),
@@ -389,6 +406,28 @@ export function EventSignupPanel({
       setMessage(signup.isOpen ? 'Registrations closed.' : 'Registrations reopened.');
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  async function removeWaitlistedRegistration() {
+    const registration = waitlistDeleteTarget;
+    if (!registration || registration.status !== 'waitlisted' || !signup || deletingRegistrationRef.current) return;
+
+    deletingRegistrationRef.current = registration.id;
+    setDeletingRegistrationId(registration.id);
+    setError(null);
+    setMessage(null);
+    try {
+      await deleteOrganizerWaitlistedRegistration(registration.id);
+      await refreshRegistrations(signup.id);
+      setWaitlistDeleteTarget(null);
+      setMessage(`${registrationLabel(registration)} removed from the waiting list.`);
+    } catch (err) {
+      setError((err as Error).message);
+      await refreshRegistrations(signup.id).catch(() => undefined);
+    } finally {
+      deletingRegistrationRef.current = null;
+      setDeletingRegistrationId(null);
     }
   }
 
@@ -636,6 +675,18 @@ export function EventSignupPanel({
                             {registration.contact}
                             {registration.playerTwoContact ? ` · ${registration.playerTwoContact}` : ''}
                           </span>
+                          {registration.status === 'waitlisted' && (
+                            <button
+                              className="setup-team-action danger signup-admin-delete"
+                              type="button"
+                              aria-label={`Remove ${registrationLabel(registration)} from waiting list`}
+                              title="Remove from waiting list"
+                              disabled={deletingRegistrationId === registration.id}
+                              onClick={() => setWaitlistDeleteTarget(registration)}
+                            >
+                              <Icons.Trash className="icon" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -671,6 +722,18 @@ export function EventSignupPanel({
         </div>
       )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      <ConfirmDialog
+        open={Boolean(waitlistDeleteTarget)}
+        title="Remove from waiting list?"
+        message={waitlistDeleteTarget
+          ? `${registrationLabel(waitlistDeleteTarget)} will be permanently removed from this sign-up's waiting list.`
+          : ''}
+        confirmLabel={deletingRegistrationId ? 'Removing…' : 'Remove'}
+        destructive
+        busy={Boolean(deletingRegistrationId)}
+        onConfirm={() => void removeWaitlistedRegistration()}
+        onCancel={() => setWaitlistDeleteTarget(null)}
+      />
     </section>
   );
 }

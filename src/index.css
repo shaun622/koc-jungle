@@ -5249,7 +5249,7 @@ button {
 }
 .signup-admin-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) minmax(100px, .7fr);
+  grid-template-columns: 32px minmax(0, 1fr) minmax(100px, .7fr) auto;
   gap: 8px;
   align-items: center;
   padding: 9px 10px;
@@ -5274,6 +5274,7 @@ button {
 }
 .signup-position.waitlisted { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, var(--bg)); }
 .signup-contact { color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+.signup-admin-delete { width: 36px; height: 36px; }
 .signup-auto-status {
   display: grid;
   gap: 2px;
@@ -5509,8 +5510,9 @@ button {
   .signup-admin-link-row > a { grid-column: 1 / -1; text-align: center; }
   .signup-admin-summary { grid-template-columns: 1fr 1fr; }
   .signup-admin-summary > div:last-child { grid-column: 1 / -1; }
-  .signup-admin-row { grid-template-columns: 30px minmax(0, 1fr); }
+  .signup-admin-row { grid-template-columns: 30px minmax(0, 1fr) auto; }
   .signup-contact { grid-column: 2; text-align: left; }
+  .signup-admin-delete { grid-column: 3; grid-row: 1 / span 2; }
   .signup-public { padding: 16px 12px 26px; }
   .signup-public-header { margin-bottom: 14px; padding: 0 4px; }
   .signup-public-hero { border-radius: 17px; }
