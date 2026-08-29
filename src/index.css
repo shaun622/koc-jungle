@@ -5056,6 +5056,224 @@ button {
   }
 }
 
+/* Multi-event library */
+.home-brand-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.home-body--library {
+  max-width: 960px;
+}
+
+.home-hero--compact {
+  padding-bottom: 2px;
+}
+
+.home-hero--compact .home-hero-logo {
+  width: 64px;
+  height: 64px;
+}
+
+.event-library {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.event-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-1);
+  font-family: var(--font-headline);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.event-group-title > span {
+  min-width: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.event-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.event-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-2);
+  box-shadow: 0 10px 30px color-mix(in oklch, var(--bg-0) 40%, transparent);
+}
+
+.event-card--live {
+  border-color: color-mix(in oklch, var(--lime) 48%, var(--line));
+  background: linear-gradient(145deg, color-mix(in oklch, var(--lime) 7%, var(--bg-2)), var(--bg-2));
+}
+
+.event-card-main {
+  display: flex;
+  width: 100%;
+  min-height: 134px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 16px 16px 12px;
+  text-align: left;
+}
+
+.event-card-main:hover {
+  background: color-mix(in oklch, var(--accent) 5%, transparent);
+}
+
+.event-card-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.event-card-format {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--lime-deep);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.event-card-current {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in oklch, var(--lime) 42%, var(--line));
+  border-radius: 999px;
+  color: var(--text-1);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.event-card-main strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-0);
+  font-family: var(--font-headline);
+  font-size: 21px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-card-status {
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.event-card-meta {
+  margin-top: auto;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.event-card-actions {
+  display: grid;
+  grid-template-columns: minmax(128px, 1fr) auto 44px;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.event-card-actions .btn {
+  min-height: 44px;
+}
+
+.event-card-actions .event-delete {
+  padding-inline: 10px;
+  color: var(--text-2);
+}
+
+.event-card-actions .event-delete:hover {
+  border-color: color-mix(in oklch, var(--red) 55%, var(--line));
+  color: var(--red);
+}
+
+.event-library-archived {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.event-library-archived .event-group {
+  width: 100%;
+}
+
+.event-library-archived > .btn {
+  min-height: 44px;
+}
+
+.new-event-section {
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-soft);
+}
+
+@media (max-width: 680px) {
+  .event-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card-main {
+    min-height: 124px;
+  }
+}
+
+@media (max-width: 420px) {
+  .event-card-actions {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .event-card-actions .btn {
+    padding-inline: 12px;
+  }
+
+  .event-card-actions .btn.primary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-top-brand > span {
+    display: none;
+  }
+}
+
 /* ==========================================================================
    Public event sign-up + organiser controls
    ========================================================================== */

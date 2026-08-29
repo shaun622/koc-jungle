@@ -1,72 +1,95 @@
 /**
- * Cloud sync for the single active tournament.
+ * Event-scoped cloud synchronization.
  *
- * Local edits are debounced, remote writes are serialised, and every pull is
- * invalidated as soon as a newer local/cross-tab/Realtime change is seen. A
- * small per-user sync marker distinguishes an unsynced local draft from an
- * event that was deleted on another device.
+ * Every competition is independent: selecting another event never deletes the
+ * previous one, writes are serialized per event id, and durable tombstones
+ * prevent an old tab/offline snapshot from recreating a deleted competition.
  */
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { useEventStore } from './eventStore';
 import type { EventState } from '@/types/domain';
+import { useEventCatalogStore } from './eventCatalog';
+import {
+  listLocalEventRecords,
+  type EventCatalogRecord,
+} from './eventRepository';
+import {
+  applyExternalEventToActiveFacade,
+  flushEventCatalogPersistence,
+  isApplyingCatalogEvent,
+  removeEventFromLocalCatalog,
+  saveEventToLocalCatalog,
+  useEventStore,
+} from './eventStore';
 
-const PUSH_DEBOUNCE_MS = 1000;
+const PUSH_DEBOUNCE_MS = 1_000;
 const FLUSH_TIMEOUT_MS = 4_000;
-const META_KEY_PREFIX = 'koc-cloud-sync-v2:';
-const LOCAL_MUTATION_KEY_PREFIX = 'koc-local-mutation-v2:';
+const META_KEY_PREFIX = 'koc-cloud-sync-v3:';
+const LOCAL_MUTATION_KEY_PREFIX = 'koc-local-mutation-v3:';
+const LEGACY_META_KEY_PREFIX = 'koc-cloud-sync-v2:';
+const LEGACY_MUTATION_KEY_PREFIX = 'koc-local-mutation-v2:';
 const LAST_USER_KEY = 'koc-last-cloud-user-v1';
 
 type Stop = () => void;
 
-interface SyncMeta {
-  /** Event known to have reached cloud on this device. */
-  lastSyncedEventId: string | null;
-  /** Local event changed but its latest snapshot has not reached cloud yet. */
-  dirtyEventId: string | null;
-  /** Cancellation remains here until a server delete succeeds. */
-  tombstoneEventId: string | null;
-  /** Explicit cancellation is still removing every legacy row for this user. */
-  clearAllPending: boolean;
+interface DirtyMarker {
+  fingerprint: string;
+  changedAt: number;
 }
 
-interface LocalMutationMarker {
-  eventId: string | null;
-  fingerprint: string | null;
-  cancelledEventId: string | null;
-  cancelledAll: boolean;
+interface TombstoneMarker {
+  deletedAt: number;
+  pending: boolean;
+}
+
+interface MutationLedger {
+  dirtyById: Record<string, DirtyMarker>;
+  tombstonesById: Record<string, TombstoneMarker>;
+}
+
+interface SyncMeta extends MutationLedger {
+  remoteUpdatedAtById: Record<string, number>;
 }
 
 interface Session {
   userId: string;
   channel: RealtimeChannel | null;
   unsubStore: Stop;
-  pushTimer: ReturnType<typeof setTimeout> | null;
-  lastKnownAt: number;
-  applyingRemote: boolean;
-  /** Increments synchronously for every accepted local/cross-tab edit. */
-  localRevision: number;
-  /** Highest local revision confirmed by a completed write/delete. */
-  syncedRevision: number;
-  /** Invalidates initial pulls without turning clean remote applies dirty. */
-  pullGeneration: number;
-  /** Older snapshots can never finish after newer snapshots in this tab. */
-  remoteQueue: Promise<void>;
-  /** Identifies the newest clear-all request independently of its tombstone. */
-  clearAllGeneration: number;
+  pushTimers: Map<string, ReturnType<typeof setTimeout>>;
+  dirtySnapshots: Map<string, EventState>;
+  pendingById: Map<string, Promise<void>>;
   meta: SyncMeta;
+  bootstrap: Promise<void>;
+}
+
+interface CloudEventRow {
+  id: string;
+  state: EventState | null;
+  updated_at: string;
+}
+
+interface CloudTombstoneRow {
+  event_id: string;
+  deleted_at: string;
 }
 
 let active: Session | null = null;
-// A same-user network chain survives route/auth gate restarts in this page.
-// A late delete from the old session must finish before the new session can
-// upload its replacement.
+
+// These chains intentionally survive auth/route restarts in this page. A late
+// write and a later deletion for the same UUID can therefore never overtake
+// one another. Unrelated competitions remain parallel.
 const remoteQueues = new Map<string, Promise<void>>();
+
+// Zustand notifies subscribers synchronously. This guard prevents trusted
+// cloud/cross-tab applications from being interpreted as fresh local edits by
+// either this module or the broadcast hook.
+const applyingExternalIds = new Set<string>();
+let applyingExternalNull = false;
 
 export function startCloudSync(userId: string): Stop {
   if (!supabase) return () => undefined;
-  if (active && active.userId === userId) {
+  if (active?.userId === userId) {
     const existing = active;
     return () => {
       if (active === existing) stopCloudSync();
@@ -78,84 +101,38 @@ export function startCloudSync(userId: string): Stop {
     userId,
     channel: null,
     unsubStore: () => undefined,
-    pushTimer: null,
-    lastKnownAt: 0,
-    applyingRemote: false,
-    localRevision: 0,
-    syncedRevision: 0,
-    pullGeneration: 0,
-    remoteQueue: remoteQueues.get(userId) ?? Promise.resolve(),
-    clearAllGeneration: 0,
+    pushTimers: new Map(),
+    dirtySnapshots: new Map(),
+    pendingById: new Map(),
     meta: readSyncMeta(userId),
+    bootstrap: Promise.resolve(),
   };
   active = session;
 
-  // The operator UI is available while authentication restores. The per-owner
-  // marker is written by the always-on tab-sync hook, so a court/score changed
-  // before this session existed is still recognised as local and authoritative.
-  const localAtStart = useEventStore.getState().event;
-  let localMarker = readLocalMutationMarker(userId);
-  const anonymousMarker = readLocalMutationMarker(null);
-  if (!hasLocalMutation(localMarker) && hasLocalMutation(anonymousMarker)) {
-    localMarker = anonymousMarker;
-    writeLocalMutationMarker(userId, localMarker);
-    removeLocalMutationMarker(null);
-  }
+  adoptLocalMutationLedger(session);
   writeLastUserId(userId);
-  if (
-    localMarker.cancelledEventId &&
-    !session.meta.tombstoneEventId
-  ) {
-    session.meta.tombstoneEventId = localMarker.cancelledEventId;
-  }
-  if (localMarker.cancelledAll) session.meta.clearAllPending = true;
-  if (
-    localAtStart &&
-    localMarker.eventId === localAtStart.id &&
-    localMarker.fingerprint === eventFingerprint(localAtStart)
-  ) {
-    session.meta.dirtyEventId = localAtStart.id;
-  }
-  writeSyncMeta(session.userId, session.meta);
 
-  // Subscribe before pulling. A court/score edit made during the request then
-  // increments the generation synchronously, so the late response is stale.
   session.unsubStore = useEventStore.subscribe((state, previous) => {
-    if (!supabase || active !== session || state.event === previous.event) return;
-    if (session.applyingRemote) return;
+    if (active !== session || state.event === previous.event) return;
+    if (isApplyingCatalogEvent()) return;
+    const next = state.event;
+    const before = previous.event;
+    if (next && applyingExternalIds.has(next.id)) return;
+    if (!next && applyingExternalNull) return;
 
-    session.localRevision += 1;
-    session.pullGeneration += 1;
-    cancelPendingPush(session);
-
-    if (!state.event) {
-      session.meta.dirtyEventId = null;
-      beginCancellation(
-        session,
-        previous.event?.id ?? session.meta.lastSyncedEventId,
-        session.localRevision,
-        true,
-      );
+    if (!next) {
+      // Legacy reset/cancel flows still mean "delete this event", but the
+      // operation is exact-id only. Selecting another event never enters this
+      // branch and never removes the previous competition.
+      if (before) markLocalEventDeleted(before.id);
       return;
     }
 
-    const snapshot = state.event;
-    const revision = session.localRevision;
-    if (previous.event && previous.event.id !== snapshot.id) {
-      // Home/import flows replace the active event directly. Remove the old
-      // row first so cancelling this replacement can never reveal it again.
-      beginCancellation(session, previous.event.id, revision, false);
-    }
-    session.meta.dirtyEventId = snapshot.id;
-    writeSyncMeta(session.userId, session.meta);
-    session.pushTimer = setTimeout(() => {
-      session.pushTimer = null;
-      enqueueRemote(session, () => pushOnce(session, snapshot, revision));
-    }, PUSH_DEBOUNCE_MS);
+    recordDirty(session, next);
   });
 
   session.channel = supabase
-    .channel(`events-${userId}`)
+    .channel(`event-catalog-${userId}`)
     .on(
       'postgres_changes',
       {
@@ -166,77 +143,54 @@ export function startCloudSync(userId: string): Stop {
       },
       (payload) => {
         if (active !== session) return;
-
         if (payload.eventType === 'DELETE') {
-          const deletedId = (payload.old as { id?: string } | null)?.id;
-          const currentId = useEventStore.getState().event?.id;
-          // A clear-all can emit several row deletions. They are echoes of the
-          // request already in flight, not new cancellation commands.
-          if (session.meta.clearAllPending && !currentId) return;
-          if (deletedId && currentId && deletedId !== currentId) return;
-
-          // Cancellation wins even over an unsaved edit in this tab. Cancel a
-          // pending push and queue an idempotent delete after any write already
-          // in flight, so that write cannot recreate the cancelled event.
-          session.localRevision += 1;
-          session.pullGeneration += 1;
-          cancelPendingPush(session);
-          const cancelledId = deletedId ?? currentId ?? session.meta.lastSyncedEventId;
-          // This tab cannot tell whether the originating DELETE was a full
-          // cancellation or the scoped cleanup preceding a replacement. Never
-          // escalate it to delete-all: the origin owns that decision.
-          beginCancellation(session, cancelledId, session.localRevision, false);
-          applyRemoteEvent(session, null, 0);
+          // Compatibility with projects that have not installed soft
+          // tombstones yet. This is still scoped to the UUID in the payload.
+          const eventId = (payload.old as { id?: unknown } | null)?.id;
+          if (typeof eventId === 'string') {
+            void applyRemoteDeletion(session, eventId, Date.now(), false);
+          }
           return;
         }
-
-        const next = payload.new as
-          | { state: EventState; updated_at: string }
-          | null;
-        if (!next?.state) return;
-        if (session.meta.clearAllPending) return;
-        if (session.meta.tombstoneEventId === next.state.id) return;
-        if (session.meta.dirtyEventId) return;
-        if (session.localRevision > session.syncedRevision) return;
-
-        const remoteAt = new Date(next.updated_at).getTime();
-        if (remoteAt <= session.lastKnownAt) return;
-        applyRemoteEvent(session, next.state, remoteAt);
+        const row = payload.new as Partial<CloudEventRow> | null;
+        if (!row || typeof row.id !== 'string' || !row.state) return;
+        void applyRemoteUpsert(
+          session,
+          row.state,
+          parseTimestamp(row.updated_at),
+        );
+      },
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'event_tombstones',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        if (active !== session || payload.eventType === 'DELETE') return;
+        const row = payload.new as Partial<CloudTombstoneRow> | null;
+        if (!row || typeof row.event_id !== 'string') return;
+        void applyRemoteDeletion(
+          session,
+          row.event_id,
+          parseTimestamp(row.deleted_at),
+          false,
+        );
       },
     )
     .subscribe();
 
-  // A cancellation that previously lost connectivity is retried before its
-  // old row is allowed to influence this session.
-  if (session.meta.tombstoneEventId || session.meta.clearAllPending) {
-    const current = useEventStore.getState().event;
-    if (session.meta.tombstoneEventId && current?.id === session.meta.tombstoneEventId) {
-      applyRemoteEvent(session, null, 0);
-    }
-    beginCancellation(
-      session,
-      session.meta.tombstoneEventId,
-      session.localRevision,
-      session.meta.clearAllPending,
-    );
-  }
-  const local = useEventStore.getState().event;
-  if (
-    local &&
-    (session.meta.dirtyEventId === local.id || session.meta.clearAllPending)
-  ) {
-    session.meta.dirtyEventId = local.id;
-    writeSyncMeta(session.userId, session.meta);
-    session.localRevision += 1;
-    session.pullGeneration += 1;
-    const revision = session.localRevision;
-    session.pushTimer = setTimeout(() => {
-      session.pushTimer = null;
-      enqueueRemote(session, () => pushOnce(session, local, revision));
-    }, PUSH_DEBOUNCE_MS);
-  }
-
-  void pullInitialEvent(session);
+  session.bootstrap = bootstrapSession(session)
+    .catch((error) => {
+      console.warn('[cloudSync] initial catalog sync failed:', errorMessage(error));
+    })
+    .then(() => resumePendingSessionMutations(session))
+    .catch((error) => {
+      console.warn('[cloudSync] pending mutation recovery failed:', errorMessage(error));
+    });
 
   return () => {
     if (active === session) stopCloudSync();
@@ -249,475 +203,642 @@ export function stopCloudSync(): void {
   active = null;
   void session.channel?.unsubscribe();
   session.unsubStore();
-  cancelPendingPush(session);
+  cancelAllPendingPushes(session);
 }
 
-/** Best-effort bounded save used before sign-out and PWA activation. */
-export async function flushCloudSync(): Promise<void> {
-  if (!supabase || !active) return;
+/** Mark one competition for durable deletion; no other id is touched. */
+export function markLocalEventDeleted(eventId: string): boolean {
+  if (!eventId) return false;
+  const userId = active?.userId ?? readLastUserId();
+  const ledger = readLocalMutationLedger(userId);
+  delete ledger.dirtyById[eventId];
+  ledger.tombstonesById[eventId] = {
+    deletedAt: Math.max(Date.now(), ledger.tombstonesById[eventId]?.deletedAt ?? 0),
+    pending: true,
+  };
+  writeLocalMutationLedger(userId, ledger);
+
   const session = active;
-  cancelPendingPush(session);
-
-  const event = useEventStore.getState().event;
-  if (session.meta.clearAllPending) {
-    session.clearAllGeneration += 1;
-    queueClear(
-      session,
-      session.localRevision,
-      session.meta.tombstoneEventId,
-      true,
-      session.clearAllGeneration,
-    );
-  } else if (session.meta.tombstoneEventId) {
-    queueClear(
-      session,
-      session.localRevision,
-      session.meta.tombstoneEventId,
-      false,
-      null,
-    );
-  }
-  if (event && session.meta.tombstoneEventId !== event.id) {
-    enqueueRemote(session, () => pushOnce(session, event, session.localRevision));
-  }
-
-  try {
-    await waitWithTimeout(session.remoteQueue, FLUSH_TIMEOUT_MS);
-  } catch (error) {
-    console.warn('[cloudSync] flush failed:', error instanceof Error ? error.message : error);
-  }
-}
-
-async function pullInitialEvent(session: Session): Promise<void> {
-  if (!supabase) return;
-  const generationAtStart = session.pullGeneration;
-  const { data, error } = await supabase
-    .from('events')
-    .select('id, state, updated_at')
-    .eq('user_id', session.userId)
-    .order('updated_at', { ascending: false })
-    .limit(1);
-
-  if (active !== session) return;
-  if (error) {
-    console.warn('[cloudSync] initial pull failed:', error.message);
-    return;
-  }
-  if (session.pullGeneration !== generationAtStart) return;
-  if (session.localRevision > session.syncedRevision) return;
-
-  const row = data?.[0];
-  if (row?.state) {
-    const remote = row.state as EventState;
-    if (session.meta.clearAllPending) return;
-    if (session.meta.tombstoneEventId === remote.id) return;
-    const remoteAt = new Date(row.updated_at as string).getTime();
-    if (remoteAt > session.lastKnownAt) applyRemoteEvent(session, remote, remoteAt);
-    return;
-  }
-
-  // An empty cloud is authoritative only for a local event that this device
-  // knows was synced. A never-synced offline draft remains available locally.
-  const current = useEventStore.getState().event;
-  const wasSynced = Boolean(
-    current && session.meta.lastSyncedEventId === current.id,
-  );
-  if (wasSynced || session.meta.tombstoneEventId || session.meta.clearAllPending) {
-    const tombstoneId = session.meta.tombstoneEventId;
-    const clearedAll = session.meta.clearAllPending;
-    if (wasSynced) applyRemoteEvent(session, null, 0);
-    if (!tombstoneId || session.meta.lastSyncedEventId === tombstoneId) {
-      session.meta.lastSyncedEventId = null;
-    }
-    if (!tombstoneId || session.meta.dirtyEventId === tombstoneId) {
-      session.meta.dirtyEventId = null;
-    }
-    session.meta.tombstoneEventId = null;
-    session.meta.clearAllPending = false;
+  if (session && session.userId === userId) {
+    cancelPendingPush(session, eventId);
+    session.dirtySnapshots.delete(eventId);
+    delete session.meta.dirtyById[eventId];
+    session.meta.tombstonesById[eventId] = ledger.tombstonesById[eventId];
     writeSyncMeta(session.userId, session.meta);
-    clearLocalCancellationMarker(tombstoneId, session.userId, clearedAll);
+    void queueDelete(session, eventId);
   }
-}
-
-/** Apply a trusted cloud change without creating a write-back echo. */
-function applyRemoteEvent(
-  session: Session,
-  event: EventState | null,
-  remoteAt: number,
-): void {
-  if (active !== session) return;
-  cancelPendingPush(session);
-  session.pullGeneration += 1;
-  session.applyingRemote = true;
-  try {
-    useEventStore.setState({ event, lastError: null });
-  } finally {
-    session.applyingRemote = false;
-  }
-  session.lastKnownAt = Math.max(session.lastKnownAt, remoteAt);
-  session.syncedRevision = session.localRevision;
-  if (event) {
-    session.meta.lastSyncedEventId = event.id;
-    session.meta.dirtyEventId = null;
-    writeSyncMeta(session.userId, session.meta);
-    clearLocalMutationMarker(event, session.userId);
-  }
-}
-
-/**
- * Apply a version-checked same-origin tab message. The hook owns ordering;
- * this function intentionally accepts the latest message even when this tab
- * has a pending edit. That makes rapid score/court updates converge instead
- * of freezing the display on the first broadcast.
- */
-export function applyStorageBroadcast(event: EventState | null): boolean {
-  const current = useEventStore.getState().event;
-
-  // A repeated null still retries a durable cancellation if the first tab
-  // closed before its network delete completed.
-  if (!event && !current) {
-    markLocalEventMutation(null, null);
-    if (active) {
-      active.localRevision += 1;
-      active.pullGeneration += 1;
-      beginCancellation(
-        active,
-        active.meta.tombstoneEventId ?? active.meta.lastSyncedEventId,
-        active.localRevision,
-        true,
-      );
-    }
-    return true;
-  }
-
-  if (event && active?.meta.tombstoneEventId === event.id) {
-    if (current?.id === event.id) applyRemoteEvent(active, null, 0);
-    return false;
-  }
-
-  if (event && active?.meta.clearAllPending && !current) return false;
-
-  if (
-    current === event ||
-    (current && event && eventFingerprint(current) === eventFingerprint(event))
-  ) {
-    if (event) markLocalEventMutation(event, current);
-    return true;
-  }
-
-  if (event && active) {
-    // The originating tab owns the cloud write. Mark this as external so a
-    // receiving TV/operator tab does not upsert it again, receive that echo
-    // over Realtime, and start an endless tab-to-cloud loop.
-    const session = active;
-    markLocalEventMutation(event, current);
-    cancelPendingPush(session);
-    session.pullGeneration += 1;
-    session.localRevision += 1;
-    if (current && current.id !== event.id) {
-      beginCancellation(session, current.id, session.localRevision, false);
-    }
-    session.applyingRemote = true;
-    try {
-      useEventStore.setState({ event, lastError: null });
-    } finally {
-      session.applyingRemote = false;
-    }
-
-    // Keep the accepted snapshot protected from an older Realtime echo until
-    // it is confirmed in cloud. If an upsert is already on the wire, the queue
-    // guarantees this newer snapshot finishes afterward.
-    const revision = session.localRevision;
-    session.meta.dirtyEventId = event.id;
-    writeSyncMeta(session.userId, session.meta);
-    session.pushTimer = setTimeout(() => {
-      session.pushTimer = null;
-      enqueueRemote(session, () => pushOnce(session, event, revision));
-    }, PUSH_DEBOUNCE_MS);
-    return true;
-  }
-
-  markLocalEventMutation(event, current);
-  useEventStore.setState({ event, lastError: null });
   return true;
 }
 
-function cancelPendingPush(session: Session): void {
-  if (!session.pushTimer) return;
-  clearTimeout(session.pushTimer);
-  session.pushTimer = null;
+/**
+ * UI-callable exact-ID cloud deletion. The caller removes the same id from the
+ * local catalog through eventStore.deleteLocalEvent; this owns the remote RPC.
+ */
+export async function deleteCloudEvent(eventId: string): Promise<void> {
+  if (!markLocalEventDeleted(eventId)) return;
+  const session = active;
+  if (!session) return;
+  await session.bootstrap.catch(() => undefined);
+  await queueDelete(session, eventId);
 }
 
-function beginCancellation(
-  session: Session,
-  eventId: string | null | undefined,
-  revision: number,
-  clearAll: boolean,
-): void {
-  cancelPendingPush(session);
-  session.pullGeneration += 1;
-  // Only an explicit clear-all establishes a new local-time authority point.
-  // A scoped remote/replacement cleanup must not outrank the E2 row that was
-  // already written just before this device received DELETE(E1).
-  if (clearAll) {
-    session.lastKnownAt = Math.max(Date.now(), session.lastKnownAt + 1);
-  }
-  let clearAllGeneration: number | null = null;
-  if (clearAll) {
-    session.meta.clearAllPending = true;
-    session.clearAllGeneration += 1;
-    clearAllGeneration = session.clearAllGeneration;
-  }
-  if (eventId) session.meta.tombstoneEventId = eventId;
-  writeSyncMeta(session.userId, session.meta);
-  queueClear(
-    session,
-    revision,
-    session.meta.tombstoneEventId,
-    clearAll,
-    clearAllGeneration,
-  );
-}
-
-function queueClear(
-  session: Session,
-  revision: number,
-  tombstoneAtQueue: string | null,
-  clearAll: boolean,
-  clearAllGeneration: number | null,
-): void {
-  enqueueRemote(session, async () => {
-    if (!supabase) return;
-    let request = supabase
-      .from('events')
-      .delete()
-      .eq('user_id', session.userId);
-    // Replacing an event removes just the previous row. Deliberately clearing
-    // the active event removes every legacy row for this account, matching the
-    // app's one-active-event model and preventing an older event resurfacing.
-    if (!clearAll && tombstoneAtQueue) request = request.eq('id', tombstoneAtQueue);
-    const { error } = await request;
-    if (error) {
-      // Keep the tombstone. It will be retried on the next start/flush and the
-      // old row is ignored meanwhile, so cancellation cannot spring back.
-      throw new Error(error.message);
-    }
-    // The server operation completed, but a restarted session now owns local
-    // metadata. It is already queued behind this request and will reconcile
-    // its own persisted tombstone/dirty snapshot without stale writes here.
+/** Best-effort bounded save of every dirty event before sign-out/SW reload. */
+export async function flushCloudSync(): Promise<void> {
+  const session = active;
+  if (session) cancelAllPendingPushes(session);
+  const work = (async () => {
+    await flushEventCatalogPersistence().catch(() => undefined);
+    if (!supabase || !session || active !== session) return;
+    await session.bootstrap.catch(() => undefined);
     if (active !== session) return;
 
-    // A scoped delete during E1 -> E2 replacement has not saved E2. Advancing
-    // the synced revision here would let a stale E1 Realtime echo overwrite E2
-    // during its debounce window. A true clear-all does complete the revision.
-    if (clearAll) {
-      session.syncedRevision = Math.max(session.syncedRevision, revision);
-    }
-    session.pullGeneration += 1;
-    let metaChanged = false;
-    if (
-      clearAll &&
-      clearAllGeneration !== null &&
-      clearAllGeneration === session.clearAllGeneration
-    ) {
-      session.meta.clearAllPending = false;
-      metaChanged = true;
-      clearLocalCancellationMarker(tombstoneAtQueue, session.userId, true);
-    }
-    if (session.meta.tombstoneEventId === tombstoneAtQueue) {
-      session.meta.tombstoneEventId = null;
-      if (
-        !tombstoneAtQueue ||
-        session.meta.lastSyncedEventId === tombstoneAtQueue
-      ) session.meta.lastSyncedEventId = null;
-      if (
-        !tombstoneAtQueue ||
-        session.meta.dirtyEventId === tombstoneAtQueue
-      ) session.meta.dirtyEventId = null;
-      metaChanged = true;
-      clearLocalCancellationMarker(tombstoneAtQueue, session.userId);
-    }
-    if (metaChanged) writeSyncMeta(session.userId, session.meta);
-  });
-}
+    // Recovery after bootstrap can schedule debounced work. Convert every
+    // remaining marker into an immediate bounded flush below.
+    cancelAllPendingPushes(session);
+    adoptLocalMutationLedger(session);
+    const localRecords = await safeListLocalRecords();
+    const localById = new Map(localRecords.map((record) => [record.id, record.state]));
+    const current = useEventStore.getState().event;
+    if (current) localById.set(current.id, current);
 
-function enqueueRemote(session: Session, operation: () => Promise<void>): void {
-  const previous = remoteQueues.get(session.userId) ?? session.remoteQueue;
-  const next = previous
-    .catch(() => undefined)
-    .then(operation)
-    .catch((error) => {
-      console.warn('[cloudSync] queued operation failed:', error instanceof Error ? error.message : error);
-    });
-  session.remoteQueue = next;
-  remoteQueues.set(session.userId, next);
-  void next.finally(() => {
-    if (remoteQueues.get(session.userId) === next) {
-      remoteQueues.delete(session.userId);
+    const pending: Promise<void>[] = [];
+    for (const [eventId, marker] of Object.entries(session.meta.tombstonesById)) {
+      if (marker.pending) pending.push(queueDelete(session, eventId));
     }
-  });
-}
-
-async function waitWithTimeout(operation: Promise<void>, timeoutMs: number): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
+    for (const eventId of Object.keys(session.meta.dirtyById)) {
+      if (session.meta.tombstonesById[eventId]) continue;
+      const snapshot = session.dirtySnapshots.get(eventId) ?? localById.get(eventId);
+      if (snapshot) pending.push(queuePush(session, snapshot));
+    }
+    await Promise.all(pending);
+  })();
   try {
-    await Promise.race([
-      operation,
-      new Promise<void>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error('Timed out saving event.')), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
+    await waitWithTimeout(work, FLUSH_TIMEOUT_MS);
+  } catch (error) {
+    console.warn('[cloudSync] flush failed:', errorMessage(error));
   }
 }
 
-async function pushOnce(
-  session: Session,
-  event: EventState,
-  revision: number,
-): Promise<void> {
-  if (!supabase || active !== session) return;
-  if (revision < session.localRevision) return;
-  if (session.meta.tombstoneEventId === event.id) return;
-  const current = useEventStore.getState().event;
-  if (!current || current.id !== event.id) return;
+/** Explicit alias used by service-worker/update integrations. */
+export const flushAllCloudEvents = flushCloudSync;
 
-  const now = Math.max(Date.now(), session.lastKnownAt + 1);
-  const { error } = await supabase.from('events').upsert(
-    {
-      id: event.id,
-      user_id: session.userId,
-      state: event,
-      updated_at: new Date(now).toISOString(),
-    },
-    { onConflict: 'id' },
-  );
-  if (error) {
-    console.warn('[cloudSync] push failed:', error.message);
-    return;
-  }
-  if (active !== session) return;
-  if (session.meta.tombstoneEventId === event.id) return;
-  session.lastKnownAt = Math.max(session.lastKnownAt, now);
-  session.syncedRevision = Math.max(session.syncedRevision, revision);
-  session.meta.lastSyncedEventId = event.id;
-  if (revision === session.localRevision) {
-    session.meta.dirtyEventId = null;
-    clearLocalMutationMarker(event, session.userId);
-  }
-  writeSyncMeta(session.userId, session.meta);
-}
-
-/** Record operator changes even before async auth has started cloud sync. */
+/**
+ * Record a local body mutation. A -> B marks B dirty but deliberately does not
+ * tombstone A: that transition is event selection, not deletion.
+ */
 export function markLocalEventMutation(
   event: EventState | null,
   previous: EventState | null,
 ): boolean {
-  if (active?.applyingRemote) return false;
-  const ownerUserId = active?.userId ?? readLastUserId();
-  const existing = readLocalMutationMarker(ownerUserId);
-  const replacedEventId =
-    event && previous && previous.id !== event.id ? previous.id : null;
-  const marker: LocalMutationMarker = event
-    ? {
-        eventId: event.id,
-        fingerprint: eventFingerprint(event),
-        cancelledEventId:
-          replacedEventId ?? existing.cancelledEventId,
-        cancelledAll: replacedEventId ? false : existing.cancelledAll,
-      }
-    : {
-        eventId: null,
-        fingerprint: null,
-        cancelledEventId:
-          previous?.id ?? existing.eventId ?? existing.cancelledEventId,
-        cancelledAll: true,
-      };
-  writeLocalMutationMarker(ownerUserId, marker);
+  if (isApplyingCatalogEvent()) return false;
+  if (event && applyingExternalIds.has(event.id)) return false;
+  if (!event && applyingExternalNull) return false;
+  if (event && previous && event.id === previous.id) {
+    if (event === previous || eventFingerprint(event) === eventFingerprint(previous)) {
+      return false;
+    }
+  }
+
+  if (!event) return previous ? markLocalEventDeleted(previous.id) : false;
+
+  const session = active;
+  if (session) {
+    recordDirty(session, event);
+    return true;
+  }
+
+  const userId = readLastUserId();
+  const ledger = readLocalMutationLedger(userId);
+  if (ledger.tombstonesById[event.id]) return false;
+  ledger.dirtyById[event.id] = dirtyMarkerFor(event);
+  writeLocalMutationLedger(userId, ledger);
   return true;
 }
 
-function eventFingerprint(event: EventState): string {
-  return JSON.stringify(event);
-}
-
-function readLocalMutationMarker(ownerUserId: string | null): LocalMutationMarker {
-  const empty: LocalMutationMarker = {
-    eventId: null,
-    fingerprint: null,
-    cancelledEventId: null,
-    cancelledAll: false,
-  };
-  try {
-    const raw = globalThis.localStorage?.getItem(localMutationKey(ownerUserId));
-    if (!raw) return empty;
-    const parsed = JSON.parse(raw) as Partial<LocalMutationMarker>;
-    return {
-      eventId: parsed.eventId ?? null,
-      fingerprint: parsed.fingerprint ?? null,
-      cancelledEventId: parsed.cancelledEventId ?? null,
-      cancelledAll: parsed.cancelledAll ?? false,
-    };
-  } catch {
-    return empty;
+/** Apply one cross-tab body snapshot without replacing unrelated events. */
+export function applyStorageBroadcast(
+  event: EventState | null,
+  pinnedEventId: string | null = null,
+): boolean {
+  if (!event) {
+    // A legacy v2 null message has no exact event id. Treating it as a delete
+    // would let an old installed PWA cancel whichever competition the new tab
+    // happens to be viewing, so it is intentionally ignored.
+    return false;
   }
+  if (hasTombstone(event.id)) return false;
+
+  const session = active;
+  if (session) recordDirty(session, event);
+  else markLocalEventMutation(event, null);
+
+  void saveExternalEvent(event);
+  const activeId = useEventCatalogStore.getState().activeEventId;
+  const shouldDisplay = pinnedEventId
+    ? pinnedEventId === event.id
+    : activeId === event.id || useEventStore.getState().event?.id === event.id;
+  if (shouldDisplay) setExternalActiveEvent(event);
+  return true;
 }
 
-function writeLocalMutationMarker(
-  ownerUserId: string | null,
-  marker: LocalMutationMarker,
-): void {
-  try {
-    globalThis.localStorage?.setItem(
-      localMutationKey(ownerUserId),
-      JSON.stringify(marker),
+/** Apply one exact cross-tab deletion and retry its idempotent cloud RPC. */
+export function applyStorageEventDeletion(eventId: string): boolean {
+  if (!eventId) return false;
+  markLocalEventDeleted(eventId);
+  void removeExternalEvent(eventId);
+  return true;
+}
+
+/** Follow another tab unless this display is pinned to a different event. */
+export function applyStorageEventSelection(
+  eventId: string,
+  pinnedEventId: string | null = null,
+): boolean {
+  if (!eventId || (pinnedEventId && pinnedEventId !== eventId)) return false;
+  void (async () => {
+    const event = await useEventCatalogStore.getState().selectEvent(eventId);
+    if (event) setExternalActiveEvent(event);
+  })();
+  return true;
+}
+
+export function isApplyingExternalEvent(eventId: string | null): boolean {
+  return eventId ? applyingExternalIds.has(eventId) : applyingExternalNull;
+}
+
+async function bootstrapSession(session: Session): Promise<void> {
+  await useEventCatalogStore.getState().initialize();
+  if (active !== session || !supabase) return;
+
+  const [eventResult, tombstoneResult, localRecords] = await Promise.all([
+    supabase
+      .from('events')
+      .select('id, state, updated_at')
+      .eq('user_id', session.userId)
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('event_tombstones')
+      .select('event_id, deleted_at')
+      .eq('user_id', session.userId),
+    safeListLocalRecords(),
+  ]);
+  if (active !== session) return;
+  if (eventResult.error) throw new Error(eventResult.error.message);
+  if (tombstoneResult.error) {
+    console.warn('[cloudSync] tombstone pull failed:', tombstoneResult.error.message);
+  }
+
+  const tombstones = (tombstoneResult.data ?? []) as CloudTombstoneRow[];
+  for (const row of tombstones) {
+    if (!row?.event_id) continue;
+    await applyRemoteDeletion(
+      session,
+      row.event_id,
+      parseTimestamp(row.deleted_at),
+      false,
     );
-  } catch {
-    // Storage restrictions must not stop score entry.
+  }
+  if (active !== session) return;
+
+  const remoteRows = ((eventResult.data ?? []) as CloudEventRow[])
+    .filter((row) => row?.id && row.state);
+  const remoteById = new Map(remoteRows.map((row) => [row.id, row]));
+  const localById = new Map(localRecords.map((record) => [record.id, record]));
+
+  for (const row of remoteRows) {
+    if (!row.state || session.meta.tombstonesById[row.id]) continue;
+    const remoteAt = parseTimestamp(row.updated_at);
+    session.meta.remoteUpdatedAtById[row.id] = Math.max(
+      remoteAt,
+      session.meta.remoteUpdatedAtById[row.id] ?? 0,
+    );
+    const local = localById.get(row.id);
+    if (session.meta.dirtyById[row.id]) {
+      // An operator can edit while the initial pull is still in flight. The
+      // in-memory dirty snapshot is newer than the IndexedDB list captured at
+      // bootstrap start, so never replace it with that stale local record.
+      const snapshot = session.dirtySnapshots.get(row.id)
+        ?? currentEventWithId(row.id)
+        ?? local?.state;
+      if (snapshot) recordDirty(session, snapshot);
+      continue;
+    }
+    if (local && local.updatedAt > remoteAt) {
+      recordDirty(session, local.state, local.updatedAt);
+      continue;
+    }
+    await applyRemoteUpsert(session, row.state, remoteAt);
+  }
+
+  for (const record of localRecords) {
+    if (remoteById.has(record.id) || session.meta.tombstonesById[record.id]) continue;
+    // A local catalog can contain another account's events on a shared iPad.
+    // Only a mutation explicitly recorded while THIS user was active may
+    // create a missing remote row; never upload the whole device catalog.
+    if (!session.meta.dirtyById[record.id]) continue;
+    // If tombstones could not be read, do not recreate a formerly-known row.
+    if (
+      session.meta.remoteUpdatedAtById[record.id]
+      && tombstoneResult.error
+      && !session.meta.dirtyById[record.id]
+    ) continue;
+    recordDirty(session, record.state, record.updatedAt);
+  }
+
+  for (const eventId of Object.keys(session.meta.dirtyById)) {
+    if (session.meta.tombstonesById[eventId]) continue;
+    const snapshot = session.dirtySnapshots.get(eventId)
+      ?? localById.get(eventId)?.state
+      ?? currentEventWithId(eventId);
+    if (snapshot) schedulePush(session, snapshot);
+  }
+  for (const [eventId, marker] of Object.entries(session.meta.tombstonesById)) {
+    if (marker.pending) void queueDelete(session, eventId);
+  }
+  writeSyncMeta(session.userId, session.meta);
+}
+
+/** Retry durable v3 markers even when the initial cloud pull failed. */
+async function resumePendingSessionMutations(session: Session): Promise<void> {
+  if (active !== session) return;
+  await useEventCatalogStore.getState().initialize();
+  const localRecords = await safeListLocalRecords();
+  if (active !== session) return;
+  const localById = new Map(localRecords.map((record) => [record.id, record.state]));
+  const current = useEventStore.getState().event;
+  if (current) localById.set(current.id, current);
+
+  for (const [eventId, marker] of Object.entries(session.meta.tombstonesById)) {
+    if (marker.pending) void queueDelete(session, eventId);
+  }
+  for (const eventId of Object.keys(session.meta.dirtyById)) {
+    if (session.meta.tombstonesById[eventId]) continue;
+    const snapshot = session.dirtySnapshots.get(eventId) ?? localById.get(eventId);
+    if (snapshot) schedulePush(session, snapshot);
   }
 }
 
-function clearLocalMutationMarker(event: EventState, userId: string): void {
-  const marker = readLocalMutationMarker(userId);
+async function applyRemoteUpsert(
+  session: Session,
+  event: EventState,
+  remoteAt: number,
+): Promise<void> {
+  if (active !== session || session.meta.tombstonesById[event.id]) return;
+  if (session.meta.dirtyById[event.id]) return;
+  const knownAt = session.meta.remoteUpdatedAtById[event.id] ?? 0;
+  if (remoteAt && remoteAt < knownAt) return;
+
+  const saved = await saveEventToLocalCatalog(event, {
+    updatedAt: remoteAt || Date.now(),
+    makeActive: false,
+  });
+  if (!saved || active !== session) return;
+  session.meta.remoteUpdatedAtById[event.id] = Math.max(remoteAt, knownAt);
+  writeSyncMeta(session.userId, session.meta);
+
   if (
-    marker.eventId !== event.id ||
-    marker.fingerprint !== eventFingerprint(event)
-  ) return;
-  marker.eventId = null;
-  marker.fingerprint = null;
-  writeLocalMutationMarker(userId, marker);
+    useEventCatalogStore.getState().activeEventId === event.id
+    || useEventStore.getState().event?.id === event.id
+  ) setExternalActiveEvent(event);
 }
 
-function clearLocalCancellationMarker(
-  eventId: string | null,
-  userId: string,
-  clearAll = false,
-): void {
-  const marker = readLocalMutationMarker(userId);
-  if (clearAll) {
-    if (!marker.cancelledAll) return;
-  } else if (!eventId || marker.cancelledEventId !== eventId) {
+async function applyRemoteDeletion(
+  session: Session,
+  eventId: string,
+  deletedAt: number,
+  pending: boolean,
+): Promise<void> {
+  if (active !== session) return;
+  cancelPendingPush(session, eventId);
+  session.dirtySnapshots.delete(eventId);
+  delete session.meta.dirtyById[eventId];
+  delete session.meta.remoteUpdatedAtById[eventId];
+  session.meta.tombstonesById[eventId] = {
+    deletedAt: Math.max(deletedAt, session.meta.tombstonesById[eventId]?.deletedAt ?? 0),
+    pending,
+  };
+  writeSyncMeta(session.userId, session.meta);
+  writeLocalDeletionMarker(session.userId, eventId, session.meta.tombstonesById[eventId]);
+  await removeExternalEvent(eventId);
+}
+
+async function saveExternalEvent(event: EventState): Promise<void> {
+  await saveEventToLocalCatalog(event, {
+    updatedAt: Date.now(),
+    makeActive: false,
+  });
+}
+
+async function removeExternalEvent(eventId: string): Promise<void> {
+  applyingExternalIds.add(eventId);
+  try {
+    await removeEventFromLocalCatalog(eventId);
+  } finally {
+    applyingExternalIds.delete(eventId);
+  }
+}
+
+function setExternalActiveEvent(event: EventState | null): void {
+  if (!event) {
+    applyingExternalNull = true;
+    try {
+      applyExternalEventToActiveFacade(null);
+    } finally {
+      applyingExternalNull = false;
+    }
     return;
   }
-  marker.cancelledEventId = null;
-  marker.cancelledAll = false;
-  writeLocalMutationMarker(userId, marker);
-}
-
-function hasLocalMutation(marker: LocalMutationMarker): boolean {
-  return Boolean(marker.eventId || marker.cancelledEventId || marker.cancelledAll);
-}
-
-function localMutationKey(ownerUserId: string | null): string {
-  return `${LOCAL_MUTATION_KEY_PREFIX}${ownerUserId ?? 'anonymous'}`;
-}
-
-function removeLocalMutationMarker(ownerUserId: string | null): void {
+  applyingExternalIds.add(event.id);
   try {
-    globalThis.localStorage?.removeItem(localMutationKey(ownerUserId));
+    applyExternalEventToActiveFacade(event);
+  } finally {
+    applyingExternalIds.delete(event.id);
+  }
+}
+
+function recordDirty(session: Session, event: EventState, changedAt = Date.now()): void {
+  if (session.meta.tombstonesById[event.id]) return;
+  const marker = dirtyMarkerFor(event, changedAt);
+  session.meta.dirtyById[event.id] = marker;
+  session.dirtySnapshots.set(event.id, cloneEvent(event));
+  writeSyncMeta(session.userId, session.meta);
+
+  const ledger = readLocalMutationLedger(session.userId);
+  ledger.dirtyById[event.id] = marker;
+  delete ledger.tombstonesById[event.id];
+  writeLocalMutationLedger(session.userId, ledger);
+  schedulePush(session, event);
+}
+
+function schedulePush(session: Session, event: EventState): void {
+  cancelPendingPush(session, event.id);
+  const snapshot = cloneEvent(event);
+  session.pushTimers.set(event.id, setTimeout(() => {
+    session.pushTimers.delete(event.id);
+    void queuePush(session, snapshot);
+  }, PUSH_DEBOUNCE_MS));
+}
+
+function queuePush(session: Session, event: EventState): Promise<void> {
+  const snapshot = cloneEvent(event);
+  const snapshotFingerprint = eventFingerprint(snapshot);
+  return enqueueRemote(session, event.id, async () => {
+    if (!supabase || session.meta.tombstonesById[event.id]) return;
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from('events').upsert(
+      {
+        id: snapshot.id,
+        user_id: session.userId,
+        state: snapshot,
+        updated_at: updatedAt,
+        deleted_at: null,
+      },
+      { onConflict: 'id' },
+    );
+    if (error) throw new Error(error.message);
+
+    const currentDirty = session.meta.dirtyById[event.id];
+    if (currentDirty?.fingerprint === snapshotFingerprint) {
+      delete session.meta.dirtyById[event.id];
+      session.dirtySnapshots.delete(event.id);
+      clearLocalDirtyMarker(session.userId, event.id, snapshotFingerprint);
+    }
+    session.meta.remoteUpdatedAtById[event.id] = parseTimestamp(updatedAt);
+    writeSyncMeta(session.userId, session.meta);
+  });
+}
+
+function queueDelete(session: Session, eventId: string): Promise<void> {
+  cancelPendingPush(session, eventId);
+  return enqueueRemote(session, eventId, async () => {
+    if (!supabase) return;
+    const marker = session.meta.tombstonesById[eventId];
+    if (!marker?.pending) return;
+    const { data, error } = await supabase.rpc('delete_event', {
+      p_event_id: eventId,
+    });
+    if (error) {
+      // A never-uploaded local draft has no server row. Local removal is
+      // already complete; the exact-id RPC intentionally reveals no owner data.
+      if (/could not be found|not found/i.test(error.message)) {
+        markTombstoneSynced(session, eventId, marker.deletedAt);
+        return;
+      }
+      throw new Error(error.message);
+    }
+    markTombstoneSynced(session, eventId, parseTimestamp(data) || marker.deletedAt);
+  });
+}
+
+function markTombstoneSynced(session: Session, eventId: string, deletedAt: number): void {
+  const current = session.meta.tombstonesById[eventId];
+  if (!current) return;
+  const synced = {
+    deletedAt: Math.max(deletedAt, current.deletedAt),
+    pending: false,
+  };
+  session.meta.tombstonesById[eventId] = synced;
+  delete session.meta.dirtyById[eventId];
+  delete session.meta.remoteUpdatedAtById[eventId];
+
+  // A request from a stopped session may finish after the same user has made
+  // new edits in a replacement session. Update only this event's marker so the
+  // late completion cannot overwrite unrelated dirty events.
+  const currentSession = active?.userId === session.userId ? active : null;
+  if (currentSession && currentSession !== session) {
+    currentSession.meta.tombstonesById[eventId] = synced;
+    delete currentSession.meta.dirtyById[eventId];
+    delete currentSession.meta.remoteUpdatedAtById[eventId];
+    writeSyncMeta(currentSession.userId, currentSession.meta);
+  } else if (currentSession === session) {
+    writeSyncMeta(session.userId, session.meta);
+  } else {
+    const persisted = readSyncMeta(session.userId);
+    persisted.tombstonesById[eventId] = synced;
+    delete persisted.dirtyById[eventId];
+    delete persisted.remoteUpdatedAtById[eventId];
+    writeSyncMeta(session.userId, persisted);
+  }
+  writeLocalDeletionMarker(session.userId, eventId, synced);
+}
+
+function enqueueRemote(
+  session: Session,
+  eventId: string,
+  operation: () => Promise<void>,
+): Promise<void> {
+  const key = `${session.userId}:${eventId}`;
+  const previous = remoteQueues.get(key) ?? Promise.resolve();
+  const raw = previous.catch(() => undefined).then(operation);
+  const observed = raw.catch((error) => {
+    console.warn(`[cloudSync] ${eventId} operation failed:`, errorMessage(error));
+  });
+  remoteQueues.set(key, observed);
+  session.pendingById.set(eventId, observed);
+  void observed.finally(() => {
+    if (remoteQueues.get(key) === observed) remoteQueues.delete(key);
+    if (session.pendingById.get(eventId) === observed) session.pendingById.delete(eventId);
+  });
+  return observed;
+}
+
+function cancelPendingPush(session: Session, eventId: string): void {
+  const timer = session.pushTimers.get(eventId);
+  if (!timer) return;
+  clearTimeout(timer);
+  session.pushTimers.delete(eventId);
+}
+
+function cancelAllPendingPushes(session: Session): void {
+  for (const timer of session.pushTimers.values()) clearTimeout(timer);
+  session.pushTimers.clear();
+}
+
+function adoptLocalMutationLedger(session: Session): void {
+  // Never assign anonymous/device-wide edits to whichever account happens to
+  // sign in next. That could leak a previous organiser's events on a shared
+  // iPad. Explicit edits made during this user session create their own
+  // per-user dirty markers through recordDirty().
+  const ledger = readLocalMutationLedger(session.userId);
+  session.meta.dirtyById = {
+    ...session.meta.dirtyById,
+    ...ledger.dirtyById,
+  };
+  session.meta.tombstonesById = mergeTombstones(
+    session.meta.tombstonesById,
+    ledger.tombstonesById,
+  );
+  for (const eventId of Object.keys(session.meta.tombstonesById)) {
+    delete session.meta.dirtyById[eventId];
+  }
+  writeLocalMutationLedger(session.userId, ledger);
+  writeSyncMeta(session.userId, session.meta);
+}
+
+function writeLocalDeletionMarker(
+  userId: string,
+  eventId: string,
+  marker: TombstoneMarker,
+): void {
+  const ledger = readLocalMutationLedger(userId);
+  delete ledger.dirtyById[eventId];
+  ledger.tombstonesById[eventId] = marker;
+  writeLocalMutationLedger(userId, ledger);
+}
+
+function clearLocalDirtyMarker(
+  userId: string,
+  eventId: string,
+  fingerprint: string,
+): void {
+  const ledger = readLocalMutationLedger(userId);
+  if (ledger.dirtyById[eventId]?.fingerprint !== fingerprint) return;
+  delete ledger.dirtyById[eventId];
+  writeLocalMutationLedger(userId, ledger);
+}
+
+function hasTombstone(eventId: string): boolean {
+  if (active?.meta.tombstonesById[eventId]) return true;
+  const userId = active?.userId ?? readLastUserId();
+  return Boolean(readLocalMutationLedger(userId).tombstonesById[eventId]);
+}
+
+function currentEventWithId(eventId: string): EventState | null {
+  const current = useEventStore.getState().event;
+  return current?.id === eventId ? current : null;
+}
+
+async function safeListLocalRecords(): Promise<EventCatalogRecord[]> {
+  try {
+    return await listLocalEventRecords();
+  } catch (error) {
+    console.warn('[cloudSync] local catalog read failed:', errorMessage(error));
+    return [];
+  }
+}
+
+function emptyLedger(): MutationLedger {
+  return { dirtyById: {}, tombstonesById: {} };
+}
+
+function emptySyncMeta(): SyncMeta {
+  return { ...emptyLedger(), remoteUpdatedAtById: {} };
+}
+
+function readSyncMeta(userId: string): SyncMeta {
+  const value = readJson<Partial<SyncMeta>>(`${META_KEY_PREFIX}${userId}`);
+  if (value) {
+    return {
+      dirtyById: sanitizeDirtyMap(value.dirtyById),
+      tombstonesById: sanitizeTombstoneMap(value.tombstonesById),
+      remoteUpdatedAtById: sanitizeNumberMap(value.remoteUpdatedAtById),
+    };
+  }
+
+  // Non-destructive migration from the old single-event marker. The former
+  // clear-all flag is intentionally not migrated; multi-event sync never
+  // performs an account-wide event delete.
+  const legacy = readJson<{
+    lastSyncedEventId?: string | null;
+    dirtyEventId?: string | null;
+    tombstoneEventId?: string | null;
+  }>(`${LEGACY_META_KEY_PREFIX}${userId}`);
+  if (!legacy) return emptySyncMeta();
+  const migrated = emptySyncMeta();
+  if (legacy.lastSyncedEventId) migrated.remoteUpdatedAtById[legacy.lastSyncedEventId] = 0;
+  if (legacy.dirtyEventId) migrated.dirtyById[legacy.dirtyEventId] = {
+    fingerprint: '',
+    changedAt: 0,
+  };
+  // Do not promote a legacy cancellation marker into a durable tombstone.
+  // Older builds could leave this marker behind when a cancelled event later
+  // reappeared; only an explicit v3 exact-id delete is destructive.
+  writeSyncMeta(userId, migrated);
+  removeStorageKey(`${LEGACY_META_KEY_PREFIX}${userId}`);
+  return migrated;
+}
+
+function writeSyncMeta(userId: string, meta: SyncMeta): void {
+  writeJson(`${META_KEY_PREFIX}${userId}`, meta);
+}
+
+function readLocalMutationLedger(userId: string | null): MutationLedger {
+  const suffix = userId ?? 'anonymous';
+  const value = readJson<Partial<MutationLedger>>(`${LOCAL_MUTATION_KEY_PREFIX}${suffix}`);
+  if (value) {
+    return {
+      dirtyById: sanitizeDirtyMap(value.dirtyById),
+      tombstonesById: sanitizeTombstoneMap(value.tombstonesById),
+    };
+  }
+
+  const legacy = readJson<{
+    eventId?: string | null;
+    fingerprint?: string | null;
+    cancelledEventId?: string | null;
+  }>(`${LEGACY_MUTATION_KEY_PREFIX}${suffix}`);
+  if (!legacy) return emptyLedger();
+  const migrated = emptyLedger();
+  if (legacy.eventId) migrated.dirtyById[legacy.eventId] = {
+    fingerprint: legacy.fingerprint ?? '',
+    changedAt: 0,
+  };
+  // As above, legacy anonymous/user cancellation markers are deliberately
+  // ignored. They did not have the multi-event exact-delete safety contract.
+  writeLocalMutationLedger(userId, migrated);
+  removeStorageKey(`${LEGACY_MUTATION_KEY_PREFIX}${suffix}`);
+  return migrated;
+}
+
+function writeLocalMutationLedger(userId: string | null, ledger: MutationLedger): void {
+  writeJson(`${LOCAL_MUTATION_KEY_PREFIX}${userId ?? 'anonymous'}`, ledger);
+}
+
+function removeStorageKey(key: string): void {
+  try {
+    globalThis.localStorage?.removeItem(key);
   } catch {
-    // Storage restrictions must not stop cloud sync.
+    // Storage migration is best effort; v3 keys remain the source of truth.
   }
 }
 
@@ -733,36 +854,119 @@ function writeLastUserId(userId: string): void {
   try {
     globalThis.localStorage?.setItem(LAST_USER_KEY, userId);
   } catch {
-    // Storage restrictions must not stop cloud sync.
+    // Cloud sync continues for this page session.
   }
 }
 
-function readSyncMeta(userId: string): SyncMeta {
-  const empty: SyncMeta = {
-    lastSyncedEventId: null,
-    dirtyEventId: null,
-    tombstoneEventId: null,
-    clearAllPending: false,
-  };
+function readJson<T>(key: string): T | null {
   try {
-    const raw = globalThis.localStorage?.getItem(`${META_KEY_PREFIX}${userId}`);
-    if (!raw) return empty;
-    const parsed = JSON.parse(raw) as Partial<SyncMeta>;
-    return {
-      lastSyncedEventId: parsed.lastSyncedEventId ?? null,
-      dirtyEventId: parsed.dirtyEventId ?? null,
-      tombstoneEventId: parsed.tombstoneEventId ?? null,
-      clearAllPending: parsed.clearAllPending ?? false,
+    const raw = globalThis.localStorage?.getItem(key);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown): void {
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(value));
+  } catch {
+    // Marker storage can be unavailable/full. IndexedDB still owns event data.
+  }
+}
+
+function sanitizeDirtyMap(value: unknown): Record<string, DirtyMarker> {
+  if (!value || typeof value !== 'object') return {};
+  const result: Record<string, DirtyMarker> = {};
+  for (const [eventId, marker] of Object.entries(value)) {
+    if (!marker || typeof marker !== 'object') continue;
+    const candidate = marker as Partial<DirtyMarker>;
+    result[eventId] = {
+      fingerprint: typeof candidate.fingerprint === 'string' ? candidate.fingerprint : '',
+      changedAt: typeof candidate.changedAt === 'number' ? candidate.changedAt : 0,
     };
+  }
+  return result;
+}
+
+function sanitizeTombstoneMap(value: unknown): Record<string, TombstoneMarker> {
+  if (!value || typeof value !== 'object') return {};
+  const result: Record<string, TombstoneMarker> = {};
+  for (const [eventId, marker] of Object.entries(value)) {
+    if (!marker || typeof marker !== 'object') continue;
+    const candidate = marker as Partial<TombstoneMarker>;
+    result[eventId] = {
+      deletedAt: typeof candidate.deletedAt === 'number' ? candidate.deletedAt : 0,
+      pending: candidate.pending !== false,
+    };
+  }
+  return result;
+}
+
+function sanitizeNumberMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') return {};
+  const result: Record<string, number> = {};
+  for (const [eventId, timestamp] of Object.entries(value)) {
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) result[eventId] = timestamp;
+  }
+  return result;
+}
+
+function mergeTombstones(
+  first: Record<string, TombstoneMarker>,
+  second: Record<string, TombstoneMarker>,
+): Record<string, TombstoneMarker> {
+  const result = { ...first };
+  for (const [eventId, marker] of Object.entries(second)) {
+    const current = result[eventId];
+    result[eventId] = {
+      deletedAt: Math.max(current?.deletedAt ?? 0, marker.deletedAt),
+      pending: Boolean(current?.pending || marker.pending),
+    };
+  }
+  return result;
+}
+
+function dirtyMarkerFor(event: EventState, changedAt = Date.now()): DirtyMarker {
+  return { fingerprint: eventFingerprint(event), changedAt };
+}
+
+function eventFingerprint(event: EventState): string {
+  try {
+    return JSON.stringify(event);
   } catch {
-    return empty;
+    return `${event.id}:${event.createdAt}`;
   }
 }
 
-function writeSyncMeta(userId: string, meta: SyncMeta): void {
-  try {
-    globalThis.localStorage?.setItem(`${META_KEY_PREFIX}${userId}`, JSON.stringify(meta));
-  } catch {
-    // Private browsing/storage restrictions must not break the tournament.
-  }
+function cloneEvent(event: EventState): EventState {
+  if (typeof globalThis.structuredClone === 'function') return globalThis.structuredClone(event);
+  return JSON.parse(JSON.stringify(event)) as EventState;
+}
+
+function parseTimestamp(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function waitWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Timed out waiting for cloud sync.')), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }

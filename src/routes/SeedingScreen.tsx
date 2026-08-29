@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { eventRoute } from '@/lib/eventRoutes';
 import {
   DndContext,
   type DragEndEvent,
@@ -307,7 +308,10 @@ export function SeedingScreen() {
             onClick={() => {
               const toQualifier = !!event.qualifier;
               reopenFromSeeding();
-              setTimeout(() => navigate(toQualifier ? '/qualifier' : '/setup'), 0);
+              setTimeout(
+                () => navigate(eventRoute(event.id, toQualifier ? 'qualifier' : 'setup')),
+                0,
+              );
             }}
           >
             ← Back
@@ -316,7 +320,7 @@ export function SeedingScreen() {
             className="btn lg primary"
             onClick={() => {
               lockSeedingAndStartRound1();
-              setTimeout(() => navigate('/display'), 0);
+              setTimeout(() => navigate(eventRoute(event.id, 'display')), 0);
             }}
           >
             Lock seeding &amp; start Round 1 →

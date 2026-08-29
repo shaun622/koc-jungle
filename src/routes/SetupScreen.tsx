@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { eventRoute } from '@/lib/eventRoutes';
 import {
   DndContext,
   type DragEndEvent,
@@ -50,7 +51,7 @@ const TIE_RULE_LABELS: Record<TieRule, string> = {
 
 export function SetupScreen() {
   const event = useEventStore((s) => s.event);
-  const resetEvent = useEventStore((s) => s.resetEvent);
+  const loadEvent = useEventStore((s) => s.loadEvent);
   const addTeam = useEventStore((s) => s.addTeam);
   const addTeams = useEventStore((s) => s.addTeams);
   const updateTeam = useEventStore((s) => s.updateTeam);
@@ -301,10 +302,10 @@ export function SetupScreen() {
   // of stranding the operator on a dead screen.
   const resumeRoute =
     event.status === 'qualifier'
-      ? '/qualifier'
+      ? eventRoute(event.id, 'qualifier')
       : event.status === 'seeding'
-        ? '/seeding'
-        : '/display'; // round-in-progress / between-rounds / complete
+        ? eventRoute(event.id, 'seeding')
+        : eventRoute(event.id, 'display'); // round-in-progress / between-rounds / complete
   const resumeLabel =
     event.status === 'qualifier'
       ? 'Resume qualifier →'
@@ -582,10 +583,10 @@ export function SetupScreen() {
               onClick={() => {
                 if (qualifierEnabled) {
                   startQualifier();
-                  setTimeout(() => navigate('/qualifier'), 0);
+                  setTimeout(() => navigate(eventRoute(event.id, 'qualifier')), 0);
                 } else {
                   skipQualifierToSeeding();
-                  setTimeout(() => navigate('/seeding'), 0);
+                  setTimeout(() => navigate(eventRoute(event.id, 'seeding')), 0);
                 }
               }}
             >
@@ -608,7 +609,7 @@ export function SetupScreen() {
                 setTimeout(() => {
                   const next = useEventStore.getState().event;
                   if (next?.status === 'round-in-progress') {
-                    navigate('/display');
+                    navigate(eventRoute(next.id, 'display'));
                   }
                 }, 0);
               }}
@@ -633,7 +634,14 @@ export function SetupScreen() {
         confirmLabel="Reset"
         destructive
         onConfirm={() => {
-          resetEvent();
+          loadEvent({
+            ...event,
+            status: 'setup',
+            teams: [],
+            qualifier: undefined,
+            rounds: [],
+            pendingAssignments: undefined,
+          });
           setConfirmReset(false);
         }}
         onCancel={() => setConfirmReset(false)}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   HashRouter,
   Navigate,
@@ -7,8 +7,10 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
+import { useEventCatalogStore } from '@/store/eventCatalog';
 import { SetupScreen } from '@/routes/SetupScreen';
 import { QualifierScreen } from '@/routes/QualifierScreen';
 import { SeedingScreen } from '@/routes/SeedingScreen';
@@ -29,61 +31,77 @@ import { startCloudSync, stopCloudSync } from '@/store/cloudSync';
 import { logInIAP, logOutIAP } from '@/lib/iap';
 import { isPublicSignupPath } from '@/lib/signups';
 import { useEntitlementsStore } from '@/store/entitlements';
-import type { EventStatus } from '@/types/domain';
+import { eventIdFromPath, eventRoute, eventRouteForStatus, routeNameForStatus } from '@/lib/eventRoutes';
 
-function routeForStatus(status: EventStatus): string {
-  switch (status) {
-    case 'qualifier':
-      return '/qualifier';
-    case 'seeding':
-      return '/seeding';
-    case 'round-in-progress':
-      return '/display';
-    case 'between-rounds':
-      return '/display';
-    case 'complete':
-      // The TV-mode complete canvas on /display is the podium.
-      return '/display';
-    case 'setup':
-    default:
-      return '/setup';
-  }
-}
+const FREE_EVENT_ROUTES = new Set(['leaderboard', 'display', 'setup']);
 
-const FREE_PATHS = new Set(['/leaderboard', '/display', '/setup', '/complete', '/help', '/home']);
-
-function RouteGate() {
+function EventRouteGate() {
   const event = useEventStore((s) => s.event);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Public registration must always win over the locally saved operator
-    // event. Otherwise opening a shared link on an organiser's device can
-    // redirect to that device's current or previous event screen.
-    if (isPublicSignupPath(location.pathname)) return;
-
-    if (!event) {
-      // No event: the home screen is the launch pad. Also allow the static
-      // format guide (/help) so the menu's "Format guide" actually opens it
-      // instead of being bounced back to the dashboard.
-      const noEventOk =
-        location.pathname === '/home' ||
-        location.pathname === '/display' ||
-        location.pathname === '/help';
-      if (!noEventOk) {
-        navigate('/home', { replace: true });
-      }
-      return;
-    }
-    if (FREE_PATHS.has(location.pathname)) return;
-    const expected = routeForStatus(event.status);
-    if (location.pathname !== expected) {
-      navigate(expected, { replace: true });
-    }
+    if (!event) return;
+    const routeName = location.pathname.split('/').filter(Boolean).at(-1) ?? '';
+    if (FREE_EVENT_ROUTES.has(routeName)) return;
+    const expectedName = routeNameForStatus(event.status);
+    if (routeName !== expectedName) navigate(eventRoute(event.id, expectedName), { replace: true });
   }, [event, location.pathname, navigate]);
 
-  return null;
+  return <Outlet />;
+}
+
+function EventSelectionGate() {
+  const { eventId = '' } = useParams();
+  const event = useEventStore((s) => s.event);
+  const selectEvent = useEventStore((s) => s.selectEventById);
+  const loadPinnedEvent = useEventStore((s) => s.loadPinnedEventById);
+  const activeEventId = useEventCatalogStore((s) => s.activeEventId);
+  const catalogRevision = useEventCatalogStore((s) =>
+    s.events.map((item) => `${item.id}:${item.updatedAt}`).join('|'),
+  );
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMissing(false);
+    const displayIsPinned = location.pathname.endsWith('/display');
+    if (!eventId) return;
+    if (event?.id === eventId && (displayIsPinned || activeEventId === eventId)) return;
+    const load = displayIsPinned ? loadPinnedEvent : selectEvent;
+    void load(eventId)
+      .then((selected) => {
+        if (!cancelled && !selected) setMissing(true);
+      })
+      .catch(() => {
+        if (!cancelled) setMissing(true);
+      });
+    return () => { cancelled = true; };
+  }, [activeEventId, catalogRevision, event?.id, eventId, loadPinnedEvent, location.pathname, selectEvent]);
+
+  if (missing) {
+    return (
+      <div className="splash" style={{ flexDirection: 'column', gap: 16 }}>
+        <span>This event is not available yet. It may still be syncing.</span>
+        <button className="btn primary" onClick={() => navigate('/home')}>Open event library</button>
+      </div>
+    );
+  }
+  if (!eventId || event?.id !== eventId) return <div className="splash">Loading event…</div>;
+  return <Outlet />;
+}
+
+function EventStatusRedirect() {
+  const event = useEventStore((s) => s.event);
+  return event ? <Navigate to={eventRouteForStatus(event)} replace /> : <Navigate to="/home" replace />;
+}
+
+function LegacyEventRedirect({ route }: { route?: 'setup' | 'qualifier' | 'seeding' | 'display' | 'leaderboard' }) {
+  const event = useEventStore((s) => s.event);
+  if (!event) return <Navigate to="/home" replace />;
+  return <Navigate to={route ? eventRoute(event.id, route) : eventRouteForStatus(event)} replace />;
 }
 
 function OperatorShell() {
@@ -129,12 +147,17 @@ function CloudSyncGate() {
 
 function StorageBroadcastGate() {
   const location = useLocation();
-  useStorageBroadcast(!isPublicSignupPath(location.pathname));
+  // Every event-scoped route is pinned to the UUID in its URL. A second tab
+  // may open or display another competition without replacing the event this
+  // operator tab is editing.
+  const pinnedEventId = eventIdFromPath(location.pathname);
+  useStorageBroadcast(!isPublicSignupPath(location.pathname), pinnedEventId);
   return null;
 }
 
 export function App() {
   const hydrated = useEventStore((s) => s.hydrated);
+  const catalogHydrated = useEventCatalogStore((s) => s.hydrated);
   useApplyTheme();
 
   // Keep the local seven-day trial honest. Check at launch, once a minute
@@ -156,18 +179,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (useEventStore.persist) {
-      if (useEventStore.persist.hasHydrated()) {
-        useEventStore.setState({ hydrated: true });
-      }
-      const unsub = useEventStore.persist.onFinishHydration(() => {
-        useEventStore.setState({ hydrated: true });
-      });
-      return unsub;
-    }
+    void useEventStore.getState().initializeCatalog();
   }, []);
 
-  if (!hydrated) {
+  if (!hydrated || !catalogHydrated) {
     return <div className="splash">Loading…</div>;
   }
 
@@ -177,24 +192,32 @@ export function App() {
       <UpdatePrompt />
       <StorageBroadcastGate />
       <CloudSyncGate />
-      <RouteGate />
       <Routes>
         <Route path="/signup/:accountSlug/:slug" element={<PublicSignupScreen />} />
         <Route path="/signup/:slug" element={<PublicSignupScreen />} />
-        <Route path="/display" element={<DisplayScreen />} />
         <Route path="/home" element={<HomeScreen />} />
-        <Route element={<OperatorShell />}>
-          <Route index element={<Navigate to="/home" replace />} />
-          <Route path="/setup" element={<SetupScreen />} />
-          <Route path="/qualifier" element={<QualifierScreen />} />
-          <Route path="/seeding" element={<SeedingScreen />} />
-          {/* Legacy route — the podium now lives on the /display complete
-              canvas. Redirect any stale /complete link there. */}
-          <Route path="/complete" element={<Navigate to="/display" replace />} />
-          <Route path="/leaderboard" element={<LeaderboardScreen />} />
-          <Route path="/help" element={<HelpScreen />} />
-          <Route path="*" element={<NotFound />} />
+        <Route path="/help" element={<HelpScreen />} />
+        <Route path="/events/:eventId" element={<EventSelectionGate />}>
+          <Route element={<EventRouteGate />}>
+            <Route index element={<EventStatusRedirect />} />
+            <Route path="display" element={<DisplayScreen />} />
+            <Route element={<OperatorShell />}>
+              <Route path="setup" element={<SetupScreen />} />
+              <Route path="qualifier" element={<QualifierScreen />} />
+              <Route path="seeding" element={<SeedingScreen />} />
+              <Route path="complete" element={<EventStatusRedirect />} />
+              <Route path="leaderboard" element={<LeaderboardScreen />} />
+            </Route>
+          </Route>
         </Route>
+        <Route path="/setup" element={<LegacyEventRedirect route="setup" />} />
+        <Route path="/qualifier" element={<LegacyEventRedirect route="qualifier" />} />
+        <Route path="/seeding" element={<LegacyEventRedirect route="seeding" />} />
+        <Route path="/display" element={<LegacyEventRedirect route="display" />} />
+        <Route path="/complete" element={<LegacyEventRedirect route="display" />} />
+        <Route path="/leaderboard" element={<LegacyEventRedirect route="leaderboard" />} />
+        <Route index element={<Navigate to="/home" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </HashRouter>
   );

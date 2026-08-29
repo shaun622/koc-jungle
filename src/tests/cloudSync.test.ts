@@ -1,28 +1,25 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
-import { cleanup, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const cloud = vi.hoisted(() => {
-  type QueryResult = {
-    data: Array<{ id: string; state: unknown; updated_at: string }> | null;
-    error: { message: string } | null;
-  };
-
-  let resolveInitial: (result: QueryResult) => void = () => undefined;
-  let initial = Promise.resolve<QueryResult>({ data: null, error: null });
-  let realtimeHandler: ((payload: unknown) => void) | null = null;
+  type Result = { data: unknown[]; error: { message: string } | null };
+  let eventResult: Result = { data: [], error: null };
+  let tombstoneResult: Result = { data: [], error: null };
+  let eventQueryImpl: () => Promise<Result> = async () => eventResult;
+  let rpcImpl: (id: string) => Promise<{ data: unknown; error: { message: string } | null }> =
+    async () => ({ data: new Date().toISOString(), error: null });
   let upsertImpl: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }> =
     async () => ({ error: null });
-  let clearImpl: (userId: string) => Promise<{ error: { message: string } | null }> =
-    async () => ({ error: null });
-  const upserts: Array<Record<string, unknown>> = [];
-  const upsertOptions: Array<Record<string, unknown> | undefined> = [];
-  const clears: string[] = [];
-  const deleteFilters: Array<Record<string, string>> = [];
+  const upserts: Record<string, unknown>[] = [];
+  const rpcs: string[] = [];
+  const handlers = new Map<string, (payload: unknown) => void>();
 
   const channel = {
-    on: (_event: string, _filter: unknown, handler: (payload: unknown) => void) => {
-      realtimeHandler = handler;
+    on: (
+      _kind: string,
+      filter: { table?: string },
+      handler: (payload: unknown) => void,
+    ) => {
+      if (filter.table) handlers.set(filter.table, handler);
       return channel;
     },
     subscribe: () => channel,
@@ -31,74 +28,57 @@ const cloud = vi.hoisted(() => {
 
   const client = {
     channel: () => channel,
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
-        eq: () => ({
-          order: () => ({
-            limit: () => initial,
-          }),
-        }),
+        eq: () => table === 'events'
+          ? { order: () => eventQueryImpl() }
+          : Promise.resolve(tombstoneResult),
       }),
-      upsert: async (
-        row: Record<string, unknown>,
-        options?: Record<string, unknown>,
-      ) => {
+      upsert: async (row: Record<string, unknown>) => {
         upserts.push(row);
-        upsertOptions.push(options);
         return upsertImpl(row);
       },
-      delete: () => {
-        let userId = '';
-        const filters: Record<string, string> = {};
-        const builder = {
-          eq: (column: string, value: string) => {
-            filters[column] = value;
-            if (column === 'user_id') userId = value;
-            return builder;
-          },
-          then: <TResult1 = { error: { message: string } | null }, TResult2 = never>(
-            onfulfilled?: ((value: { error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
-            onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-          ) => {
-            clears.push(userId);
-            deleteFilters.push({ ...filters });
-            return clearImpl(userId).then(onfulfilled, onrejected);
-          },
-        };
-        return builder;
-      },
     }),
+    rpc: async (_name: string, args: { p_event_id: string }) => {
+      rpcs.push(args.p_event_id);
+      return rpcImpl(args.p_event_id);
+    },
   };
 
   return {
     client,
     upserts,
-    upsertOptions,
-    clears,
-    deleteFilters,
+    rpcs,
     reset() {
-      initial = new Promise<QueryResult>((resolve) => {
-        resolveInitial = resolve;
-      });
-      realtimeHandler = null;
+      eventResult = { data: [], error: null };
+      tombstoneResult = { data: [], error: null };
+      eventQueryImpl = async () => eventResult;
+      rpcImpl = async () => ({ data: new Date().toISOString(), error: null });
       upsertImpl = async () => ({ error: null });
-      clearImpl = async () => ({ error: null });
       upserts.length = 0;
-      upsertOptions.length = 0;
-      clears.length = 0;
-      deleteFilters.length = 0;
+      rpcs.length = 0;
+      handlers.clear();
     },
-    resolveInitial(result: QueryResult) {
-      resolveInitial(result);
+    setEvents(data: unknown[]) {
+      eventResult = { data, error: null };
     },
-    emitRemote(payload: unknown) {
-      realtimeHandler?.(payload);
+    setEventsError(message: string) {
+      eventResult = { data: [], error: { message } };
+    },
+    setEventQueryImpl(impl: () => Promise<Result>) {
+      eventQueryImpl = impl;
+    },
+    setTombstones(data: unknown[]) {
+      tombstoneResult = { data, error: null };
     },
     setUpsertImpl(impl: typeof upsertImpl) {
       upsertImpl = impl;
     },
-    setClearImpl(impl: typeof clearImpl) {
-      clearImpl = impl;
+    setRpcImpl(impl: typeof rpcImpl) {
+      rpcImpl = impl;
+    },
+    emit(table: string, payload: unknown) {
+      handlers.get(table)?.(payload);
     },
   };
 });
@@ -106,792 +86,474 @@ const cloud = vi.hoisted(() => {
 vi.mock('@/lib/supabase', () => ({ supabase: cloud.client }));
 
 import {
-  applyStorageBroadcast,
+  deleteCloudEvent,
   flushCloudSync,
   markLocalEventMutation,
   startCloudSync,
   stopCloudSync,
 } from '@/store/cloudSync';
+import { useEventCatalogStore } from '@/store/eventCatalog';
+import {
+  listLocalEventRecords,
+  removeLocalEventRecord,
+  saveLocalEventRecord,
+} from '@/store/eventRepository';
 import { useEventStore } from '@/store/eventStore';
-import { useStorageBroadcast } from '@/hooks/useStorageBroadcast';
-import type { EventState } from '@/types/domain';
+import { DEFAULT_SETTINGS, type EventState } from '@/types/domain';
 
-const BROADCAST_KEY = 'koc-event-broadcast-v2';
-
-function StorageBroadcastHarness() {
-  useStorageBroadcast();
-  return null;
+function eventFixture(id: string, name: string): EventState {
+  return {
+    id,
+    name,
+    venue: '',
+    createdAt: 1_700_000_000_000,
+    status: 'setup',
+    settings: { ...DEFAULT_SETTINGS },
+    courts: [],
+    teams: [],
+    rounds: [],
+    format: 'koc',
+    formatConfig: {},
+  };
 }
 
-function eventFixture(name: string, courtCount = 3): EventState {
-  useEventStore.getState().createEvent(name, 'koc');
-  const event = structuredClone(useEventStore.getState().event!);
-  event.courts = event.courts.slice(0, courtCount).map((court, index) => ({
-    ...court,
-    position: index + 1,
-  }));
-  return event;
+function remoteRow(event: EventState, at = '2026-08-29T10:00:00.000Z') {
+  return { id: event.id, state: event, updated_at: at };
 }
 
-async function settle(): Promise<void> {
-  for (let index = 0; index < 10; index += 1) await Promise.resolve();
+async function saveLocal(event: EventState, updatedAt = 1_700_000_000_000) {
+  await saveLocalEventRecord({
+    id: event.id,
+    state: event,
+    createdAt: event.createdAt,
+    updatedAt,
+    archivedAt: null,
+  });
 }
 
-describe('cloud sync conflict protection', () => {
-  beforeEach(() => {
+async function settle(turns = 30): Promise<void> {
+  for (let index = 0; index < turns; index += 1) await Promise.resolve();
+}
+
+describe('event-scoped cloud sync', () => {
+  beforeEach(async () => {
     vi.useFakeTimers();
     stopCloudSync();
     cloud.reset();
     localStorage.clear();
+    for (const record of await listLocalEventRecords()) {
+      await removeLocalEventRecord(record.id);
+    }
+    useEventCatalogStore.setState({
+      events: [],
+      activeEventId: null,
+      hydrated: false,
+      lastError: null,
+    });
     useEventStore.setState({ event: null, hydrated: true, lastError: null });
   });
 
   afterEach(() => {
-    cleanup();
     stopCloudSync();
     vi.useRealTimers();
   });
 
-  it('keeps a court added while the initial cloud pull is pending', async () => {
-    const remote = eventFixture('Remote event');
-    const local = eventFixture('Local event');
-    useEventStore.getState().loadEvent(local);
+  it('pulls and stores the complete remote catalog without selecting one row', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    const bravo = eventFixture('event-bravo', 'Bravo');
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
 
     startCloudSync('user-1');
-    useEventStore.getState().addCourt();
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
     await settle();
 
-    expect(useEventStore.getState().event?.name).toBe('Local event');
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
-  });
-
-  it('keeps a court edited before authentication starts cloud sync', async () => {
-    const remote = eventFixture('Pre-auth event');
-    useEventStore.getState().loadEvent(remote);
-    useEventStore.getState().addCourt();
-    const edited = useEventStore.getState().event!;
-    markLocalEventMutation(edited, remote);
-
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-    await settle();
-
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).courts).toHaveLength(4);
-  });
-
-  it('keeps an unsaved court after a reload and retries it instead of pulling stale cloud state', async () => {
-    const remote = eventFixture('Reload event');
-    useEventStore.getState().loadEvent(remote);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    useEventStore.getState().addCourt();
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
-    stopCloudSync();
-
-    cloud.reset();
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-    await settle();
-
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).courts).toHaveLength(4);
-  });
-
-  it('does not resurrect an old event after cancel and replace during initial pull', async () => {
-    const remote = eventFixture('Cancelled cloud event');
-    const local = eventFixture('Local event');
-    useEventStore.getState().loadEvent(local);
-
-    startCloudSync('user-1');
-    useEventStore.getState().resetEvent();
-    useEventStore.getState().createEvent('Replacement event', 'koc');
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    expect(useEventStore.getState().event?.name).toBe('Replacement event');
-  });
-
-  it('rejects realtime state while a local court change is waiting to save', async () => {
-    const initial = eventFixture('Current event');
-    useEventStore.getState().loadEvent(initial);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    useEventStore.getState().addCourt();
-    cloud.emitRemote({
-      new: {
-        state: initial,
-        updated_at: '2026-08-25T12:01:00.000Z',
-      },
-    });
-
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
-  });
-
-  it('lets a cross-tab cancellation override a dirty local court change', async () => {
-    const initial = eventFixture('Cross-tab event');
-    useEventStore.getState().loadEvent(initial);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    useEventStore.getState().addCourt();
-    expect(applyStorageBroadcast(null)).toBe(true);
-    await vi.advanceTimersByTimeAsync(1_100);
-    await settle();
-
-    expect(useEventStore.getState().event).toBeNull();
-    expect(cloud.upserts).toHaveLength(0);
-    expect(cloud.clears.length).toBeGreaterThan(0);
-  });
-
-  it('persists explicit cross-tab cancellation scope before cloud sync restarts', async () => {
-    const current = eventFixture('Pre-restart cross-tab cancellation');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    stopCloudSync();
-
-    expect(applyStorageBroadcast(null)).toBe(true);
-    cloud.reset();
-    startCloudSync('user-1');
-    await settle();
-
-    expect(cloud.deleteFilters.at(-1)).toEqual({ user_id: 'user-1' });
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
+    const records = await listLocalEventRecords();
+    expect(records.map((record) => record.id).sort()).toEqual([
+      alpha.id,
+      bravo.id,
+    ]);
     expect(useEventStore.getState().event).toBeNull();
   });
 
-  it('lets a newer cross-tab edit invalidate a pending stale initial pull', async () => {
-    const stale = eventFixture('Stale cloud event');
-    const local = eventFixture('Local event');
-    const broadcast = { ...structuredClone(local), name: 'Edited in other tab' };
-    useEventStore.getState().loadEvent(local);
+  it('does not delete the prior competition when the active selection changes', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    const bravo = eventFixture('event-bravo', 'Bravo');
+    await saveLocal(alpha, Date.parse('2026-08-29T10:00:00.000Z'));
+    await saveLocal(bravo, Date.parse('2026-08-29T10:00:00.000Z'));
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
+    await useEventStore.getState().selectEventById(alpha.id);
+
     startCloudSync('user-1');
-
-    expect(applyStorageBroadcast(broadcast)).toBe(true);
-    cloud.resolveInitial({
-      data: [{ id: stale.id, state: stale, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
     await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-
-    expect(useEventStore.getState().event?.name).toBe('Edited in other tab');
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).name).toBe('Edited in other tab');
-  });
-
-  it('protects a clean tab\'s newer cross-tab court state from an older cloud echo', async () => {
-    const initial = eventFixture('Clean receiver');
-    useEventStore.getState().loadEvent(initial);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    const newer = structuredClone(initial);
-    newer.courts.push({
-      ...newer.courts[0],
-      id: 'fourth-court',
-      name: 'Court 4',
-      position: 4,
-    });
-    applyStorageBroadcast(newer);
-    cloud.emitRemote({
-      eventType: 'UPDATE',
-      new: {
-        state: initial,
-        updated_at: '2026-08-25T12:01:00.000Z',
-      },
-    });
-
-    expect(useEventStore.getState().event?.courts).toHaveLength(4);
+    await useEventStore.getState().selectEventById(bravo.id);
     await vi.advanceTimersByTimeAsync(1_100);
     await settle();
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).courts).toHaveLength(4);
+
+    expect(cloud.rpcs).toEqual([]);
+    expect(cloud.upserts).toEqual([]);
+    expect((await listLocalEventRecords()).map((record) => record.id)).toEqual(
+      expect.arrayContaining([alpha.id, bravo.id]),
+    );
   });
 
-  it('does not adopt another account\'s pre-auth local mutation marker', async () => {
-    const accountA = eventFixture('Account A');
-    useEventStore.getState().loadEvent(accountA);
-    startCloudSync('account-a');
-    cloud.resolveInitial({
-      data: [{ id: accountA.id, state: accountA, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    stopCloudSync();
-
-    useEventStore.getState().addCourt();
-    const editedAccountA = structuredClone(useEventStore.getState().event!);
-    markLocalEventMutation(editedAccountA, accountA);
-
-    const accountB = eventFixture('Account B');
-    cloud.reset();
-    useEventStore.getState().loadEvent(editedAccountA);
-    startCloudSync('account-b');
-    cloud.resolveInitial({
-      data: [{ id: accountB.id, state: accountB, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    expect(useEventStore.getState().event?.name).toBe('Account B');
-    expect(cloud.upserts).toHaveLength(0);
-  });
-
-  it('applies a clean remote state without writing it straight back', async () => {
-    const remote = eventFixture('Remote winner');
-    const local = eventFixture('Local copy');
-    useEventStore.getState().loadEvent(local);
+  it('flushes every dirty competition rather than only the active one', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha offline edit');
+    const bravo = eventFixture('event-bravo', 'Bravo offline edit');
+    await saveLocal(alpha);
+    await saveLocal(bravo);
     startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: remote.id, state: remote, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
     await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-
-    expect(useEventStore.getState().event?.name).toBe('Remote winner');
-    expect(cloud.upserts).toHaveLength(0);
-  });
-
-  it('does not resurrect a local event when the cloud row was deleted', async () => {
-    const local = eventFixture('Local only');
-    useEventStore.getState().loadEvent(local);
-    startCloudSync('user-1');
-    cloud.resolveInitial({ data: [], error: null });
-    await settle();
-
-    expect(cloud.upserts).toHaveLength(0);
-    expect(useEventStore.getState().event?.name).toBe('Local only');
-  });
-
-  it('applies a remote cancellation without echoing or resurrecting it', async () => {
-    const current = eventFixture('Cancelled elsewhere');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: current.id }, new: {} });
-    expect(useEventStore.getState().event).toBeNull();
-    await settle();
-    expect(cloud.deleteFilters.at(-1)).toEqual({
-      user_id: 'user-1',
-      id: current.id,
-    });
-    await vi.advanceTimersByTimeAsync(1_100);
-    expect(cloud.upserts).toHaveLength(0);
-  });
-
-  it('does not escalate a replacement delete received from another device', async () => {
-    const original = eventFixture('Remote original');
-    const replacement = eventFixture('Remote replacement');
-    useEventStore.getState().loadEvent(original);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: original.id }, new: {} });
-    await settle();
-    expect(cloud.deleteFilters.at(-1)).toEqual({
-      user_id: 'user-1',
-      id: original.id,
-    });
-
-    cloud.emitRemote({
-      eventType: 'INSERT',
-      new: {
-        state: replacement,
-        updated_at: new Date(Date.now() + 1_000).toISOString(),
-      },
-    });
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
-  });
-
-  it('keeps a remote scoped delete scoped after restart before replacement arrives', async () => {
-    const original = eventFixture('Restarted remote original');
-    const replacement = eventFixture('Restarted remote replacement');
-    useEventStore.getState().loadEvent(original);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    let resolveOldClear: (result: { error: null }) => void = () => undefined;
-    cloud.setClearImpl(() => new Promise((resolve) => {
-      resolveOldClear = resolve;
-    }));
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: original.id }, new: {} });
-    await settle();
-    expect(useEventStore.getState().event).toBeNull();
-    stopCloudSync();
-
-    cloud.reset();
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: replacement.id, state: replacement, updated_at: '2026-08-25T12:00:30.000Z' }],
-      error: null,
-    });
-    await settle();
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
-
-    resolveOldClear({ error: null });
-    await settle();
-    expect(cloud.deleteFilters.at(-1)).toEqual({
-      user_id: 'user-1',
-      id: original.id,
-    });
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
-  });
-
-  it('does not rebroadcast a cloud-origin scoped delete as explicit cancellation', async () => {
-    const current = eventFixture('Cloud-origin delete');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    render(createElement(StorageBroadcastHarness));
-
-    const sentinel = JSON.stringify({
-      version: { at: Date.now(), source: 'existing-tab' },
-      event: current,
-    });
-    localStorage.setItem(BROADCAST_KEY, sentinel);
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: current.id }, new: {} });
-
-    expect(useEventStore.getState().event).toBeNull();
-    expect(localStorage.getItem(BROADCAST_KEY)).toBe(sentinel);
-  });
-
-  it('finishes account-wide cleanup despite multiple realtime delete echoes', async () => {
-    const current = eventFixture('Clear-all current');
-    const replacement = eventFixture('After clear-all');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    let resolveClear: (result: { error: null }) => void = () => undefined;
-    cloud.setClearImpl(() => new Promise((resolve) => {
-      resolveClear = resolve;
-    }));
-    useEventStore.getState().resetEvent();
-    await settle();
-    expect(cloud.clears).toHaveLength(1);
-
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: current.id }, new: {} });
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: 'legacy-row' }, new: {} });
-    expect(cloud.clears).toHaveLength(1);
-
-    resolveClear({ error: null });
-    await settle();
-    cloud.emitRemote({
-      eventType: 'INSERT',
-      new: {
-        state: replacement,
-        updated_at: new Date(Date.now() + 1_000).toISOString(),
-      },
-    });
-
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
-  });
-
-  it('clears pending cleanup after cancel, create and replace before delete resolves', async () => {
-    const original = eventFixture('Deferred original');
-    const firstReplacement = eventFixture('Deferred replacement one');
-    const finalReplacement = eventFixture('Deferred replacement two');
-    const remoteAfterward = eventFixture('Remote after cleanup');
-    useEventStore.getState().loadEvent(original);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    let resolveFirstClear: (result: { error: null }) => void = () => undefined;
-    let clearCalls = 0;
-    cloud.setClearImpl(() => {
-      clearCalls += 1;
-      if (clearCalls === 1) {
-        return new Promise((resolve) => {
-          resolveFirstClear = resolve;
-        });
-      }
-      return Promise.resolve({ error: null });
-    });
-
-    useEventStore.getState().resetEvent();
-    useEventStore.getState().loadEvent(firstReplacement);
-    useEventStore.getState().loadEvent(finalReplacement);
-    await settle();
-    expect(cloud.clears).toHaveLength(1);
-
-    resolveFirstClear({ error: null });
-    await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-    await settle();
-    expect((cloud.upserts.at(-1)?.state as EventState).id).toBe(finalReplacement.id);
-
-    cloud.emitRemote({
-      eventType: 'UPDATE',
-      new: {
-        state: remoteAfterward,
-        updated_at: new Date(Date.now() + 2_000).toISOString(),
-      },
-    });
-    expect(useEventStore.getState().event?.id).toBe(remoteAfterward.id);
-  });
-
-  it('serialises a restarted replacement behind the old session clear', async () => {
-    const original = eventFixture('Old session event');
-    const replacement = eventFixture('New session replacement');
-    useEventStore.getState().loadEvent(original);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    let resolveOldClear: (result: { error: null }) => void = () => undefined;
-    cloud.setClearImpl(() => new Promise((resolve) => {
-      resolveOldClear = resolve;
-    }));
-    useEventStore.getState().resetEvent();
-    await settle();
-    stopCloudSync();
-
-    cloud.reset();
-    useEventStore.getState().loadEvent(replacement);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    await vi.advanceTimersByTimeAsync(1_100);
-    expect(cloud.upserts).toHaveLength(0);
-
-    resolveOldClear({ error: null });
-    await settle();
+    markLocalEventMutation(alpha, null);
+    markLocalEventMutation(bravo, null);
     await flushCloudSync();
     await settle();
-    expect(cloud.upserts.length).toBeGreaterThan(0);
-    expect(cloud.upserts.every(
-      (row) => (row.state as EventState).id === replacement.id,
-    )).toBe(true);
-    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).toContain(replacement.id);
+
+    expect(cloud.upserts.map((row) => row.id)).toEqual(
+      expect.arrayContaining([alpha.id, bravo.id]),
+    );
   });
 
-  it('does not let an initial pull resurrect a deletion received first', async () => {
-    const current = eventFixture('Deleted before pull');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
+  it('does not upload another account\'s device-local catalog during bootstrap', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha private draft');
+    await saveLocal(alpha);
 
-    cloud.emitRemote({ eventType: 'DELETE', old: { id: current.id }, new: {} });
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
+    startCloudSync('user-a');
     await settle();
-
-    expect(useEventStore.getState().event).toBeNull();
-  });
-
-  it('persists a failed cancellation and blocks resurrection after restart', async () => {
-    const current = eventFixture('Offline cancellation');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.setClearImpl(async () => ({ error: { message: 'offline' } }));
-    useEventStore.getState().resetEvent();
-    await settle();
+    useEventStore.setState({ event: alpha });
     stopCloudSync();
 
-    cloud.reset();
-    cloud.setClearImpl(async () => ({ error: { message: 'still offline' } }));
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    expect(useEventStore.getState().event).toBeNull();
-    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).toContain(current.id);
-  });
-
-  it('blocks a different legacy row while an account-wide cancellation retries', async () => {
-    const legacy = eventFixture('Older legacy row');
-    const current = eventFixture('Cancelled newest row');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.setClearImpl(async () => ({ error: { message: 'offline' } }));
-    useEventStore.getState().resetEvent();
-    await settle();
-    stopCloudSync();
-
-    cloud.reset();
-    cloud.setClearImpl(async () => ({ error: { message: 'still offline' } }));
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: legacy.id, state: legacy, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    expect(useEventStore.getState().event).toBeNull();
-    expect(cloud.deleteFilters.at(-1)).toEqual({ user_id: 'user-1' });
-  });
-
-  it('retries a failed cancellation when another tab repeats the null snapshot', async () => {
-    const current = eventFixture('Repeated cancellation');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.setClearImpl(async () => ({ error: { message: 'offline' } }));
-    useEventStore.getState().resetEvent();
-    await settle();
-    expect(cloud.clears).toHaveLength(1);
-
-    expect(applyStorageBroadcast(null)).toBe(true);
-    await settle();
-
-    expect(cloud.clears).toHaveLength(2);
-    expect(cloud.deleteFilters[1]).toEqual({
-      user_id: 'user-1',
-    });
-  });
-
-  it('rejects a stale cross-tab snapshot for a tombstoned event', async () => {
-    const current = eventFixture('Tombstoned broadcast');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.setClearImpl(async () => ({ error: { message: 'offline' } }));
-    useEventStore.getState().resetEvent();
-    await settle();
-
-    expect(applyStorageBroadcast(current)).toBe(false);
-    expect(useEventStore.getState().event).toBeNull();
-    await vi.advanceTimersByTimeAsync(1_100);
-    await settle();
-    expect(cloud.upserts).toHaveLength(0);
-  });
-
-  it('preserves one account cancellation while another account records edits', async () => {
-    const accountA = eventFixture('Account A cancellation');
-    useEventStore.getState().loadEvent(accountA);
-    startCloudSync('account-a');
-    cloud.resolveInitial({
-      data: [{ id: accountA.id, state: accountA, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    stopCloudSync();
-
-    useEventStore.getState().loadEvent(accountA);
-    useEventStore.getState().resetEvent();
-    markLocalEventMutation(null, accountA);
-
-    const accountB = eventFixture('Account B edit');
-    useEventStore.getState().loadEvent(accountB);
-    cloud.reset();
-    startCloudSync('account-b');
-    cloud.resolveInitial({
-      data: [{ id: accountB.id, state: accountB, updated_at: '2026-08-25T12:01:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    useEventStore.getState().addCourt();
-    markLocalEventMutation(useEventStore.getState().event, accountB);
-    stopCloudSync();
-
-    expect(localStorage.getItem('koc-local-mutation-v2:account-a')).toContain(accountA.id);
-    expect(localStorage.getItem('koc-local-mutation-v2:account-b')).toContain(accountB.id);
-
-    useEventStore.setState({ event: null, lastError: null });
-    cloud.reset();
-    startCloudSync('account-a');
-    await settle();
-    cloud.resolveInitial({
-      data: [{ id: accountA.id, state: accountA, updated_at: '2026-08-25T12:02:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    expect(cloud.clears).toContain('account-a');
-    expect(cloud.deleteFilters.at(-1)).toEqual({ user_id: 'account-a' });
-    expect(useEventStore.getState().event).toBeNull();
-  });
-
-  it('preserves and uploads a replacement while retrying an older cancellation', async () => {
-    const current = eventFixture('Old cancelled event');
-    useEventStore.getState().loadEvent(current);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: current.id, state: current, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    cloud.setClearImpl(async () => ({ error: { message: 'offline' } }));
-    useEventStore.getState().resetEvent();
-    useEventStore.getState().createEvent('Replacement event', 'koc');
-    const replacement = structuredClone(useEventStore.getState().event!);
-    await settle();
-    stopCloudSync();
-
-    cloud.reset();
-    useEventStore.getState().loadEvent(replacement);
-    startCloudSync('user-1');
-    cloud.resolveInitial({ data: [], error: null });
+    startCloudSync('user-b');
     await settle();
     await vi.advanceTimersByTimeAsync(1_100);
+    await flushCloudSync();
     await settle();
 
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).id).toBe(replacement.id);
-    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).not.toContain(current.id);
+    expect(cloud.upserts).toEqual([]);
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-b')).not.toContain(alpha.id);
   });
 
-  it('removes a directly replaced event before saving its replacement', async () => {
-    const original = eventFixture('Original event');
-    useEventStore.getState().loadEvent(original);
+  it('ignores legacy cancellation markers instead of deleting an event', async () => {
+    localStorage.setItem('koc-cloud-sync-v2:user-1', JSON.stringify({
+      tombstoneEventId: 'silver-koc',
+    }));
+    localStorage.setItem('koc-local-mutation-v2:user-1', JSON.stringify({
+      cancelledEventId: 'silver-koc',
+    }));
+
     startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: original.id, state: original, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    expect(cloud.rpcs).toEqual([]);
+    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).toBeNull();
+    expect(localStorage.getItem('koc-local-mutation-v2:user-1')).toBeNull();
+  });
+
+  it('deletes through the exact-id RPC and never issues an account-wide delete', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    const bravo = eventFixture('event-bravo', 'Bravo');
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
+    startCloudSync('user-1');
     await settle();
 
-    const replacement = eventFixture('Direct replacement');
+    await deleteCloudEvent(alpha.id);
     await settle();
-    expect(cloud.deleteFilters).toContainEqual({
-      user_id: 'user-1',
-      id: original.id,
-    });
 
-    cloud.emitRemote({
+    expect(cloud.rpcs).toEqual([alpha.id]);
+    expect((await listLocalEventRecords()).find((record) => record.id === bravo.id)).toBeTruthy();
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-1')).toContain(alpha.id);
+  });
+
+  it('applies realtime updates only to their matching catalog record', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    const bravo = eventFixture('event-bravo', 'Bravo');
+    await saveLocal(alpha, Date.parse('2026-08-29T10:00:00.000Z'));
+    await saveLocal(bravo, Date.parse('2026-08-29T10:00:00.000Z'));
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
+    useEventCatalogStore.setState({ activeEventId: alpha.id });
+    useEventStore.setState({ event: alpha });
+    startCloudSync('user-1');
+    await settle();
+
+    const updatedBravo = { ...bravo, name: 'Bravo remotely edited' };
+    cloud.emit('events', {
       eventType: 'UPDATE',
+      old: {},
+      new: remoteRow(updatedBravo, '2026-08-29T11:00:00.000Z'),
+    });
+    await settle();
+
+    expect(useEventStore.getState().event?.id).toBe(alpha.id);
+    expect(
+      (await listLocalEventRecords()).find((record) => record.id === bravo.id)?.state.name,
+    ).toBe('Bravo remotely edited');
+  });
+
+  it('removes only the tombstoned event and keeps the active event intact', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    const bravo = eventFixture('event-bravo', 'Bravo');
+    await saveLocal(alpha);
+    await saveLocal(bravo);
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
+    useEventCatalogStore.setState({ activeEventId: alpha.id });
+    useEventStore.setState({ event: alpha });
+    startCloudSync('user-1');
+    await settle();
+
+    cloud.emit('event_tombstones', {
+      eventType: 'INSERT',
+      old: {},
       new: {
-        state: original,
-        updated_at: new Date(Date.now() + 1_000).toISOString(),
+        event_id: bravo.id,
+        deleted_at: '2026-08-29T11:00:00.000Z',
       },
     });
-    expect(useEventStore.getState().event?.id).toBe(replacement.id);
+    await settle();
 
+    expect(useEventStore.getState().event?.id).toBe(alpha.id);
+    expect((await listLocalEventRecords()).find((record) => record.id === bravo.id)).toBeUndefined();
+    expect((await listLocalEventRecords()).find((record) => record.id === alpha.id)).toBeTruthy();
+  });
+
+  it('does not turn legacy cancellation markers into exact-id deletions', async () => {
+    const preserved = eventFixture('legacy-preserved-event', 'Preserved event');
+    await saveLocal(preserved);
+    localStorage.setItem('koc-cloud-sync-v2:user-1', JSON.stringify({
+      lastSyncedEventId: preserved.id,
+      tombstoneEventId: preserved.id,
+    }));
+    localStorage.setItem('koc-local-mutation-v2:user-1', JSON.stringify({
+      cancelledEventId: preserved.id,
+    }));
+
+    startCloudSync('user-1');
+    await settle();
     await vi.advanceTimersByTimeAsync(1_100);
     await settle();
-    expect(cloud.upserts).toHaveLength(1);
-    expect((cloud.upserts[0].state as EventState).id).toBe(replacement.id);
-    expect(cloud.upsertOptions[0]).toEqual({ onConflict: 'id' });
 
-    useEventStore.getState().resetEvent();
+    expect(cloud.rpcs).toEqual([]);
+    expect((await listLocalEventRecords()).find((record) => record.id === preserved.id))
+      .toBeTruthy();
+    expect(localStorage.getItem('koc-cloud-sync-v2:user-1')).toBeNull();
+    expect(localStorage.getItem('koc-local-mutation-v2:user-1')).toBeNull();
+  });
+
+  it('does not upload another account\'s local catalog during bootstrap', async () => {
+    const accountA = eventFixture('account-a-local-event', 'Account A local event');
+    const accountB = eventFixture('account-b-remote-event', 'Account B remote event');
+    await saveLocal(accountA);
+    localStorage.setItem('koc-local-mutation-v3:account-a', JSON.stringify({
+      dirtyById: {
+        [accountA.id]: { fingerprint: JSON.stringify(accountA), changedAt: Date.now() },
+      },
+      tombstonesById: {},
+    }));
+    cloud.setEvents([remoteRow(accountB)]);
+
+    startCloudSync('account-b');
     await settle();
-    expect(cloud.deleteFilters).toContainEqual({
-      user_id: 'user-1',
-    });
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
 
+    expect(cloud.upserts.some((row) => row.id === accountA.id)).toBe(false);
+    expect((await listLocalEventRecords()).map((record) => record.id)).toEqual(
+      expect.arrayContaining([accountA.id, accountB.id]),
+    );
+  });
+
+  it('does not cloud-upsert an event merely because it was selected', async () => {
+    const alpha = eventFixture('pure-selection-alpha', 'Alpha');
+    const bravo = eventFixture('pure-selection-bravo', 'Bravo');
+    const remoteAt = Date.parse('2026-08-29T10:00:00.000Z');
+    await saveLocal(alpha, remoteAt);
+    await saveLocal(bravo, remoteAt);
+    cloud.setEvents([remoteRow(alpha), remoteRow(bravo)]);
+    useEventCatalogStore.setState({ activeEventId: alpha.id });
+    useEventStore.setState({ event: alpha });
+
+    startCloudSync('user-1');
+    await settle();
+    await useEventStore.getState().selectEventById(bravo.id);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(useEventStore.getState().event?.id).toBe(bravo.id);
+    expect(cloud.upserts.some((row) => row.id === bravo.id)).toBe(false);
+    expect(cloud.rpcs).toEqual([]);
+  });
+
+  it('keeps an edit made while the initial pull is pending', async () => {
+    const alpha = eventFixture('pending-pull-alpha', 'Before edit');
+    const remoteAt = Date.parse('2026-08-29T10:00:00.000Z');
+    await saveLocal(alpha, remoteAt);
+    await useEventStore.getState().selectEventById(alpha.id);
+
+    let resolvePull: (result: { data: unknown[]; error: null }) => void = () => undefined;
+    cloud.setEventQueryImpl(() => new Promise((resolve) => {
+      resolvePull = resolve;
+    }));
+
+    startCloudSync('user-1');
+    await settle();
+    const edited = { ...alpha, name: 'Edited while connecting' };
+    useEventStore.setState({ event: edited });
+    await settle();
+
+    resolvePull({ data: [remoteRow(alpha)], error: null });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(cloud.upserts).toHaveLength(1);
+    expect((cloud.upserts[0].state as EventState).name).toBe(edited.name);
+  });
+
+  it('does not let a stopped delete session erase a newer event dirty marker', async () => {
+    const alpha = eventFixture('late-delete-alpha', 'Delete me');
+    const bravo = eventFixture('late-delete-bravo', 'Keep my pending edit');
+    cloud.setEvents([remoteRow(alpha)]);
+    startCloudSync('user-1');
+    await settle();
+
+    let resolveDelete: (result: { data: unknown; error: null }) => void = () => undefined;
+    cloud.setRpcImpl(() => new Promise((resolve) => {
+      resolveDelete = resolve;
+    }));
+    const deleting = deleteCloudEvent(alpha.id);
+    await settle();
+    expect(cloud.rpcs).toEqual([alpha.id]);
     stopCloudSync();
-    cloud.reset();
+
+    cloud.setEvents([]);
+    await saveLocal(bravo);
     startCloudSync('user-1');
-    cloud.resolveInitial({ data: [], error: null });
     await settle();
-    expect(useEventStore.getState().event).toBeNull();
+    useEventStore.setState({ event: bravo });
+    await settle();
+    stopCloudSync();
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-1')).toContain(bravo.id);
+
+    resolveDelete({ data: '2026-08-29T12:00:00.000Z', error: null });
+    await deleting;
+    await settle();
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-1')).toContain(bravo.id);
+
+    startCloudSync('user-1');
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(cloud.upserts.some((row) => row.id === bravo.id)).toBe(true);
   });
 
-  it('serialises writes so an older snapshot cannot finish last', async () => {
-    const initial = eventFixture('Serial event');
-    useEventStore.getState().loadEvent(initial);
+  it('retries pending exact deletes and dirty saves even when the initial pull fails', async () => {
+    const alpha = eventFixture('offline-delete-alpha', 'Delete offline');
+    const bravo = eventFixture('offline-save-bravo', 'Save offline');
+    await saveLocal(bravo);
+    localStorage.setItem('koc-cloud-sync-v3:user-1', JSON.stringify({
+      dirtyById: {
+        [bravo.id]: { fingerprint: JSON.stringify(bravo), changedAt: Date.now() },
+      },
+      tombstonesById: {
+        [alpha.id]: { deletedAt: Date.now(), pending: true },
+      },
+      remoteUpdatedAtById: {},
+    }));
+    cloud.setEventsError('network unavailable');
+
     startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(cloud.rpcs).toContain(alpha.id);
+    expect(cloud.upserts.some((row) => row.id === bravo.id)).toBe(true);
+  });
+
+  it('bounds a flush even while the initial cloud pull never resolves', async () => {
+    cloud.setEventQueryImpl(() => new Promise(() => undefined));
+    startCloudSync('user-1');
+    await settle();
+
+    const flush = flushCloudSync();
+    await vi.advanceTimersByTimeAsync(4_100);
+    await expect(flush).resolves.toBeUndefined();
+  });
+
+  it('applies a clean active remote state without echoing it as a local upsert', async () => {
+    const alpha = eventFixture('clean-active-alpha', 'Old local name');
+    const updated = { ...alpha, name: 'Cloud name' };
+    const localAt = Date.parse('2026-08-29T10:00:00.000Z');
+    await saveLocal(alpha, localAt);
+    await useEventStore.getState().selectEventById(alpha.id);
+    cloud.setEvents([remoteRow(updated, '2026-08-29T11:00:00.000Z')]);
+
+    startCloudSync('user-1');
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(useEventStore.getState().event?.name).toBe(updated.name);
+    expect(cloud.upserts).toEqual([]);
+  });
+
+  it('does not resurrect an event when a tombstone arrives before the initial pull', async () => {
+    const alpha = eventFixture('tombstone-first-alpha', 'Stale cloud event');
+    await saveLocal(alpha);
+    let resolvePull: (result: { data: unknown[]; error: null }) => void = () => undefined;
+    cloud.setEventQueryImpl(() => new Promise((resolve) => {
+      resolvePull = resolve;
+    }));
+
+    startCloudSync('user-1');
+    await settle();
+    cloud.emit('event_tombstones', {
+      eventType: 'INSERT',
+      old: {},
+      new: {
+        event_id: alpha.id,
+        deleted_at: '2026-08-29T11:00:00.000Z',
+      },
     });
+    await settle();
+    resolvePull({ data: [remoteRow(alpha)], error: null });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    expect((await listLocalEventRecords()).some((record) => record.id === alpha.id)).toBe(false);
+    expect(cloud.upserts).toEqual([]);
+  });
+
+  it('rejects realtime state while a local edit is waiting to save', async () => {
+    const alpha = eventFixture('dirty-realtime-alpha', 'Original');
+    const remoteAt = Date.parse('2026-08-29T10:00:00.000Z');
+    await saveLocal(alpha, remoteAt);
+    cloud.setEvents([remoteRow(alpha)]);
+    await useEventStore.getState().selectEventById(alpha.id);
+    startCloudSync('user-1');
+    await settle();
+
+    const edited = { ...alpha, name: 'Local court edit' };
+    useEventStore.setState({ event: edited });
+    cloud.emit('events', {
+      eventType: 'UPDATE',
+      old: {},
+      new: remoteRow({ ...alpha, name: 'Stale remote echo' }, '2026-08-29T11:00:00.000Z'),
+    });
+    await settle();
+
+    expect(useEventStore.getState().event?.name).toBe(edited.name);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+    expect((cloud.upserts.at(-1)?.state as EventState).name).toBe(edited.name);
+  });
+
+  it('serializes snapshots of the same id so an older write cannot finish last', async () => {
+    const alpha = eventFixture('event-alpha', 'Alpha');
+    await saveLocal(alpha);
+    cloud.setEvents([remoteRow(alpha)]);
+    useEventCatalogStore.setState({ activeEventId: alpha.id });
+    useEventStore.setState({ event: alpha });
+    startCloudSync('user-1');
     await settle();
 
     const resolvers: Array<() => void> = [];
@@ -899,84 +561,21 @@ describe('cloud sync conflict protection', () => {
       resolvers.push(() => resolve({ error: null }));
     }));
 
-    useEventStore.getState().addCourt();
+    const first = { ...alpha, name: 'First edit' };
+    useEventStore.setState({ event: first });
     await vi.advanceTimersByTimeAsync(1_100);
     expect(cloud.upserts).toHaveLength(1);
 
-    useEventStore.getState().addCourt();
-    await vi.advanceTimersByTimeAsync(1_100);
-    expect(cloud.upserts).toHaveLength(1);
-
-    resolvers[0]();
-    await settle();
-    expect(cloud.upserts).toHaveLength(2);
-    expect((cloud.upserts[1].state as EventState).courts).toHaveLength(5);
-
-    resolvers[1]();
-    await settle();
-  });
-
-  it('queues a newer cross-tab snapshot behind an upsert already in flight', async () => {
-    const initial = eventFixture('Cross-tab write race');
-    useEventStore.getState().loadEvent(initial);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-
-    const resolvers: Array<() => void> = [];
-    cloud.setUpsertImpl(() => new Promise((resolve) => {
-      resolvers.push(() => resolve({ error: null }));
-    }));
-
-    useEventStore.getState().addCourt();
-    await vi.advanceTimersByTimeAsync(1_100);
-    expect(cloud.upserts).toHaveLength(1);
-
-    const newer = structuredClone(useEventStore.getState().event!);
-    newer.courts.push({
-      ...newer.courts[0],
-      id: 'newer-court',
-      name: 'Newest court',
-      position: newer.courts.length + 1,
-    });
-    applyStorageBroadcast(newer);
+    const second = { ...alpha, name: 'Second edit' };
+    useEventStore.setState({ event: second });
     await vi.advanceTimersByTimeAsync(1_100);
     expect(cloud.upserts).toHaveLength(1);
 
     resolvers[0]();
     await settle();
     expect(cloud.upserts).toHaveLength(2);
-    expect((cloud.upserts[1].state as EventState).courts).toHaveLength(5);
-
+    expect((cloud.upserts[1].state as EventState).name).toBe('Second edit');
     resolvers[1]();
     await settle();
-  });
-
-  it('bounds a flush when the network write never settles', async () => {
-    const initial = eventFixture('Stalled save');
-    useEventStore.getState().loadEvent(initial);
-    startCloudSync('user-1');
-    cloud.resolveInitial({
-      data: [{ id: initial.id, state: initial, updated_at: '2026-08-25T12:00:00.000Z' }],
-      error: null,
-    });
-    await settle();
-    cloud.setUpsertImpl(() => new Promise(() => undefined));
-
-    useEventStore.getState().addCourt();
-    await vi.advanceTimersByTimeAsync(1_100);
-
-    let finished = false;
-    const flush = flushCloudSync().then(() => {
-      finished = true;
-    });
-    await vi.advanceTimersByTimeAsync(3_999);
-    expect(finished).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    await flush;
-    expect(finished).toBe(true);
   });
 });

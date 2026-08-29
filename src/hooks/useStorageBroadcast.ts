@@ -1,16 +1,44 @@
-import { useEffect, useRef } from 'react';
-import { useEventStore } from '@/store/eventStore';
-import { applyStorageBroadcast, markLocalEventMutation } from '@/store/cloudSync';
+import { useEffect } from 'react';
+import { useEventCatalogStore } from '@/store/eventCatalog';
+import { isApplyingCatalogEvent, useEventStore } from '@/store/eventStore';
+import {
+  applyStorageBroadcast,
+  applyStorageEventDeletion,
+  applyStorageEventSelection,
+  isApplyingExternalEvent,
+  markLocalEventDeleted,
+  markLocalEventMutation,
+} from '@/store/cloudSync';
 import type { EventState } from '@/types/domain';
 
-const BROADCAST_KEY = 'koc-event-broadcast-v2';
+export const EVENT_BROADCAST_KEY = 'koc-event-broadcast-v3';
+const LEGACY_BROADCAST_KEY = 'koc-event-broadcast-v2';
 
 interface Version {
   at: number;
   source: string;
 }
 
-interface EventBroadcast {
+type EventBroadcast =
+  | {
+      schema: 3;
+      operation: 'upsert';
+      eventId: string;
+      event: EventState;
+      version: Version;
+    }
+  | {
+      schema: 3;
+      operation: 'delete' | 'select';
+      eventId: string;
+      version: Version;
+    };
+
+type PublishMessage =
+  | { operation: 'upsert'; eventId: string; event: EventState }
+  | { operation: 'delete' | 'select'; eventId: string };
+
+interface LegacyBroadcast {
   version: Version;
   event: EventState | null;
 }
@@ -18,23 +46,6 @@ interface EventBroadcast {
 function compareVersion(a: Version, b: Version): number {
   if (a.at !== b.at) return a.at - b.at;
   return a.source.localeCompare(b.source);
-}
-
-function readBroadcast(raw?: string | null): EventBroadcast | null {
-  try {
-    const value = raw ?? globalThis.localStorage?.getItem(BROADCAST_KEY);
-    if (!value) return null;
-    const parsed = JSON.parse(value) as Partial<EventBroadcast>;
-    if (
-      !parsed.version ||
-      typeof parsed.version.at !== 'number' ||
-      typeof parsed.version.source !== 'string' ||
-      !Object.prototype.hasOwnProperty.call(parsed, 'event')
-    ) return null;
-    return parsed as EventBroadcast;
-  } catch {
-    return null;
-  }
 }
 
 function newSourceId(): string {
@@ -45,78 +56,218 @@ function newSourceId(): string {
   }
 }
 
-// One browser tab has one ordering/source identity even if a component is
-// accidentally mounted twice. The shared apply guard prevents an incoming
-// state from being re-broadcast by a sibling subscriber.
+function parseVersion(value: unknown): Version | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<Version>;
+  return typeof candidate.at === 'number' && typeof candidate.source === 'string'
+    ? { at: candidate.at, source: candidate.source }
+    : null;
+}
+
+function readMessage(raw: string | null): EventBroadcast | LegacyBroadcast | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    const version = parseVersion(value.version);
+    if (!version) return null;
+    if (value.schema === 3) {
+      if (
+        (value.operation !== 'upsert'
+          && value.operation !== 'delete'
+          && value.operation !== 'select')
+        || typeof value.eventId !== 'string'
+      ) return null;
+      if (value.operation === 'upsert') {
+        if (!value.event || typeof value.event !== 'object') return null;
+        return {
+          schema: 3,
+          operation: 'upsert',
+          eventId: value.eventId,
+          event: value.event as EventState,
+          version,
+        };
+      }
+      return {
+        schema: 3,
+        operation: value.operation,
+        eventId: value.eventId,
+        version,
+      };
+    }
+    if (!Object.prototype.hasOwnProperty.call(value, 'event')) return null;
+    return { version, event: (value.event as EventState | null) ?? null };
+  } catch {
+    return null;
+  }
+}
+
+function orderingKey(message: EventBroadcast | LegacyBroadcast): string {
+  if ('schema' in message) {
+    return message.operation === 'select' ? '$selection' : message.eventId;
+  }
+  return message.event?.id ?? '$legacy-null';
+}
+
+function inferredPinnedEventId(): string | null {
+  try {
+    const match = globalThis.location?.hash.match(/^#\/events\/([^/?#]+)\/display(?:[/?#]|$)/i);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+// One browser tab has one source identity and one event-scoped ordering map,
+// even if React mounts the hook twice. Event A can never suppress a newer Event
+// B message merely because their wall-clock timestamps cross.
 const TAB_SOURCE = newSourceId();
-let lastSeenVersion: Version = { at: 0, source: '' };
-let applyingIncoming = false;
+const lastSeenByKey = new Map<string, Version>();
+const lastPublishedFingerprints = new Map<string, string>();
+const suppressedDeletes = new Set<string>();
+let suppressedSelection: string | null = null;
+let lastPublishedSelection: string | null = null;
+
+function nextVersion(key: string): Version {
+  const previous = lastSeenByKey.get(key);
+  const version = {
+    at: Math.max(Date.now(), (previous?.at ?? 0) + 1),
+    source: TAB_SOURCE,
+  };
+  lastSeenByKey.set(key, version);
+  return version;
+}
+
+function publish(message: PublishMessage): void {
+  const key = message.operation === 'select' ? '$selection' : message.eventId;
+  const value = {
+    ...message,
+    schema: 3 as const,
+    version: nextVersion(key),
+  } as EventBroadcast;
+  try {
+    globalThis.localStorage?.setItem(EVENT_BROADCAST_KEY, JSON.stringify(value));
+  } catch {
+    // Local storage can be disabled; the active tab must keep working.
+  }
+}
+
+function fingerprint(event: EventState): string {
+  try {
+    return JSON.stringify(event);
+  } catch {
+    return `${event.id}:${event.createdAt}`;
+  }
+}
 
 /**
- * Keep operator and TV tabs in sync. Messages carry a deterministic version,
- * so a delayed older full-state snapshot can never undo a newer court/score.
+ * Keep operator and TV tabs in sync without collapsing the event catalog.
+ * Event-scoped routes are pinned by App via their URL id, so another tab can
+ * select a different competition without replacing this tab's active facade.
  */
-export function useStorageBroadcast(enabled = true) {
-  const activated = useRef(false);
-  const enabledOnFirstRender = useRef(enabled);
-
+export function useStorageBroadcast(
+  enabled = true,
+  pinnedEventId: string | null = null,
+): void {
   useEffect(() => {
     if (!enabled) return;
+    const pinnedId = pinnedEventId ?? inferredPinnedEventId();
 
-    const applyIncoming = (message: EventBroadcast | null) => {
+    const applyIncoming = (message: EventBroadcast | LegacyBroadcast | null) => {
       if (!message || message.version.source === TAB_SOURCE) return;
-      if (compareVersion(message.version, lastSeenVersion) <= 0) return;
-      lastSeenVersion = message.version;
-      applyingIncoming = true;
-      try {
-        applyStorageBroadcast(message.event);
-      } finally {
-        applyingIncoming = false;
+      const key = orderingKey(message);
+      const previousVersion = lastSeenByKey.get(key);
+      if (previousVersion && compareVersion(message.version, previousVersion) <= 0) return;
+      lastSeenByKey.set(key, message.version);
+
+      if (!('schema' in message)) {
+        applyStorageBroadcast(message.event, pinnedId);
+        return;
       }
+      if (message.operation === 'upsert') {
+        applyStorageBroadcast(message.event, pinnedId);
+        return;
+      }
+      if (message.operation === 'delete') {
+        suppressedDeletes.add(message.eventId);
+        applyStorageEventDeletion(message.eventId);
+        return;
+      }
+      if (!pinnedId || pinnedId === message.eventId) {
+        suppressedSelection = message.eventId;
+      }
+      applyStorageEventSelection(message.eventId, pinnedId);
     };
 
-    // Catch up after returning from a public link or a temporarily suspended
-    // tab. On first mount the Zustand snapshot was hydrated from the same
-    // storage already, so its version was used only as the baseline above.
-    const latest = readBroadcast();
-    if (!activated.current && enabledOnFirstRender.current) {
-      activated.current = true;
-      if (latest && compareVersion(latest.version, lastSeenVersion) > 0) {
-        lastSeenVersion = latest.version;
-      }
-    } else {
-      activated.current = true;
-      applyIncoming(latest);
-    }
+    // Catch up after a suspended tab. The message is event-scoped, so applying
+    // it cannot replace or clear unrelated catalog records.
+    applyIncoming(readMessage(globalThis.localStorage?.getItem(EVENT_BROADCAST_KEY) ?? null));
 
-    const unsubscribe = useEventStore.subscribe((state, previous) => {
-      if (applyingIncoming || state.event === previous.event) return;
-      // Trusted cloud applies already have their own Realtime origin. Do not
-      // turn a scoped remote DELETE into a plain null broadcast that another
-      // same-origin tab could mistake for an explicit delete-all.
-      if (!markLocalEventMutation(state.event, previous.event)) return;
-      const version: Version = {
-        at: Math.max(Date.now(), lastSeenVersion.at + 1),
-        source: TAB_SOURCE,
-      };
-      lastSeenVersion = version;
-      const message: EventBroadcast = { version, event: state.event };
-      try {
-        globalThis.localStorage?.setItem(BROADCAST_KEY, JSON.stringify(message));
-      } catch {
-        // Local storage can be disabled; the active tab must keep working.
+    const unsubscribeEvent = useEventStore.subscribe((state, previous) => {
+      if (state.event === previous.event) return;
+      if (isApplyingCatalogEvent()) return;
+      if (state.event) {
+        const eventFingerprint = fingerprint(state.event);
+        if (lastPublishedFingerprints.get(state.event.id) === eventFingerprint) return;
+        if (!markLocalEventMutation(state.event, previous.event)) return;
+        lastPublishedFingerprints.set(state.event.id, eventFingerprint);
+        publish({
+          operation: 'upsert',
+          eventId: state.event.id,
+          event: state.event,
+        });
+        return;
       }
+      if (!previous.event) return;
+      if (!markLocalEventMutation(null, previous.event)) return;
+      lastPublishedFingerprints.delete(previous.event.id);
+      publish({ operation: 'delete', eventId: previous.event.id });
+    });
+
+    const unsubscribeCatalog = useEventCatalogStore.subscribe((state, previous) => {
+      const currentIds = new Set(state.events.map((event) => event.id));
+      for (const removed of previous.events) {
+        if (currentIds.has(removed.id)) continue;
+        if (suppressedDeletes.delete(removed.id)) continue;
+        if (isApplyingExternalEvent(removed.id)) continue;
+        markLocalEventDeleted(removed.id);
+        lastPublishedFingerprints.delete(removed.id);
+        publish({ operation: 'delete', eventId: removed.id });
+      }
+
+      if (state.activeEventId === previous.activeEventId || !state.activeEventId) return;
+      if (suppressedSelection === state.activeEventId) {
+        suppressedSelection = null;
+        return;
+      }
+      if (lastPublishedSelection === state.activeEventId) return;
+      lastPublishedSelection = state.activeEventId;
+      publish({ operation: 'select', eventId: state.activeEventId });
     });
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== BROADCAST_KEY || !event.newValue) return;
-      applyIncoming(readBroadcast(event.newValue));
+      if (event.key === EVENT_BROADCAST_KEY) {
+        applyIncoming(readMessage(event.newValue));
+        return;
+      }
+      if (event.key === LEGACY_BROADCAST_KEY) {
+        applyIncoming(readMessage(event.newValue));
+      }
     };
     window.addEventListener('storage', onStorage);
 
     return () => {
-      unsubscribe();
+      unsubscribeEvent();
+      unsubscribeCatalog();
       window.removeEventListener('storage', onStorage);
     };
-  }, [enabled]);
+  }, [enabled, pinnedEventId]);
+}
+
+/** Test-only reset for module-scoped ordering/deduplication state. */
+export function resetStorageBroadcastStateForTests(): void {
+  lastSeenByKey.clear();
+  lastPublishedFingerprints.clear();
+  suppressedDeletes.clear();
+  suppressedSelection = null;
+  lastPublishedSelection = null;
 }

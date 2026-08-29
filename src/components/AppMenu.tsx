@@ -25,18 +25,17 @@ import { SettingsModal } from './SettingsModal';
 import { ClubBrandingModal } from './ClubBrandingModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Portal } from './Portal';
+import { eventRoute } from '@/lib/eventRoutes';
 import type { EventState } from '@/types/domain';
 
 export function AppMenu({ event }: { event: EventState | null }) {
   const [open, setOpen] = useState(false);
-  const [confirmNew, setConfirmNew] = useState(false);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clubOpen, setClubOpen] = useState(false);
 
   const navigate = useNavigate();
-  const resetEvent = useEventStore((s) => s.resetEvent);
   const finishEventNow = useEventStore((s) => s.finishEventNow);
 
   const auth = useAuth();
@@ -167,7 +166,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
               className="app-menu-item"
               onClick={() => {
                 close();
-                setConfirmNew(true);
+                navigate('/home');
               }}
             >
               <Icons.Plus className="icon" />
@@ -201,23 +200,6 @@ export function AppMenu({ event }: { event: EventState | null }) {
       )}
 
       <ConfirmDialog
-        open={confirmNew}
-        title="Start a new event?"
-        message="This clears the current event: teams, scores, rounds, podium. Export first if you want to keep them."
-        confirmLabel="Yes, start fresh"
-        destructive
-        onConfirm={() => {
-          resetEvent();
-          setConfirmNew(false);
-          // Land on the dashboard (the launch pad with the format picker).
-          // SetupScreen renders nothing without an event, so navigating
-          // there directly would show a blank screen.
-          setTimeout(() => navigate('/home'), 0);
-        }}
-        onCancel={() => setConfirmNew(false)}
-      />
-
-      <ConfirmDialog
         open={confirmFinish}
         title="Finish the event now?"
         message="The podium is revealed with the scores entered so far. A round in progress that hasn't been scored is dropped."
@@ -225,7 +207,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
         onConfirm={() => {
           finishEventNow();
           setConfirmFinish(false);
-          setTimeout(() => navigate('/display'), 0);
+          if (event) setTimeout(() => navigate(eventRoute(event.id, 'display')), 0);
         }}
         onCancel={() => setConfirmFinish(false)}
       />

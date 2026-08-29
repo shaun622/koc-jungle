@@ -26,6 +26,11 @@ import { unresolvedTies } from '@/logic/rotation';
 import { validateAssignments, validateQualifierScore } from '@/logic/validation';
 import { getFormat } from '@/logic/formats';
 import { hapticTick } from '@/lib/haptics';
+import {
+  LEGACY_EVENT_STORAGE_KEY,
+  type SaveCatalogEventOptions,
+  useEventCatalogStore,
+} from './eventCatalog';
 
 function rosterPairKey(playerOne: string, playerTwo: string): string {
   return [playerOne, playerTwo]
@@ -34,7 +39,7 @@ function rosterPairKey(playerOne: string, playerTwo: string): string {
     .join('|');
 }
 
-export const STORAGE_KEY = 'koc-event-v1';
+export const STORAGE_KEY = LEGACY_EVENT_STORAGE_KEY;
 
 interface State {
   event: EventState | null;
@@ -45,6 +50,17 @@ interface State {
 interface Actions {
   setHydrated: (v: boolean) => void;
   clearError: () => void;
+
+  /** Ensure the local event catalog is ready and restore its active event. */
+  initializeCatalog: () => Promise<void>;
+  /** Select a locally stored event and make it the active-event facade. */
+  selectEventById: (id: string) => Promise<EventState | null>;
+  /** Load an event into this tab without changing/broadcasting catalog selection. */
+  loadPinnedEventById: (id: string) => Promise<EventState | null>;
+  /** Archive/unarchive a local event without deleting its body. */
+  archiveLocalEvent: (id: string, archived?: boolean) => Promise<void>;
+  /** Permanently remove one event from this device's local catalog. */
+  deleteLocalEvent: (id: string) => Promise<void>;
 
   createEvent: (name: string, format?: TournamentFormatId) => void;
   resetEvent: () => void;
@@ -229,6 +245,170 @@ function refreshAmericanoSchedule(
   return { ...nextEvent, rounds: [...completedRounds, refreshedRound] };
 }
 
+/**
+ * The old Zustand key is intentionally read-only after the catalog migration.
+ * It remains available as an untouched rollback/import source, while all new
+ * event bodies are persisted one-per-record in IndexedDB.
+ */
+const legacyReadOnlyStorage = {
+  getItem(name: string): string | null {
+    try {
+      return globalThis.localStorage?.getItem(name) ?? null;
+    } catch {
+      return null;
+    }
+  },
+  setItem(_name: string, _value: string): void {
+    // Deliberately preserve the exact legacy payload.
+  },
+  removeItem(_name: string): void {
+    // Deliberately preserve the exact legacy payload.
+  },
+};
+
+let applyingCatalogEvent = false;
+let catalogInitializationPromise: Promise<void> | null = null;
+let catalogPersistenceQueue: Promise<void> = Promise.resolve();
+const deletedCatalogEventIds = new Set<string>();
+
+/** True only while the active facade is being changed by catalog selection. */
+export function isApplyingCatalogEvent(): boolean {
+  return applyingCatalogEvent;
+}
+
+function enqueueCatalogOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = catalogPersistenceQueue
+    .catch(() => {
+      // A failed earlier write must not permanently block a later archive or
+      // exact-id deletion.
+    })
+    .then(operation);
+  // Keep a void tail for later operations while returning the caller's value.
+  // Selection therefore participates in the same ordering as body writes:
+  // a last-second edit to A cannot finish after selecting B and flip the
+  // active-event pointer back to A.
+  catalogPersistenceQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+function eventStoreError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function replaceActiveEventFromCatalog(event: EventState | null): void {
+  applyingCatalogEvent = true;
+  try {
+    useEventStore.setState({ event, lastError: null });
+  } finally {
+    applyingCatalogEvent = false;
+  }
+}
+
+/** Apply a trusted cloud/cross-tab snapshot without treating it as a local edit. */
+export function applyExternalEventToActiveFacade(event: EventState | null): void {
+  replaceActiveEventFromCatalog(event);
+}
+
+async function initializeCatalogFacade(): Promise<void> {
+  if (catalogInitializationPromise) return catalogInitializationPromise;
+
+  const eventBeforeInitialization = useEventStore.getState().event;
+  catalogInitializationPromise = (async () => {
+    await useEventCatalogStore.getState().initialize();
+    const activeEventId = useEventCatalogStore.getState().activeEventId;
+    const storedEvent = activeEventId
+      ? await useEventCatalogStore.getState().loadEvent(activeEventId)
+      : null;
+
+    // Never replace an event the operator/cloud sync changed while the
+    // asynchronous IndexedDB read was in flight.
+    if (useEventStore.getState().event === eventBeforeInitialization) {
+      replaceActiveEventFromCatalog(storedEvent);
+    }
+  })()
+    .catch((error) => {
+      useEventStore.setState({ lastError: eventStoreError(error) });
+      throw error;
+    })
+    .finally(() => {
+      catalogInitializationPromise = null;
+    });
+
+  return catalogInitializationPromise;
+}
+
+async function selectCatalogEvent(id: string): Promise<EventState | null> {
+  if (deletedCatalogEventIds.has(id)) return null;
+  return enqueueCatalogOperation(async () => {
+    if (deletedCatalogEventIds.has(id)) return null;
+    await useEventCatalogStore.getState().initialize();
+    const event = await useEventCatalogStore.getState().selectEvent(id);
+    if (event) replaceActiveEventFromCatalog(event);
+    return event;
+  });
+}
+
+async function loadPinnedCatalogEvent(id: string): Promise<EventState | null> {
+  if (deletedCatalogEventIds.has(id)) return null;
+  return enqueueCatalogOperation(async () => {
+    if (deletedCatalogEventIds.has(id)) return null;
+    await useEventCatalogStore.getState().initialize();
+    const event = await useEventCatalogStore.getState().loadEvent(id);
+    if (event) replaceActiveEventFromCatalog(event);
+    return event;
+  });
+}
+
+/**
+ * Queue-safe catalog upsert used by cloud and cross-tab synchronization.
+ * Exact deletion marks the id synchronously, so a write that was already
+ * waiting (or finishes just before the queued delete) cannot resurrect it.
+ */
+export async function saveEventToLocalCatalog(
+  event: EventState,
+  options: SaveCatalogEventOptions = {},
+): Promise<boolean> {
+  if (deletedCatalogEventIds.has(event.id)) return false;
+  return enqueueCatalogOperation(async () => {
+    if (deletedCatalogEventIds.has(event.id)) return false;
+    await useEventCatalogStore.getState().initialize();
+    await useEventCatalogStore.getState().saveEvent(event, options);
+    return true;
+  });
+}
+
+async function archiveCatalogEvent(id: string, archived = true): Promise<void> {
+  await enqueueCatalogOperation(async () => {
+    await useEventCatalogStore.getState().archiveEvent(id, archived);
+    if (archived && useEventStore.getState().event?.id === id) {
+      const nextId = useEventCatalogStore.getState().activeEventId;
+      const nextEvent = nextId
+        ? await useEventCatalogStore.getState().loadEvent(nextId)
+        : null;
+      replaceActiveEventFromCatalog(nextEvent);
+    }
+  });
+}
+
+export async function removeEventFromLocalCatalog(id: string): Promise<void> {
+  // Mark immediately so a body write already scheduled by React cannot be
+  // appended behind the deletion and recreate the record.
+  deletedCatalogEventIds.add(id);
+  await enqueueCatalogOperation(async () => {
+    await useEventCatalogStore.getState().deleteLocalEvent(id);
+    if (useEventStore.getState().event?.id === id) {
+      const nextId = useEventCatalogStore.getState().activeEventId;
+      const nextEvent = nextId
+        ? await useEventCatalogStore.getState().loadEvent(nextId)
+        : null;
+      replaceActiveEventFromCatalog(nextEvent);
+    }
+  });
+}
+
 export const useEventStore = create<EventStore>()(
   persist(
     (set, get) => ({
@@ -238,6 +418,12 @@ export const useEventStore = create<EventStore>()(
 
       setHydrated: (v) => set({ hydrated: v }),
       clearError: () => set({ lastError: null }),
+
+      initializeCatalog: initializeCatalogFacade,
+      selectEventById: selectCatalogEvent,
+      loadPinnedEventById: loadPinnedCatalogEvent,
+      archiveLocalEvent: archiveCatalogEvent,
+      deleteLocalEvent: removeEventFromLocalCatalog,
 
       createEvent: (name, format) => {
         const fmt: TournamentFormatId = format ?? 'koc';
@@ -1274,12 +1460,45 @@ export const useEventStore = create<EventStore>()(
     {
       name: STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => legacyReadOnlyStorage),
       onRehydrateStorage: () => (state) => {
         // Mark hydrated whether or not load succeeded.
         if (state) state.hydrated = true;
+        void initializeCatalogFacade().catch(() => {
+          // The helper records a user-visible store error. Keep hydration
+          // non-blocking so an IndexedDB failure cannot blank the app.
+        });
       },
       partialize: (state) => ({ event: state.event }),
     },
   ),
 );
+
+// Preserve the existing active-event facade: every immutable event mutation
+// is queued into the per-event repository. Queueing guarantees that a slower
+// earlier IndexedDB write cannot overwrite a newer mutation.
+useEventStore.subscribe((state, previousState) => {
+  if (
+    applyingCatalogEvent
+    || state.event === previousState.event
+    || state.event === null
+  ) return;
+
+  const eventSnapshot = state.event;
+  if (deletedCatalogEventIds.has(eventSnapshot.id)) return;
+  void enqueueCatalogOperation(async () => {
+      if (deletedCatalogEventIds.has(eventSnapshot.id)) return;
+      await useEventCatalogStore.getState().initialize();
+      await useEventCatalogStore.getState().saveEvent(eventSnapshot);
+    })
+    .catch((error) => {
+      if (useEventStore.getState().event?.id === eventSnapshot.id) {
+        useEventStore.setState({ lastError: eventStoreError(error) });
+      }
+    });
+});
+
+/** Await all catalog writes already queued by active-event mutations. */
+export function flushEventCatalogPersistence(): Promise<void> {
+  return catalogPersistenceQueue;
+}

@@ -33,6 +33,7 @@ import { captureAndShare } from '@/utils/shareCard';
 import { useKeepAwake } from '@/hooks/useKeepAwake';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
+import { eventRoute } from '@/lib/eventRoutes';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -61,7 +62,6 @@ export function DisplayScreen() {
   const incrementScore = useEventStore((s) => s.incrementScore);
   const nominateTieWinner = useEventStore((s) => s.nominateTieWinner);
   const endRound = useEventStore((s) => s.endRound);
-  const resetEvent = useEventStore((s) => s.resetEvent);
   const startRoundTimer = useEventStore((s) => s.startRoundTimer);
   const pauseRoundTimer = useEventStore((s) => s.pauseRoundTimer);
   const resetRoundTimer = useEventStore((s) => s.resetRoundTimer);
@@ -110,8 +110,8 @@ export function DisplayScreen() {
     return (
       <div className="splash" style={{ flexDirection: 'column', gap: 16 }}>
         <span>Open an event to drive the display.</span>
-        <button className="btn primary" onClick={() => navigate('/setup')}>
-          Go to setup
+        <button className="btn primary" onClick={() => navigate('/home')}>
+          Open event library
         </button>
       </div>
     );
@@ -284,7 +284,7 @@ export function DisplayScreen() {
                   <button
                     className="display-menu-item"
                     onClick={() => {
-                      navigate('/leaderboard');
+                      navigate(eventRoute(event.id, 'leaderboard'));
                       setMenuOpen(false);
                     }}
                   >
@@ -293,7 +293,7 @@ export function DisplayScreen() {
                   <button
                     className="display-menu-item"
                     onClick={() => {
-                      navigate('/setup');
+                      navigate(eventRoute(event.id, 'setup'));
                       setMenuOpen(false);
                     }}
                   >
@@ -363,7 +363,7 @@ export function DisplayScreen() {
           <button className="btn" onClick={() => setShowEditPoints(true)}>
             Edit points
           </button>
-          <button className="btn ghost" onClick={() => navigate('/leaderboard')}>
+          <button className="btn ghost" onClick={() => navigate(eventRoute(event.id, 'leaderboard'))}>
             Full standings
           </button>
           {shareError && (
@@ -392,14 +392,12 @@ export function DisplayScreen() {
 
       <ConfirmDialog
         open={confirmNew}
-        title="Start a new event?"
-        message="This clears the current event: teams, scores, rounds, podium. Export first if you want to keep them."
-        confirmLabel="Yes, start fresh"
-        destructive
+        title="Create another event?"
+        message="This event stays saved. You can return to it anytime from the event library."
+        confirmLabel="Open event library"
         onConfirm={() => {
-          resetEvent();
           setConfirmNew(false);
-          setTimeout(() => navigate('/setup'), 0);
+          setTimeout(() => navigate('/home'), 0);
         }}
         onCancel={() => setConfirmNew(false)}
       />
@@ -671,7 +669,7 @@ function DisplayToolbar({
               <button
                 className="display-menu-item"
                 onClick={() => {
-                  onNavigate('/leaderboard');
+                  onNavigate(eventRoute(event.id, 'leaderboard'));
                   onMenuToggle();
                 }}
               >
@@ -680,7 +678,7 @@ function DisplayToolbar({
               <button
                 className="display-menu-item"
                 onClick={() => {
-                  onNavigate('/setup');
+                  onNavigate(eventRoute(event.id, 'setup'));
                   onMenuToggle();
                 }}
               >

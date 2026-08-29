@@ -9,22 +9,23 @@
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from './Icons';
+import { eventRoute, type EventRouteName } from '@/lib/eventRoutes';
 import type { EventState, EventStatus } from '@/types/domain';
 
 interface TabDef {
-  path: string;
+  route: EventRouteName;
   label: string;
   icon: keyof typeof Icons;
   showFor?: EventStatus[];
 }
 
 const TABS: TabDef[] = [
-  { path: '/setup', label: 'Setup', icon: 'Home', showFor: ['setup'] },
-  { path: '/qualifier', label: 'Qualifier', icon: 'Timer', showFor: ['qualifier'] },
-  { path: '/seeding', label: 'Seeding', icon: 'List', showFor: ['seeding'] },
-  { path: '/display', label: 'Live', icon: 'Play', showFor: ['round-in-progress', 'between-rounds'] },
-  { path: '/display', label: 'Podium', icon: 'Trophy', showFor: ['complete'] },
-  { path: '/leaderboard', label: 'Standings', icon: 'List' },
+  { route: 'setup', label: 'Setup', icon: 'Home', showFor: ['setup'] },
+  { route: 'qualifier', label: 'Qualifier', icon: 'Timer', showFor: ['qualifier'] },
+  { route: 'seeding', label: 'Seeding', icon: 'List', showFor: ['seeding'] },
+  { route: 'display', label: 'Live', icon: 'Play', showFor: ['round-in-progress', 'between-rounds'] },
+  { route: 'display', label: 'Podium', icon: 'Trophy', showFor: ['complete'] },
+  { route: 'leaderboard', label: 'Standings', icon: 'List' },
 ];
 
 export function MobileTabBar({ event }: { event: EventState }) {
@@ -33,8 +34,8 @@ export function MobileTabBar({ event }: { event: EventState }) {
   const tabs = TABS.filter((t) => !t.showFor || t.showFor.includes(event.status));
 
   const isActive = (tab: TabDef) =>
-    location.pathname === tab.path ||
-    (location.pathname === '/' && tab.path === '/setup' && event.status === 'setup');
+    location.pathname === eventRoute(event.id, tab.route) ||
+    (location.pathname === '/' && tab.route === 'setup' && event.status === 'setup');
 
   return (
     <nav className="mobile-tabbar" aria-label="Primary">
@@ -44,7 +45,7 @@ export function MobileTabBar({ event }: { event: EventState }) {
           <button
             key={tab.label}
             className={'mobile-tab ' + (isActive(tab) ? 'active' : '')}
-            onClick={() => navigate(tab.path)}
+            onClick={() => navigate(eventRoute(event.id, tab.route))}
           >
             <Icon className="icon" />
             <span>{tab.label}</span>

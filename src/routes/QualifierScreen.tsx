@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { eventRoute } from '@/lib/eventRoutes';
 import { useEventStore } from '@/store/eventStore';
 import { teamLabelShort } from '@/store/selectors';
 import { validateQualifierScore } from '@/logic/validation';
@@ -137,7 +138,7 @@ export function QualifierScreen() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate('/setup')}>
+          <button className="btn" onClick={() => navigate(eventRoute(event.id, 'setup'))}>
             ← Back to setup
           </button>
           <button
@@ -145,7 +146,7 @@ export function QualifierScreen() {
             disabled={!allValid}
             onClick={() => {
               confirmQualifierResults();
-              setTimeout(() => navigate('/seeding'), 0);
+              setTimeout(() => navigate(eventRoute(event.id, 'seeding')), 0);
             }}
           >
             {allValid ? 'Confirm results →' : `${total - validCount} more to enter`}

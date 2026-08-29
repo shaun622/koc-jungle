@@ -2,21 +2,22 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { BrandLogo } from './BrandLogo';
 import { AppMenu } from './AppMenu';
 import { useClubBrandingStore } from '@/store/clubBranding';
+import { eventRoute, type EventRouteName } from '@/lib/eventRoutes';
 import type { EventState, EventStatus } from '@/types/domain';
 
 interface TabDef {
-  path: string;
+  route: EventRouteName;
   label: string;
   showFor?: EventStatus[];
 }
 
 const TABS: TabDef[] = [
-  { path: '/setup', label: 'Setup', showFor: ['setup'] },
-  { path: '/qualifier', label: 'Qualifier', showFor: ['qualifier'] },
-  { path: '/seeding', label: 'Seeding', showFor: ['seeding'] },
-  { path: '/display', label: 'Live', showFor: ['round-in-progress', 'between-rounds'] },
-  { path: '/display', label: 'Podium', showFor: ['complete'] },
-  { path: '/leaderboard', label: 'Standings' },
+  { route: 'setup', label: 'Setup', showFor: ['setup'] },
+  { route: 'qualifier', label: 'Qualifier', showFor: ['qualifier'] },
+  { route: 'seeding', label: 'Seeding', showFor: ['seeding'] },
+  { route: 'display', label: 'Live', showFor: ['round-in-progress', 'between-rounds'] },
+  { route: 'display', label: 'Podium', showFor: ['complete'] },
+  { route: 'leaderboard', label: 'Standings' },
 ];
 
 interface Props {
@@ -38,8 +39,8 @@ export function TopNav({ event }: Props) {
   const visibleTabs = TABS.filter((t) => !t.showFor || t.showFor.includes(event.status));
 
   const isTabActive = (tab: TabDef) => {
-    if (location.pathname === tab.path) return true;
-    if (location.pathname === '/' && tab.path === '/setup' && event.status === 'setup') return true;
+    if (location.pathname === eventRoute(event.id, tab.route)) return true;
+    if (location.pathname === '/' && tab.route === 'setup' && event.status === 'setup') return true;
     return false;
   };
 
@@ -67,9 +68,9 @@ export function TopNav({ event }: Props) {
       <div className="op-top-center">
         {visibleTabs.map((tab) => (
           <button
-            key={tab.path}
+            key={tab.route}
             className={'op-tab ' + (isTabActive(tab) ? 'active' : '')}
-            onClick={() => navigate(tab.path)}
+            onClick={() => navigate(eventRoute(event.id, tab.route))}
           >
             {tab.label}
           </button>
