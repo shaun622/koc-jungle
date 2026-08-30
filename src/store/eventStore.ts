@@ -26,6 +26,8 @@ import { unresolvedTies } from '@/logic/rotation';
 import { validateAssignments, validateQualifierScore } from '@/logic/validation';
 import { getFormat } from '@/logic/formats';
 import { hapticTick } from '@/lib/haptics';
+import type { SignupRegistration } from '@/lib/signups';
+import { reconcileConfirmedSignupRoster } from '@/utils/rosterReconciliation';
 import {
   LEGACY_EVENT_STORAGE_KEY,
   type SaveCatalogEventOptions,
@@ -71,6 +73,11 @@ interface Actions {
 
   addTeam: (input: { name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }) => void;
   addTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
+  syncConfirmedSignupTeams: (
+    registrations: SignupRegistration[],
+    capacity: number,
+    options?: { includeIgnored?: boolean },
+  ) => void;
   updateTeam: (id: string, patch: { name?: string; player1?: string; player2?: string; signupPairKey?: string; signupRegistrationId?: string }) => void;
   removeTeam: (id: string) => void;
   reorderTeams: (orderedIds: string[]) => void;
@@ -466,12 +473,28 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event) return;
         if (inputs.length === 0) return;
-        if (inputs.some(({ player1, player2 }) => !player1.trim() || !player2.trim())) {
+        const existingRegistrationIds = new Set(
+          event.teams
+            .map((team) => team.signupRegistrationId)
+            .filter((id): id is string => Boolean(id)),
+        );
+        const incomingRegistrationIds = new Set<string>();
+        const uniqueInputs = inputs.filter(({ signupRegistrationId }) => {
+          if (!signupRegistrationId) return true;
+          if (
+            existingRegistrationIds.has(signupRegistrationId)
+            || incomingRegistrationIds.has(signupRegistrationId)
+          ) return false;
+          incomingRegistrationIds.add(signupRegistrationId);
+          return true;
+        });
+        if (uniqueInputs.length === 0) return;
+        if (uniqueInputs.some(({ player1, player2 }) => !player1.trim() || !player2.trim())) {
           set({ lastError: 'Both player names are required.' });
           return;
         }
         const createdAt = Date.now();
-        const addedTeams: Team[] = inputs.map(({ name, player1, player2, signupPairKey, signupRegistrationId }, index) => ({
+        const addedTeams: Team[] = uniqueInputs.map(({ name, player1, player2, signupPairKey, signupRegistrationId }, index) => ({
           id: newId(),
           name: name?.trim() || undefined,
           players: [buildPlayer(player1), buildPlayer(player2)],
@@ -494,20 +517,128 @@ export const useEventStore = create<EventStore>()(
           : event.formatConfig;
         const teams = [...event.teams, ...addedTeams];
         const restoredPairKeys = new Set(
-          inputs.map(({ player1, player2, signupPairKey }) =>
+          uniqueInputs.map(({ player1, player2, signupPairKey }) =>
             signupPairKey ?? rosterPairKey(player1, player2)),
         );
         const ignoredAutoSignupPairKeys = (event.settings.ignoredAutoSignupPairKeys ?? [])
           .filter((key) => !restoredPairKeys.has(key));
+        const restoredRegistrationIds = new Set(
+          uniqueInputs
+            .map(({ signupRegistrationId }) => signupRegistrationId)
+            .filter((id): id is string => Boolean(id)),
+        );
+        const ignoredAutoSignupRegistrationIds = (
+          event.settings.ignoredAutoSignupRegistrationIds ?? []
+        ).filter((id) => !restoredRegistrationIds.has(id));
         set({
           event: refreshAmericanoSchedule(
             {
               ...event,
-              settings: { ...event.settings, ignoredAutoSignupPairKeys },
+              settings: {
+                ...event.settings,
+                ignoredAutoSignupPairKeys,
+                ignoredAutoSignupRegistrationIds,
+              },
             },
             teams,
             formatConfig as Record<string, unknown>,
           ),
+          lastError: null,
+        });
+      },
+
+      syncConfirmedSignupTeams: (registrations, capacity, options) => {
+        const event = get().event;
+        if (!event || event.status !== 'setup') return;
+
+        const ignoredPairKeys = new Set(event.settings.ignoredAutoSignupPairKeys ?? []);
+        const ignoredRegistrationIds = new Set(
+          event.settings.ignoredAutoSignupRegistrationIds ?? [],
+        );
+        const linkedRegistrationIds = new Set(
+          event.teams
+            .map((team) => team.signupRegistrationId)
+            .filter((id): id is string => Boolean(id)),
+        );
+        const eligibleRegistrations = options?.includeIgnored
+          ? registrations
+          : registrations.filter((registration) =>
+            !registration.playerTwo
+            || linkedRegistrationIds.has(registration.id)
+            || (
+              !ignoredRegistrationIds.has(registration.id)
+              && !ignoredPairKeys.has(rosterPairKey(registration.playerOne, registration.playerTwo))
+            ));
+        const reconciliation = reconcileConfirmedSignupRoster({
+          confirmedRegistrations: eligibleRegistrations,
+          localTeams: event.teams,
+          capacity,
+        });
+        if (
+          reconciliation.teamsToAdd.length === 0
+          && reconciliation.teamUpdates.length === 0
+          && reconciliation.importedTeamIdsToRemoveOrDeactivate.length === 0
+        ) return;
+
+        const removals = new Set(reconciliation.importedTeamIdsToRemoveOrDeactivate);
+        const updates = new Map(
+          reconciliation.teamUpdates.map((update) => [update.teamId, update.patch]),
+        );
+        const retainedTeams = event.teams
+          .filter((team) => !removals.has(team.id))
+          .map((team): Team => {
+            const patch = updates.get(team.id);
+            if (!patch) return team;
+            return {
+              ...team,
+              name: patch.name.trim() || undefined,
+              players: [
+                { ...team.players[0], name: patch.player1.trim() },
+                { ...team.players[1], name: patch.player2.trim() },
+              ],
+              signupPairKey: patch.signupPairKey,
+              signupRegistrationId: patch.signupRegistrationId,
+            };
+          });
+        const createdAt = Date.now();
+        const addedTeams: Team[] = reconciliation.teamsToAdd.map((input, index) => ({
+          id: newId(),
+          name: input.name?.trim() || undefined,
+          players: [buildPlayer(input.player1), buildPlayer(input.player2)],
+          createdAt: createdAt + index,
+          active: true,
+          signupPairKey: input.signupPairKey,
+          signupRegistrationId: input.signupRegistrationId,
+        }));
+        const teams = [...retainedTeams, ...addedTeams];
+        const acceptedSignupPairKeys = new Set(
+          teams
+            .filter((team) => team.active && Boolean(team.signupRegistrationId))
+            .map((team) => team.signupPairKey)
+            .filter((key): key is string => Boolean(key)),
+        );
+        const ignoredAutoSignupPairKeys = (event.settings.ignoredAutoSignupPairKeys ?? [])
+          .filter((key) => !acceptedSignupPairKeys.has(key));
+        const acceptedSignupRegistrationIds = new Set(
+          teams
+            .filter((team) => team.active)
+            .map((team) => team.signupRegistrationId)
+            .filter((id): id is string => Boolean(id)),
+        );
+        const ignoredAutoSignupRegistrationIds = (
+          event.settings.ignoredAutoSignupRegistrationIds ?? []
+        ).filter((id) => !acceptedSignupRegistrationIds.has(id));
+
+        set({
+          event: {
+            ...event,
+            settings: {
+              ...event.settings,
+              ignoredAutoSignupPairKeys,
+              ignoredAutoSignupRegistrationIds,
+            },
+            teams,
+          },
           lastError: null,
         });
       },
@@ -545,7 +676,18 @@ export const useEventStore = create<EventStore>()(
         const ignoredAutoSignupPairKeys = removedPairKey
           ? Array.from(new Set([...(event.settings.ignoredAutoSignupPairKeys ?? []), removedPairKey]))
           : event.settings.ignoredAutoSignupPairKeys;
-        const settings = { ...event.settings, ignoredAutoSignupPairKeys };
+        const removedRegistrationId = removedTeam?.signupRegistrationId;
+        const ignoredAutoSignupRegistrationIds = removedRegistrationId
+          ? Array.from(new Set([
+            ...(event.settings.ignoredAutoSignupRegistrationIds ?? []),
+            removedRegistrationId,
+          ]))
+          : event.settings.ignoredAutoSignupRegistrationIds;
+        const settings = {
+          ...event.settings,
+          ignoredAutoSignupPairKeys,
+          ignoredAutoSignupRegistrationIds,
+        };
         if (event.status === 'setup') {
           set({ event: { ...event, settings, teams: event.teams.filter((t) => t.id !== id) } });
         } else {

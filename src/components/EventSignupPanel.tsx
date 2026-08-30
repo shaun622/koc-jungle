@@ -20,10 +20,12 @@ import {
   setSignupOpen,
   shareSignupLink,
   type SignupEvent,
+  type SignupEventMutationResult,
   type SignupRegistration,
   type SignupTemplate,
 } from '@/lib/signups';
 import type { EventState, Team } from '@/types/domain';
+import { reconcileConfirmedSignupRoster } from '@/utils/rosterReconciliation';
 
 function inputDateTime(iso: string | null): string {
   if (!iso) return '';
@@ -98,6 +100,7 @@ export function EventSignupPanel({
   expectedTeams,
   teams,
   onAddTeams,
+  onSyncTeams,
   onRegistrationsChange,
   refreshRegistrationsVersion,
   onSignupChange,
@@ -106,6 +109,11 @@ export function EventSignupPanel({
   expectedTeams: number;
   teams: Team[];
   onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
+  onSyncTeams: (
+    registrations: SignupRegistration[],
+    capacity: number,
+    options?: { includeIgnored?: boolean },
+  ) => void;
   onRegistrationsChange?: (registrations: SignupRegistration[]) => void;
   refreshRegistrationsVersion?: number;
   onSignupChange?: (signup: SignupEvent | null) => void;
@@ -115,6 +123,7 @@ export function EventSignupPanel({
   const [authOpen, setAuthOpen] = useState(false);
   const [signup, setSignup] = useState<SignupEvent | null>(null);
   const [registrations, setRegistrations] = useState<SignupRegistration[]>([]);
+  const [registrationsReady, setRegistrationsReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -134,15 +143,76 @@ export function EventSignupPanel({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
-  const lastAutoImportSignature = useRef('');
   const deletingRegistrationRef = useRef<string | null>(null);
   const registrationsRefreshVersion = useRef(0);
+  const requestedRosterVersion = refreshRegistrationsVersion ?? 0;
+  const requestedRosterVersionRef = useRef(requestedRosterVersion);
+  const appliedRosterVersionRef = useRef(-1);
+  requestedRosterVersionRef.current = requestedRosterVersion;
+  const signupMutationQueue = useRef<Promise<SignupEvent | null>>(Promise.resolve(null));
+  const manualTeamCount = useMemo(
+    () => teams.filter((team) =>
+      team.active
+      && !team.signupRegistrationId
+      && !team.signupPairKey).length,
+    [teams],
+  );
+  const onlineSignupCapacity = Math.max(0, expectedTeams - manualTeamCount);
+
+  const enqueueSignupMutation = useCallback((
+    fallback: SignupEvent | null,
+    sourceEventId: string,
+    mutation: (current: SignupEvent | null) => Promise<SignupEventMutationResult>,
+  ): Promise<SignupEventMutationResult> => {
+    const operation = signupMutationQueue.current
+      .catch(() => null)
+      .then((queued) => mutation(
+        queued?.sourceEventId === sourceEventId ? queued : fallback,
+      ));
+    signupMutationQueue.current = operation.then(
+      (result) => result.event,
+      () => fallback,
+    );
+    return operation;
+  }, []);
+
+  const syncCapacity = useCallback((
+    row: SignupEvent,
+    capacity: number,
+  ): Promise<SignupEventMutationResult> => enqueueSignupMutation(
+    row,
+    row.sourceEventId,
+    async (queued) => {
+      const current = queued?.id === row.id ? queued : row;
+      if (current.capacityTeams === capacity) {
+        return { event: current, applied: false, conflict: false };
+      }
+      return saveSignupEvent({
+        ownerUserId: current.ownerUserId,
+        sourceEventId: current.sourceEventId,
+        accountSlug: current.accountSlug,
+        title: current.title,
+        venue: current.venue,
+        startsAt: current.startsAt,
+        endsAt: current.endsAt,
+        capacityTeams: capacity,
+        details: current.details,
+        prizes: current.prizes,
+        autoAddPairs: current.autoAddPairs,
+        signupEventId: current.id,
+        baseRevision: current.capacityRevision,
+        isOpen: current.isOpen,
+      });
+    },
+  ), [enqueueSignupMutation]);
 
   const refreshRegistrations = useCallback(async (signupId: string) => {
     const refreshVersion = ++registrationsRefreshVersion.current;
     const rows = await getOrganizerRegistrations(signupId);
     if (refreshVersion === registrationsRefreshVersion.current) {
+      appliedRosterVersionRef.current = requestedRosterVersionRef.current;
       setRegistrations(rows);
+      setRegistrationsReady(true);
     }
   }, []);
 
@@ -162,6 +232,8 @@ export function EventSignupPanel({
     setError(null);
     setSignup(null);
     setRegistrations([]);
+    setRegistrationsReady(false);
+    appliedRosterVersionRef.current = -1;
     setTitle(event.name);
     setVenue(event.venue ?? '');
     setStartsAt('');
@@ -179,22 +251,15 @@ export function EventSignupPanel({
       .then(async ([row, savedAccountSlug]) => {
         if (cancelled) return;
         let currentRow = row;
-        if (row && row.capacityTeams !== expectedTeams) {
-          currentRow = await saveSignupEvent({
-            ownerUserId: row.ownerUserId,
-            sourceEventId: row.sourceEventId,
-            accountSlug: row.accountSlug,
-            title: row.title,
-            venue: row.venue,
-            startsAt: row.startsAt,
-            endsAt: row.endsAt,
-            capacityTeams: expectedTeams,
-            details: row.details,
-            prizes: row.prizes,
-            autoAddPairs: row.autoAddPairs,
-          });
+        if (row) {
+          const capacityResult = await syncCapacity(row, onlineSignupCapacity);
+          currentRow = capacityResult.event;
           if (cancelled) return;
-          setMessage(`Confirmed team limit synced to ${expectedTeams}. Extra registrations will wait.`);
+          if (capacityResult.conflict) {
+            setError('This sign-up changed in another tab. Refresh before changing its team limit.');
+          } else if (capacityResult.applied) {
+            setMessage(`Online team limit synced to ${onlineSignupCapacity}. Extra registrations will wait.`);
+          }
         }
         setSignup(currentRow);
         setAccountSlug(
@@ -217,7 +282,15 @@ export function EventSignupPanel({
     return () => {
       cancelled = true;
     };
-  }, [auth.user, event.id, event.name, event.venue, expectedTeams, refreshRegistrations]);
+  }, [
+    auth.user,
+    event.id,
+    event.name,
+    event.venue,
+    onlineSignupCapacity,
+    refreshRegistrations,
+    syncCapacity,
+  ]);
 
   useEffect(() => {
     if (!auth.user || !expanded) return;
@@ -240,6 +313,7 @@ export function EventSignupPanel({
 
   useEffect(() => {
     if (!signup || !refreshRegistrationsVersion) return;
+    setRegistrationsReady(false);
     void refreshRegistrations(signup.id).catch((err: Error) => setError(err.message));
   }, [refreshRegistrations, refreshRegistrationsVersion, signup]);
 
@@ -251,42 +325,82 @@ export function EventSignupPanel({
     () => registrations.filter((registration) => registration.status === 'waitlisted'),
     [registrations],
   );
-  const existingPairs = useMemo(
-    () => new Set(teams.map((team) => registrationPairKey(team.players[0].name, team.players[1].name))),
-    [teams],
-  );
-  const importable = useMemo(
-    () => confirmed.filter(
-      (registration) => registration.playerTwo
-        && !existingPairs.has(registrationPairKey(registration.playerOne, registration.playerTwo)),
-    ),
-    [confirmed, existingPairs],
-  );
-  const autoImportable = useMemo(() => {
+  const autoSyncRegistrations = useMemo(() => {
     const ignored = new Set(event.settings.ignoredAutoSignupPairKeys ?? []);
-    return importable.filter((registration) =>
-      !ignored.has(registrationPairKey(registration.playerOne, registration.playerTwo)));
-  }, [event.settings.ignoredAutoSignupPairKeys, importable]);
+    const ignoredRegistrationIds = new Set(
+      event.settings.ignoredAutoSignupRegistrationIds ?? [],
+    );
+    const alreadyLinked = new Set(
+      teams
+        .map((team) => team.signupRegistrationId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return confirmed.filter((registration) =>
+      Boolean(registration.playerTwo)
+      && (
+        alreadyLinked.has(registration.id)
+        || (
+          !ignoredRegistrationIds.has(registration.id)
+          && !ignored.has(registrationPairKey(registration.playerOne, registration.playerTwo))
+        )
+      ));
+  }, [
+    confirmed,
+    event.settings.ignoredAutoSignupPairKeys,
+    event.settings.ignoredAutoSignupRegistrationIds,
+    teams,
+  ]);
+  const autoReconciliation = useMemo(
+    () => reconcileConfirmedSignupRoster({
+      confirmedRegistrations: autoSyncRegistrations,
+      localTeams: teams,
+      capacity: expectedTeams,
+    }),
+    [autoSyncRegistrations, expectedTeams, teams],
+  );
+  const manualReconciliation = useMemo(
+    () => reconcileConfirmedSignupRoster({
+      confirmedRegistrations: confirmed,
+      localTeams: teams,
+      capacity: expectedTeams,
+    }),
+    [confirmed, expectedTeams, teams],
+  );
+  const manualChangeCount = manualReconciliation.teamsToAdd.length
+    + manualReconciliation.teamUpdates.length
+    + manualReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
 
   useEffect(() => {
-    const signature = autoImportable.map((registration) => registration.id).join('|');
-    if (!signature) {
-      lastAutoImportSignature.current = '';
-      return;
-    }
-    if (!autoAddPairs || event.status !== 'setup' || lastAutoImportSignature.current === signature) return;
-    lastAutoImportSignature.current = signature;
-    onAddTeams(autoImportable.map((registration) => ({
-      name: registration.teamName || undefined,
-      player1: registration.playerOne,
-      player2: registration.playerTwo,
-      signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
-      signupRegistrationId: registration.id,
-    })));
-    setMessage(
-      `Auto-added ${autoImportable.length} confirmed pair${autoImportable.length === 1 ? '' : 's'} (${autoImportable.length * 2} players).`,
-    );
-  }, [autoAddPairs, autoImportable, event.status, onAddTeams]);
+    if (
+      !signup
+      || !registrationsReady
+      || appliedRosterVersionRef.current !== requestedRosterVersion
+      || !autoAddPairs
+      || event.status !== 'setup'
+    ) return;
+    const added = autoReconciliation.teamsToAdd.length;
+    const updated = autoReconciliation.teamUpdates.length;
+    const removed = autoReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
+    if (added + updated + removed === 0) return;
+
+    onSyncTeams(autoSyncRegistrations, expectedTeams);
+    const changes = [
+      added ? `${added} added` : '',
+      updated ? `${updated} updated` : '',
+      removed ? `${removed} removed` : '',
+    ].filter(Boolean).join(', ');
+    setMessage(`Online roster synced: ${changes}.`);
+  }, [
+    autoAddPairs,
+    autoReconciliation,
+    autoSyncRegistrations,
+    event.status,
+    expectedTeams,
+    onSyncTeams,
+    registrationsReady,
+    requestedRosterVersion,
+    signup,
+  ]);
 
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
@@ -321,6 +435,8 @@ export function EventSignupPanel({
         name: templateName,
         title,
         venue,
+        // Templates describe the complete tournament shape. The remaining
+        // online capacity is recalculated from manual teams when published.
         capacityTeams: expectedTeams,
         details,
         prizes,
@@ -361,6 +477,7 @@ export function EventSignupPanel({
 
   async function save() {
     if (!auth.user) return;
+    const ownerUserId = auth.user.id;
     if (!title.trim()) {
       setError('Give the event a name first.');
       return;
@@ -373,21 +490,37 @@ export function EventSignupPanel({
     setMessage(null);
     setError(null);
     try {
-      const row = await saveSignupEvent({
-        ownerUserId: auth.user.id,
-        sourceEventId: event.id,
-        accountSlug,
-        title,
-        venue,
-        startsAt: toIso(startsAt),
-        endsAt: toIso(endsAt),
-        capacityTeams: expectedTeams,
-        details,
-        prizes,
-        autoAddPairs,
-      });
+      const result = await enqueueSignupMutation(signup, event.id, (current) =>
+        saveSignupEvent({
+          ownerUserId,
+          sourceEventId: event.id,
+          accountSlug,
+          title,
+          venue,
+          startsAt: toIso(startsAt),
+          endsAt: toIso(endsAt),
+          capacityTeams: onlineSignupCapacity,
+          details,
+          prizes,
+          autoAddPairs,
+          signupEventId: current?.id,
+          baseRevision: current?.capacityRevision ?? 0,
+          isOpen: current?.isOpen,
+        }));
+      const row = result.event;
       setSignup(row);
       setAccountSlug(row.accountSlug);
+      if (result.conflict) {
+        setTitle(row.title);
+        setVenue(row.venue);
+        setStartsAt(inputDateTime(row.startsAt));
+        setEndsAt(inputDateTime(row.endsAt));
+        setDetails(row.details);
+        setPrizes(row.prizes);
+        setAutoAddPairs(row.autoAddPairs);
+        setError('This sign-up changed in another tab, so the latest version was reloaded. Review it before saving again.');
+        return;
+      }
       await refreshRegistrations(row.id);
       setMessage(signup ? 'Sign-up page updated.' : 'Sign-up page is live. Share the link with every group.');
     } catch (err) {
@@ -401,9 +534,22 @@ export function EventSignupPanel({
     if (!signup) return;
     setError(null);
     try {
-      await setSignupOpen(signup.id, !signup.isOpen);
-      setSignup({ ...signup, isOpen: !signup.isOpen });
-      setMessage(signup.isOpen ? 'Registrations closed.' : 'Registrations reopened.');
+      const shouldOpen = !signup.isOpen;
+      const result = await enqueueSignupMutation(signup, event.id, (current) => {
+        const authoritative = current?.id === signup.id ? current : signup;
+        return setSignupOpen(
+          authoritative.id,
+          shouldOpen,
+          authoritative.sourceEventId,
+          authoritative.capacityRevision,
+        );
+      });
+      setSignup(result.event);
+      if (result.conflict) {
+        setError('This sign-up changed in another tab. Refresh before opening or closing it.');
+        return;
+      }
+      setMessage(shouldOpen ? 'Registrations reopened.' : 'Registrations closed.');
     } catch (err) {
       setError((err as Error).message);
     }
@@ -432,13 +578,17 @@ export function EventSignupPanel({
   }
 
   function importTeams() {
-    onAddTeams(importable.map((registration) => ({
-      name: registration.teamName || undefined,
-      player1: registration.playerOne,
-      player2: registration.playerTwo,
-      signupPairKey: registrationPairKey(registration.playerOne, registration.playerTwo),
-      signupRegistrationId: registration.id,
-    })));
+    const importable = manualReconciliation.teamsToAdd;
+    if (event.status === 'setup') {
+      onSyncTeams(confirmed, expectedTeams, { includeIgnored: true });
+      const updated = manualReconciliation.teamUpdates.length;
+      const removed = manualReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
+      setMessage(
+        `Online roster reviewed: ${importable.length} added, ${updated} updated, ${removed} removed.`,
+      );
+      return;
+    }
+    onAddTeams(importable);
     setMessage(
       `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,
     );
@@ -453,7 +603,7 @@ export function EventSignupPanel({
           <small>One live link for confirmed teams, solo players and the waiting list.</small>
         </span>
         <span className="signup-admin-toggle-meta">
-          {signup ? `${confirmed.length}/${expectedTeams}` : 'SET UP'}
+          {signup ? `${confirmed.length}/${onlineSignupCapacity}` : 'SET UP'}
         </span>
       </button>
 
@@ -542,15 +692,17 @@ export function EventSignupPanel({
                   <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </div>
                 <div className="setup-field">
-                  <label>Confirmed team limit</label>
+                  <label>Online team limit</label>
                   <input
                     className="setup-input"
                     type="number"
-                    value={expectedTeams}
+                    value={onlineSignupCapacity}
                     readOnly
                   />
                   <small className="setup-help">
-                    Matches the tournament setup automatically. Pairs have priority; every extra registration joins the waiting list.
+                    The tournament has {expectedTeams} places. {manualTeamCount
+                      ? `${manualTeamCount} manually added team${manualTeamCount === 1 ? '' : 's'} already ${manualTeamCount === 1 ? 'uses' : 'use'} ${manualTeamCount === 1 ? 'one' : manualTeamCount}, so the live link offers the remaining places.`
+                      : 'The live link offers all of them.'} Pairs have priority; every extra registration joins the waiting list.
                   </small>
                 </div>
                 <div className="setup-field signup-wide">
@@ -647,7 +799,7 @@ export function EventSignupPanel({
                     </a>
                   </div>
                   <div className="signup-admin-summary">
-                    <div><strong>{confirmed.length}</strong><span>Confirmed teams / {expectedTeams}</span></div>
+                    <div><strong>{confirmed.length}</strong><span>Online teams / {onlineSignupCapacity}</span></div>
                     <div><strong>{waitlisted.length}</strong><span>Waiting list</span></div>
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
@@ -705,9 +857,18 @@ export function EventSignupPanel({
                           <span>The tournament has started, so late pairs need a manual review before joining.</span>
                         </div>
                       )}
-                      <button className="btn full" type="button" disabled={importable.length === 0} onClick={importTeams}>
-                        {importable.length > 0
-                          ? `Add ${importable.length} confirmed pair${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) to tournament`
+                      <button
+                        className="btn full"
+                        type="button"
+                        disabled={event.status === 'setup'
+                          ? manualChangeCount === 0
+                          : manualReconciliation.teamsToAdd.length === 0}
+                        onClick={importTeams}
+                      >
+                        {event.status === 'setup' && manualChangeCount > 0
+                          ? `Sync ${manualChangeCount} online roster change${manualChangeCount === 1 ? '' : 's'}`
+                          : manualReconciliation.teamsToAdd.length > 0
+                          ? `Add ${manualReconciliation.teamsToAdd.length} confirmed pair${manualReconciliation.teamsToAdd.length === 1 ? '' : 's'} (${manualReconciliation.teamsToAdd.length * 2} players) to tournament`
                           : 'No new confirmed pairs ready to add'}
                       </button>
                     </>

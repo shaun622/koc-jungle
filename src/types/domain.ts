@@ -123,6 +123,9 @@ export interface EventSettings {
   /** Online sign-up pairs the organiser deliberately removed from the roster.
    *  Manual review can add one back, which clears it from this list. */
   ignoredAutoSignupPairKeys?: string[];
+  /** Stable identities for deliberately removed online registrations. Pair
+   *  keys remain above only as a fallback for events created before IDs were stored. */
+  ignoredAutoSignupRegistrationIds?: string[];
 }
 
 export interface PendingAssignment {

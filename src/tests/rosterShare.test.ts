@@ -41,7 +41,10 @@ const signup: SignupEvent = {
   venue: 'Jungle Padel Sanur',
   startsAt: null,
   endsAt: null,
-  capacityTeams: 4,
+  // One tournament place was filled manually, so only three were offered by
+  // the public link. The shared tournament roster still reports four places.
+  capacityTeams: 3,
+  capacityRevision: 1,
   details: '',
   prizes: '',
   isOpen: true,

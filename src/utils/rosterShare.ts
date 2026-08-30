@@ -54,7 +54,9 @@ export function buildRosterShareText(input: {
   const { event, teams, signup, registrations = [] } = input;
   const title = (signup?.title || event.name || 'Padel event').trim();
   const venue = (signup?.venue || event.venue || '').trim();
-  const capacity = signup?.capacityTeams ?? event.courts.length * 2;
+  // The public sign-up capacity excludes any organiser-added teams. A shared
+  // tournament roster should still show the complete number of court places.
+  const capacity = event.courts.length * 2;
   const lines = [`🎾 ${title.toLocaleUpperCase()}`, ''];
 
   if (venue) lines.push(`📍 ${venue}`);

@@ -13,6 +13,8 @@ export interface SignupEvent {
   startsAt: string | null;
   endsAt: string | null;
   capacityTeams: number;
+  /** Server compare-and-swap revision for organiser metadata/capacity writes. */
+  capacityRevision: number;
   details: string;
   prizes: string;
   isOpen: boolean;
@@ -56,7 +58,7 @@ export interface SignupTemplate {
 }
 
 export interface PublicSignup {
-  event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId' | 'autoAddPairs'>;
+  event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId' | 'autoAddPairs' | 'capacityRevision'>;
   registrations: SignupRegistration[];
 }
 
@@ -72,6 +74,19 @@ export interface SaveSignupInput {
   details: string;
   prizes: string;
   autoAddPairs: boolean;
+  /** Known server signup id. Omit only for first publish/legacy callers. */
+  signupEventId?: string;
+  /** Last capacityRevision read from the server; use 0 only for first publish. */
+  baseRevision: number;
+  /** Preserve the current open state when omitted. */
+  isOpen?: boolean;
+}
+
+/** The current authoritative event is returned on both success and conflict. */
+export interface SignupEventMutationResult {
+  event: SignupEvent;
+  applied: boolean;
+  conflict: boolean;
 }
 
 export interface SaveSignupTemplateInput extends Omit<SignupTemplate, 'id'> {}
@@ -89,6 +104,7 @@ interface SignupEventRow {
   starts_at: string | null;
   ends_at: string | null;
   capacity_teams: number;
+  capacity_revision?: number | null;
   details: string | null;
   prizes: string | null;
   is_open: boolean;
@@ -136,10 +152,39 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     capacityTeams: row.capacity_teams,
+    capacityRevision: row.capacity_revision ?? 0,
     details: row.details ?? '',
     prizes: row.prizes ?? '',
     isOpen: row.is_open,
     autoAddPairs: row.auto_add_pairs ?? true,
+  };
+}
+
+interface OrganizerSignupMutationResponse {
+  applied: boolean;
+  conflict: boolean;
+  capacityRevision: number;
+  event: SignupEventRow;
+}
+
+function mapSignupMutation(data: unknown): SignupEventMutationResult {
+  if (!data || typeof data !== 'object') {
+    throw new Error('The sign-up server returned an invalid response. Refresh and try again.');
+  }
+  const response = data as Partial<OrganizerSignupMutationResponse>;
+  if (!response.event || typeof response.applied !== 'boolean' || typeof response.conflict !== 'boolean') {
+    throw new Error('The sign-up server returned an invalid response. Refresh and try again.');
+  }
+  const event = mapEvent(response.event);
+  // Prefer the explicit RPC field during rollout, while the row value remains
+  // the canonical representation once every environment has the migration.
+  if (Number.isSafeInteger(response.capacityRevision) && (response.capacityRevision ?? -1) >= 0) {
+    event.capacityRevision = response.capacityRevision as number;
+  }
+  return {
+    event,
+    applied: response.applied,
+    conflict: response.conflict,
   };
 }
 
@@ -259,41 +304,53 @@ export async function deleteSignupTemplate(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEvent> {
+export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEventMutationResult> {
   const client = requireSupabase();
   const accountSlug = normaliseSignupLinkPart(input.accountSlug, 'organiser');
-  const { data, error } = await client
-    .from('signup_events')
-    .upsert(
-      {
-        owner_user_id: input.ownerUserId,
-        source_event_id: input.sourceEventId,
-        account_slug: accountSlug,
-        title: input.title.trim(),
-        venue: input.venue.trim(),
-        starts_at: input.startsAt,
-        ends_at: input.endsAt,
-        capacity_teams: input.capacityTeams,
-        details: input.details.trim(),
-        prizes: input.prizes.trim(),
-        auto_add_pairs: input.autoAddPairs,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'owner_user_id,source_event_id' },
-    )
-    .select('*')
-    .single();
+  if (!Number.isSafeInteger(input.baseRevision) || input.baseRevision < 0) {
+    throw new Error('Refresh this sign-up before saving it again.');
+  }
+  if (!input.signupEventId && input.baseRevision !== 0) {
+    throw new Error('A new sign-up must start at revision 0.');
+  }
+  const signupEventId = input.signupEventId ?? null;
+  const { data, error } = await client.rpc('organizer_save_signup_event', {
+    p_source_event_id: input.sourceEventId,
+    p_account_slug: accountSlug,
+    p_title: input.title.trim(),
+    p_venue: input.venue.trim(),
+    p_starts_at: input.startsAt,
+    p_ends_at: input.endsAt,
+    p_expected_capacity: input.capacityTeams,
+    p_base_revision: input.baseRevision,
+    p_details: input.details.trim(),
+    p_prizes: input.prizes.trim(),
+    p_auto_add_pairs: input.autoAddPairs,
+    p_signup_event_id: signupEventId,
+    p_is_open: input.isOpen ?? null,
+  });
   if (error) throw new Error(error.message);
-  return mapEvent(data as SignupEventRow);
+  return mapSignupMutation(data);
 }
 
-export async function setSignupOpen(id: string, isOpen: boolean): Promise<void> {
+export async function setSignupOpen(
+  id: string,
+  isOpen: boolean,
+  sourceEventId: string,
+  baseRevision: number,
+): Promise<SignupEventMutationResult> {
   const client = requireSupabase();
-  const { error } = await client
-    .from('signup_events')
-    .update({ is_open: isOpen, updated_at: new Date().toISOString() })
-    .eq('id', id);
+  if (!sourceEventId || !Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+    throw new Error('Refresh this sign-up before changing registrations.');
+  }
+  const { data, error } = await client.rpc('organizer_set_signup_open', {
+    p_signup_event_id: id,
+    p_source_event_id: sourceEventId,
+    p_is_open: isOpen,
+    p_base_revision: baseRevision,
+  });
   if (error) throw new Error(error.message);
+  return mapSignupMutation(data);
 }
 
 export async function getOrganizerRegistrations(
@@ -330,19 +387,13 @@ export async function updateOrganizerRegistration(
   patch: { teamName: string; playerOne: string; playerTwo: string; contact?: string },
 ): Promise<void> {
   const client = requireSupabase();
-  const values: Record<string, string> = {
-    team_name: patch.teamName.trim(),
-    player_one: patch.playerOne.trim(),
-    player_two: patch.playerTwo.trim(),
-    updated_at: new Date().toISOString(),
-  };
-  if (patch.contact !== undefined) values.contact = patch.contact.trim();
-  const { error } = await client
-    .from('signup_registrations')
-    .update(values)
-    .eq('id', registrationId)
-    .select('id')
-    .single();
+  const { error } = await client.rpc('organizer_update_signup_registration', {
+    p_registration_id: registrationId,
+    p_team_name: patch.teamName.trim(),
+    p_player_one: patch.playerOne.trim(),
+    p_player_two: patch.playerTwo.trim(),
+    p_contact: patch.contact === undefined ? null : patch.contact.trim(),
+  });
   if (error) throw new Error(error.message);
 }
 

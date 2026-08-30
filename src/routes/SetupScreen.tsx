@@ -54,6 +54,7 @@ export function SetupScreen() {
   const loadEvent = useEventStore((s) => s.loadEvent);
   const addTeam = useEventStore((s) => s.addTeam);
   const addTeams = useEventStore((s) => s.addTeams);
+  const syncConfirmedSignupTeams = useEventStore((s) => s.syncConfirmedSignupTeams);
   const updateTeam = useEventStore((s) => s.updateTeam);
   const removeTeam = useEventStore((s) => s.removeTeam);
   const reorderTeams = useEventStore((s) => s.reorderTeams);
@@ -529,6 +530,7 @@ export function SetupScreen() {
           expectedTeams={expectedTeams}
           teams={teams}
           onAddTeams={addTeams}
+          onSyncTeams={syncConfirmedSignupTeams}
           onRegistrationsChange={setOnlineRegistrations}
           refreshRegistrationsVersion={refreshRegistrationsVersion}
           onSignupChange={setSignupDetails}

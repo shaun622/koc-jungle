@@ -1,7 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS, type EventState } from '@/types/domain';
-import type { SignupEvent, SignupRegistration } from '@/lib/signups';
+import { DEFAULT_SETTINGS, type EventState, type Team } from '@/types/domain';
+import type {
+  SaveSignupInput,
+  SignupEvent,
+  SignupEventMutationResult,
+  SignupRegistration,
+} from '@/lib/signups';
 
 const signupMocks = vi.hoisted(() => ({
   deleteOrganizerWaitlistedRegistration: vi.fn(),
@@ -9,6 +14,7 @@ const signupMocks = vi.hoisted(() => ({
   getOwnedSignup: vi.fn(),
   getSignupAccountSlug: vi.fn(),
   getSignupTemplates: vi.fn(),
+  saveSignupEvent: vi.fn(),
 }));
 
 const authUser = vi.hoisted(() => ({ id: 'owner-1', email: 'owner@example.com' }));
@@ -59,6 +65,7 @@ const signup: SignupEvent = {
   startsAt: null,
   endsAt: null,
   capacityTeams: 4,
+  capacityRevision: 1,
   details: '',
   prizes: '',
   isOpen: true,
@@ -101,13 +108,26 @@ const registrations: SignupRegistration[] = [
   },
 ];
 
-function panel(refreshRegistrationsVersion = 0) {
+function panel({
+  expectedTeams = 4,
+  teams = [],
+  onAddTeams = vi.fn(),
+  onSyncTeams = vi.fn(),
+  refreshRegistrationsVersion = 0,
+}: {
+  expectedTeams?: number;
+  teams?: Team[];
+  onAddTeams?: React.ComponentProps<typeof EventSignupPanel>['onAddTeams'];
+  onSyncTeams?: React.ComponentProps<typeof EventSignupPanel>['onSyncTeams'];
+  refreshRegistrationsVersion?: number;
+} = {}) {
   return (
     <EventSignupPanel
       event={event}
-      expectedTeams={4}
-      teams={[]}
-      onAddTeams={vi.fn()}
+      expectedTeams={expectedTeams}
+      teams={teams}
+      onAddTeams={onAddTeams}
+      onSyncTeams={onSyncTeams}
       refreshRegistrationsVersion={refreshRegistrationsVersion}
     />
   );
@@ -224,7 +244,7 @@ describe('organiser waiting-list deletion', () => {
       .mockResolvedValueOnce([registrations[0], registrations[2]]);
     const view = await loadPanel();
 
-    view.rerender(panel(1));
+    view.rerender(panel({ refreshRegistrationsVersion: 1 }));
     await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
@@ -235,5 +255,209 @@ describe('organiser waiting-list deletion', () => {
     await act(async () => resolveOldRefresh(registrations));
 
     expect(screen.queryByText('Waiting Pair')).not.toBeInTheDocument();
+  });
+});
+
+describe('online signup synchronisation regressions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signupMocks.saveSignupEvent.mockReset();
+    signupMocks.getSignupAccountSlug.mockResolvedValue('shaun');
+    signupMocks.getSignupTemplates.mockResolvedValue([]);
+    signupMocks.getOrganizerRegistrations.mockResolvedValue([registrations[0]]);
+  });
+
+  it('routes a renamed signup through stable-id reconciliation instead of emitting another add', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, autoAddPairs: true });
+    const onAddTeams = vi.fn();
+    const onSyncTeams = vi.fn();
+    const originalImportedTeam: Team = {
+      id: 'local-confirmed-1',
+      name: 'Confirmed Pair',
+      players: [
+        { id: 'player-tapia', name: 'Tapia' },
+        { id: 'player-coello', name: 'Coello' },
+      ],
+      createdAt: 1,
+      active: true,
+      signupPairKey: 'coello|tapia',
+      signupRegistrationId: 'confirmed-1',
+    };
+    const renamedImportedTeam: Team = {
+      ...originalImportedTeam,
+      name: 'Renamed Pair',
+      players: [
+        { ...originalImportedTeam.players[0], name: 'Renamed Tapia' },
+        { ...originalImportedTeam.players[1], name: 'Renamed Coello' },
+      ],
+      signupPairKey: 'renamed coello|renamed tapia',
+    };
+
+    const view = render(panel({ teams: [], onAddTeams, onSyncTeams }));
+    await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(1));
+    expect(onSyncTeams.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: 'confirmed-1' }),
+    ]);
+
+    view.rerender(panel({ teams: [originalImportedTeam], onAddTeams, onSyncTeams }));
+    await act(async () => undefined);
+    view.rerender(panel({ teams: [renamedImportedTeam], onAddTeams, onSyncTeams }));
+    await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(2));
+
+    expect(onAddTeams).not.toHaveBeenCalled();
+  });
+
+  it('does not reconcile a local organiser edit against the previous server snapshot', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, autoAddPairs: true });
+    const originalImportedTeam: Team = {
+      id: 'local-confirmed-1',
+      name: 'Confirmed Pair',
+      players: [
+        { id: 'player-tapia', name: 'Tapia' },
+        { id: 'player-coello', name: 'Coello' },
+      ],
+      createdAt: 1,
+      active: true,
+      signupPairKey: 'coello|tapia',
+      signupRegistrationId: 'confirmed-1',
+    };
+    const renamedImportedTeam: Team = {
+      ...originalImportedTeam,
+      name: 'Renamed Pair',
+      players: [
+        { ...originalImportedTeam.players[0], name: 'Renamed Tapia' },
+        { ...originalImportedTeam.players[1], name: 'Renamed Coello' },
+      ],
+      signupPairKey: 'renamed coello|renamed tapia',
+    };
+    let resolveFreshSnapshot: (rows: SignupRegistration[]) => void = () => undefined;
+    signupMocks.getOrganizerRegistrations
+      .mockResolvedValueOnce([registrations[0]])
+      .mockImplementationOnce(() => new Promise<SignupRegistration[]>((resolve) => {
+        resolveFreshSnapshot = resolve;
+      }));
+    const onSyncTeams = vi.fn();
+    const view = render(panel({ teams: [originalImportedTeam], onSyncTeams }));
+    await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(1));
+
+    view.rerender(panel({
+      teams: [renamedImportedTeam],
+      onSyncTeams,
+      refreshRegistrationsVersion: 1,
+    }));
+    await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
+    await act(async () => undefined);
+
+    expect(onSyncTeams).not.toHaveBeenCalled();
+
+    await act(async () => resolveFreshSnapshot([{
+      ...registrations[0],
+      teamName: 'Renamed Pair',
+      playerOne: 'Renamed Tapia',
+      playerTwo: 'Renamed Coello',
+    }]));
+    await act(async () => undefined);
+    expect(onSyncTeams).not.toHaveBeenCalled();
+  });
+
+  it('does not let an older capacity write beat the latest expected team count', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+    let remoteCapacity = signup.capacityTeams;
+    let resolveStaleWrite: (() => void) | undefined;
+    signupMocks.saveSignupEvent
+      .mockImplementationOnce((input: SaveSignupInput) => new Promise<SignupEventMutationResult>((resolve) => {
+        resolveStaleWrite = () => {
+          remoteCapacity = input.capacityTeams;
+          resolve({
+            event: { ...signup, capacityTeams: input.capacityTeams, capacityRevision: 2 },
+            applied: true,
+            conflict: false,
+          });
+        };
+      }))
+      .mockImplementation(async (input: SaveSignupInput) => {
+        remoteCapacity = input.capacityTeams;
+        return {
+          event: { ...signup, capacityTeams: input.capacityTeams, capacityRevision: 3 },
+          applied: true,
+          conflict: false,
+        };
+      });
+
+    const view = render(panel({ expectedTeams: 6 }));
+    await waitFor(() => expect(signupMocks.saveSignupEvent).toHaveBeenCalledTimes(1));
+    expect(signupMocks.saveSignupEvent.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ capacityTeams: 6 }),
+    );
+
+    view.rerender(panel({ expectedTeams: 4 }));
+    await waitFor(() => expect(signupMocks.getOwnedSignup).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolveStaleWrite?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const calls = signupMocks.saveSignupEvent.mock.calls;
+      expect(calls[calls.length - 1]?.[0]).toEqual(
+        expect.objectContaining({ capacityTeams: 4, baseRevision: 2 }),
+      );
+    });
+    expect(remoteCapacity).toBe(4);
+  });
+
+  it('reserves online signup capacity for teams added manually by the organiser', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+    signupMocks.saveSignupEvent.mockImplementation(async (input: SaveSignupInput) => ({
+      event: {
+        ...signup,
+        capacityTeams: input.capacityTeams,
+        capacityRevision: 2,
+      },
+      applied: true,
+      conflict: false,
+    }));
+    const manualTeam: Team = {
+      id: 'manual-team',
+      name: 'Invited pair',
+      players: [
+        { id: 'manual-player-1', name: 'Manual One' },
+        { id: 'manual-player-2', name: 'Manual Two' },
+      ],
+      createdAt: 1,
+      active: true,
+    };
+
+    render(panel({ teams: [manualTeam] }));
+
+    await waitFor(() => expect(signupMocks.saveSignupEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ capacityTeams: 3 }),
+    ));
+  });
+
+  it('reloads the authoritative form after a save conflict instead of enabling a stale retry', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+    signupMocks.saveSignupEvent.mockResolvedValueOnce({
+      event: {
+        ...signup,
+        title: 'Latest title from another tab',
+        details: 'Latest details',
+        capacityRevision: 2,
+      },
+      applied: false,
+      conflict: true,
+    });
+    renderPanel();
+    const titleInput = await screen.findByDisplayValue('Monday Night KoC');
+    fireEvent.change(titleInput, { target: { value: 'Stale local title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Update sign-up page' }));
+
+    expect(await screen.findByText(
+      'This sign-up changed in another tab, so the latest version was reloaded. Review it before saving again.',
+    )).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Latest title from another tab')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Stale local title')).not.toBeInTheDocument();
+    expect(signupMocks.saveSignupEvent).toHaveBeenCalledTimes(1);
   });
 });
