@@ -164,10 +164,12 @@ describe('organiser registration deletion', () => {
     signupMocks.updateOrganizerRegistration.mockResolvedValue(undefined);
   });
 
-  it('offers organiser delete controls for confirmed, waiting, and solo registrations', async () => {
+  it('keeps confirmed teams in the main roster and shows controls only for waiting and solo registrations', async () => {
     await loadPanel();
 
-    expect(screen.getByRole('button', { name: 'Remove Confirmed Pair from sign-up' })).toBeInTheDocument();
+    expect(screen.queryByText('Confirmed Pair')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove Confirmed Pair from sign-up' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Waiting pairs and partner requests' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Shaun from sign-up' })).toBeInTheDocument();
   });

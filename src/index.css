@@ -5471,6 +5471,16 @@ button {
   border-radius: 10px;
   overflow: hidden;
 }
+.signup-admin-pending { margin-top: 12px; }
+.signup-admin-pending-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+.signup-admin-pending-heading strong { font-size: 13px; }
+.signup-admin-pending-heading span { color: var(--text-2); font-size: 11px; text-align: right; }
 .signup-admin-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) minmax(100px, .7fr) auto;

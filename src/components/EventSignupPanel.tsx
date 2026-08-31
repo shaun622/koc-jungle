@@ -350,6 +350,7 @@ export function EventSignupPanel({
     () => buildSignupRosterView(registrations, expectedTeams),
     [expectedTeams, registrations],
   );
+  const pendingRegistrations = [...waitlistedPairs, ...lookingForPartner];
 
   useEffect(() => {
     if (
@@ -797,9 +798,14 @@ export function EventSignupPanel({
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
-                  {registrations.length > 0 && (
-                    <div className="signup-admin-roster">
-                      {registrations.map((registration) => (
+                  {pendingRegistrations.length > 0 && (
+                    <section className="signup-admin-pending" aria-label="Waiting pairs and partner requests">
+                      <div className="signup-admin-pending-heading">
+                        <strong>Waiting &amp; partner requests</strong>
+                        <span>Not yet in the tournament roster</span>
+                      </div>
+                      <div className="signup-admin-roster">
+                      {pendingRegistrations.map((registration) => (
                         <div className="signup-admin-row" key={registration.id}>
                           <span className={'signup-position ' + registration.status}>
                             {!registration.playerTwo
@@ -826,43 +832,40 @@ export function EventSignupPanel({
                           </span>
                           <span className="signup-admin-row-actions">
                             {event.status === 'setup' ? (
-                                <button
-                                  className="setup-team-action"
-                                  type="button"
-                                  aria-label={`Edit ${registrationLabel(registration)}`}
-                                  title="Edit registration"
-                                  disabled={Boolean(editingRegistrationId || deletingRegistrationId)}
-                                  onClick={() => setRegistrationEditTarget(registration)}
-                                >
-                                  <Icons.Edit className="icon" />
-                                </button>
-                              ) : null}
-                          {event.status === 'setup'
-                            || registration.status !== 'confirmed'
-                            || !registration.playerTwo.trim() ? (
                               <button
-                                className="setup-team-action danger signup-admin-delete"
+                                className="setup-team-action"
                                 type="button"
-                                aria-label={`Remove ${registrationLabel(registration)} from sign-up`}
-                                title="Remove from sign-up"
-                                disabled={deletingRegistrationId === registration.id}
-                                onClick={() => setRegistrationDeleteTarget(registration)}
+                                aria-label={`Edit ${registrationLabel(registration)}`}
+                                title="Edit registration"
+                                disabled={Boolean(editingRegistrationId || deletingRegistrationId)}
+                                onClick={() => setRegistrationEditTarget(registration)}
                               >
-                                <Icons.Trash className="icon" />
+                                <Icons.Edit className="icon" />
                               </button>
-                            ) : <span aria-label="Manage this confirmed team in the tournament roster" />}
+                            ) : null}
+                            <button
+                              className="setup-team-action danger signup-admin-delete"
+                              type="button"
+                              aria-label={`Remove ${registrationLabel(registration)} from sign-up`}
+                              title="Remove from sign-up"
+                              disabled={deletingRegistrationId === registration.id}
+                              onClick={() => setRegistrationDeleteTarget(registration)}
+                            >
+                              <Icons.Trash className="icon" />
+                            </button>
                           </span>
                         </div>
                       ))}
-                    </div>
+                      </div>
+                    </section>
                   )}
 
                   <div className={'signup-auto-status ' + (event.status === 'setup' ? '' : 'paused')}>
                     <strong>{event.status === 'setup' ? 'One roster, kept in sync' : 'Roster locked for play'}</strong>
                     <span>
                       {event.status === 'setup'
-                        ? 'Complete pairs fill the tournament automatically. Overflow pairs wait, and solos stay in Looking for a partner.'
-                        : 'The tournament has started, so its playing roster is no longer changed by new registrations.'}
+                        ? 'Confirmed teams are managed in the tournament roster below. Only waiting pairs and partner requests appear here.'
+                        : 'The playing roster is locked. Waiting pairs and partner requests remain here for organiser follow-up.'}
                     </span>
                   </div>
                 </>
