@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { buildSignupUrl, type SignupEvent, type SignupRegistration } from '@/lib/signups';
 import type { EventState, Team } from '@/types/domain';
+import { buildSignupRosterView } from '@/utils/signupRosterView';
 
 export interface RosterShareResult {
   ok: boolean;
@@ -10,6 +11,21 @@ export interface RosterShareResult {
 
 function numbered(index: number): string {
   return `${index + 1}.`;
+}
+
+function normalizedName(value: string | undefined): string {
+  return value
+    ?.trim()
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase() ?? '';
+}
+
+function normalizedPairKey(playerOne: string, playerTwo: string): string {
+  return [playerOne, playerTwo]
+    .map(normalizedName)
+    .sort()
+    .join('|');
 }
 
 function formatSchedule(signup?: SignupEvent | null): string[] {
@@ -54,29 +70,49 @@ export function buildRosterShareText(input: {
   const { event, teams, signup, registrations = [] } = input;
   const title = (signup?.title || event.name || 'Padel event').trim();
   const venue = (signup?.venue || event.venue || '').trim();
-  // The public sign-up capacity excludes any organiser-added teams. A shared
-  // tournament roster should still show the complete number of court places.
   const capacity = event.courts.length * 2;
+  const confirmedTeams = teams.filter((team) => team.active);
+  const representedRegistrationIds = new Set(
+    confirmedTeams
+      .map((team) => team.signupRegistrationId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const representedPairKeys = new Set(
+    confirmedTeams.map((team) => normalizedPairKey(
+      team.players[0].name,
+      team.players[1].name,
+    )),
+  );
+  const rosterView = buildSignupRosterView(registrations, capacity);
+  const isAlreadyRepresented = (registration: SignupRegistration): boolean =>
+    representedRegistrationIds.has(registration.id)
+    || (
+      Boolean(registration.playerTwo?.trim())
+      && representedPairKeys.has(normalizedPairKey(
+        registration.playerOne,
+        registration.playerTwo,
+      ))
+    );
   const lines = [`🎾 ${title.toLocaleUpperCase()}`, ''];
 
   if (venue) lines.push(`📍 ${venue}`);
   lines.push(...formatSchedule(signup));
-  lines.push(`👥 ${teams.length} of ${capacity} teams confirmed`, '');
+  lines.push(`👥 ${confirmedTeams.length} of ${capacity} teams confirmed`, '');
 
-  teams.forEach((team, index) => {
+  confirmedTeams.forEach((team, index) => {
     lines.push(...teamLines(team, index), '');
   });
 
-  const soloPlayers = registrations.filter((registration) =>
-    registration.status !== 'cancelled' && !registration.playerTwo);
+  const soloPlayers = rosterView.lookingForPartner
+    .filter((registration) => !isAlreadyRepresented(registration));
   if (soloPlayers.length > 0) {
     lines.push('👤 LOOKING FOR A PARTNER');
     soloPlayers.forEach((registration, index) => lines.push(waitingLine(registration, index)));
     lines.push('');
   }
 
-  const waitingPairs = registrations.filter((registration) =>
-    registration.status === 'waitlisted' && Boolean(registration.playerTwo));
+  const waitingPairs = rosterView.waitlistedPairs
+    .filter((registration) => !isAlreadyRepresented(registration));
   if (waitingPairs.length > 0) {
     lines.push('⏳ WAITING LIST');
     waitingPairs.forEach((registration, index) => lines.push(waitingLine(registration, index)));

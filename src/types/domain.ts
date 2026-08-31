@@ -31,8 +31,8 @@ export interface Team {
   players: [Player, Player];
   createdAt: number;
   active: boolean;
-  /** Stable player-pair key for a team imported from online sign-up. This lets
-   *  a deliberate roster removal stay removed instead of Auto-add restoring it. */
+  /** Legacy player-pair identity for teams imported before stable registration
+   *  IDs were stored. New online teams use signupRegistrationId. */
   signupPairKey?: string;
   /** Source row for an online sign-up team, used to keep organiser edits,
    *  deletion and ordering in sync with the public sign-up page. */
@@ -120,12 +120,15 @@ export interface EventSettings {
   /** Target number: points/games to play to, or minutes when unit is
    *  'time'. Default 16 (points). */
   qualifierTarget?: number;
-  /** Online sign-up pairs the organiser deliberately removed from the roster.
-   *  Manual review can add one back, which clears it from this list. */
+  /** @deprecated Legacy pre-single-roster suppression keys. Retained so older
+   *  saved events can be loaded; the canonical server roster now decides. */
   ignoredAutoSignupPairKeys?: string[];
-  /** Stable identities for deliberately removed online registrations. Pair
-   *  keys remain above only as a fallback for events created before IDs were stored. */
+  /** @deprecated Legacy pre-single-roster suppression IDs. */
   ignoredAutoSignupRegistrationIds?: string[];
+  /** Durable local/cloud marker that this tournament has a published server
+   * sign-up. It prevents a signed-out reload from starting play while an
+   * otherwise-empty public registration page is still open. */
+  publishedSignupId?: string;
 }
 
 export interface PendingAssignment {

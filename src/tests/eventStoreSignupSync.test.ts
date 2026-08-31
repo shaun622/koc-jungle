@@ -62,7 +62,7 @@ describe('event-store confirmed signup roster synchronisation', () => {
     expect(after.players[0].avatar).toEqual(withAvatar.players[0].avatar);
   });
 
-  it('atomically removes a demoted imported team and adds its promoted replacement', () => {
+  it('keeps a demoted team inactive so a later promotion preserves its identity', () => {
     useEventStore.getState().addTeams([{
       name: 'Demoted team',
       player1: 'Old One',
@@ -83,12 +83,67 @@ describe('event-store confirmed signup roster synchronisation', () => {
 
     const teams = useEventStore.getState().event!.teams;
     expect(notifications).toBe(1);
-    expect(teams).toHaveLength(1);
+    expect(teams).toHaveLength(2);
     expect(teams[0]).toMatchObject({
       name: 'Promoted team',
       signupRegistrationId: 'promoted-registration',
+      active: true,
     });
     expect(teams[0].players.map((player) => player.name)).toEqual(['Promoted One', 'Promoted Two']);
+    const demoted = teams.find((team) => team.signupRegistrationId === 'demoted-registration')!;
+    expect(demoted.active).toBe(false);
+
+    useEventStore.getState().syncConfirmedSignupTeams([
+      registration('demoted-registration', 1, 'Old One', 'Old Two', 'Demoted team'),
+      registration('promoted-registration', 2, 'Promoted One', 'Promoted Two', 'Promoted team'),
+    ], 2);
+
+    const restored = useEventStore.getState().event!.teams
+      .find((team) => team.signupRegistrationId === 'demoted-registration')!;
+    expect(restored.id).toBe(demoted.id);
+    expect(restored.players.map((player) => player.id)).toEqual(
+      demoted.players.map((player) => player.id),
+    );
+    expect(restored.active).toBe(true);
+  });
+
+  it('applies authoritative server order without replacing team identities', () => {
+    useEventStore.getState().addTeams([
+      {
+        name: 'First',
+        player1: 'First One',
+        player2: 'First Two',
+        signupPairKey: 'first one|first two',
+        signupRegistrationId: 'registration-1',
+      },
+      {
+        name: 'Second',
+        player1: 'Second One',
+        player2: 'Second Two',
+        signupPairKey: 'second one|second two',
+        signupRegistrationId: 'registration-2',
+      },
+    ]);
+    const before = new Map(useEventStore.getState().event!.teams.map((team) => [
+      team.signupRegistrationId,
+      { teamId: team.id, playerIds: team.players.map((player) => player.id) },
+    ]));
+
+    useEventStore.getState().syncConfirmedSignupTeams([
+      registration('registration-2', 1, 'Second One', 'Second Two', 'Second'),
+      registration('registration-1', 2, 'First One', 'First Two', 'First'),
+    ], 2);
+
+    const after = useEventStore.getState().event!.teams.filter((team) => team.active);
+    expect(after.map((team) => team.signupRegistrationId)).toEqual([
+      'registration-2',
+      'registration-1',
+    ]);
+    for (const team of after) {
+      expect(team.id).toBe(before.get(team.signupRegistrationId)?.teamId);
+      expect(team.players.map((player) => player.id))
+        .toEqual(before.get(team.signupRegistrationId)?.playerIds);
+    }
   });
 
   it('deduplicates registration ids and is idempotent with stable local identities', () => {
@@ -140,29 +195,40 @@ describe('event-store confirmed signup roster synchronisation', () => {
     expect(teams[0].signupRegistrationId).toBe('registration-1');
   });
 
-  it('keeps manual teams and uses only their remaining capacity for confirmed signup teams', () => {
+  it('adopts an exact legacy local pair and fills the complete court capacity', () => {
     useEventStore.getState().addTeam({
       name: 'Manual team',
       player1: 'Manual One',
       player2: 'Manual Two',
     });
+    const localTeamId = useEventStore.getState().event!.teams[0].id;
+    useEventStore.getState().setPlayerAvatar(localTeamId, 0, {
+      color: 'oklch(72% 0.18 190)',
+      photoDataUrl: 'data:image/png;base64,legacy-avatar',
+    });
+    useEventStore.getState().setPointsOverride(localTeamId, 12);
     const manualBefore = useEventStore.getState().event!.teams[0];
 
     useEventStore.getState().syncConfirmedSignupTeams([
-      registration('registration-1', 1, 'Online One A', 'Online One B', 'Online one'),
+      registration('registration-1', 1, 'manual two', 'manual one', 'Canonical manual team'),
       registration('registration-2', 2, 'Online Two A', 'Online Two B', 'Online two'),
     ], 2);
 
     const teams = useEventStore.getState().event!.teams;
     expect(teams).toHaveLength(2);
-    expect(teams[0]).toBe(manualBefore);
+    expect(teams[0].id).toBe(manualBefore.id);
+    expect(teams[0].players.map((player) => player.id)).toEqual(
+      manualBefore.players.map((player) => player.id),
+    );
+    expect(teams[0].players[0].avatar).toEqual(manualBefore.players[0].avatar);
+    expect(teams[0].pointsOverride).toBe(12);
     expect(teams.map((team) => team.signupRegistrationId)).toEqual([
-      undefined,
       'registration-1',
+      'registration-2',
     ]);
   });
 
-  it('lets a manual review restore an intentionally ignored online pair', () => {
+  it('restores a still-confirmed server pair even if an old client marked it ignored', () => {
     const row = registration('registration-1', 1, 'Online One', 'Online Two', 'Online pair');
     useEventStore.getState().addTeams([{
       name: row.teamName,
@@ -176,7 +242,7 @@ describe('event-store confirmed signup roster synchronisation', () => {
     expect(useEventStore.getState().event!.settings.ignoredAutoSignupRegistrationIds)
       .toEqual([row.id]);
 
-    useEventStore.getState().syncConfirmedSignupTeams([row], 1, { includeIgnored: true });
+    useEventStore.getState().syncConfirmedSignupTeams([row], 1);
 
     const event = useEventStore.getState().event!;
     expect(event.teams).toHaveLength(1);

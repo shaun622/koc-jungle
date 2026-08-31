@@ -13,6 +13,25 @@ export interface Template {
   settings: EventSettings;
 }
 
+function independentSettings(settings: EventSettings): EventSettings {
+  const clean = { ...settings };
+  delete clean.publishedSignupId;
+  delete clean.ignoredAutoSignupPairKeys;
+  delete clean.ignoredAutoSignupRegistrationIds;
+  return clean;
+}
+
+function independentTeam(team: Team): Team {
+  const clean: Team = {
+    ...team,
+    players: [{ ...team.players[0] }, { ...team.players[1] }],
+  };
+  delete clean.signupRegistrationId;
+  delete clean.signupPairKey;
+  delete clean.pointsOverride;
+  return clean;
+}
+
 export function listTemplates(): Template[] {
   const raw = safeGet(KEY);
   if (!raw) return [];
@@ -33,9 +52,9 @@ export function saveTemplate(name: string, event: EventState): Template {
     id: newId(),
     name: name.trim(),
     savedAt: Date.now(),
-    courts: event.courts,
-    teams: event.teams.filter((t) => t.active),
-    settings: event.settings,
+    courts: event.courts.map((court) => ({ ...court })),
+    teams: event.teams.filter((team) => team.active).map(independentTeam),
+    settings: independentSettings(event.settings),
   };
   filtered.push(template);
   filtered.sort((a, b) => b.savedAt - a.savedAt);
@@ -55,18 +74,21 @@ export function templateToEventState(template: Template): EventState {
     name: template.name,
     createdAt: Date.now(),
     status: 'setup',
-    settings: { ...template.settings },
+    settings: independentSettings(template.settings),
     courts: template.courts.map((c) => ({ ...c, id: newId() })),
-    teams: template.teams.map((t) => ({
-      ...t,
-      id: newId(),
-      createdAt: Date.now(),
-      active: true,
-      players: [
-        { ...t.players[0], id: newId() },
-        { ...t.players[1], id: newId() },
-      ] as [{ id: string; name: string }, { id: string; name: string }],
-    })),
+    teams: template.teams.map((storedTeam) => {
+      const t = independentTeam(storedTeam);
+      return {
+        ...t,
+        id: newId(),
+        createdAt: Date.now(),
+        active: true,
+        players: [
+          { ...t.players[0], id: newId() },
+          { ...t.players[1], id: newId() },
+        ] as [{ id: string; name: string }, { id: string; name: string }],
+      };
+    }),
     rounds: [],
   };
 }

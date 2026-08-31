@@ -2,30 +2,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthModal } from '@/components/AuthModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
+import { Portal } from '@/components/Portal';
 import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
   copySignupLink,
   defaultSignupAccountSlug,
-  deleteOrganizerWaitlistedRegistration,
+  deleteOrganizerRegistrationIfStatus,
   deleteSignupTemplate,
   getOrganizerRegistrations,
   getOwnedSignup,
   getSignupAccountSlug,
   getSignupTemplates,
-  registrationPairKey,
   normaliseSignupLinkPart,
   saveSignupEvent,
   saveSignupTemplate,
+  seedOrganizerSignupRoster,
   setSignupOpen,
   shareSignupLink,
+  updateOrganizerRegistration,
   type SignupEvent,
   type SignupEventMutationResult,
   type SignupRegistration,
   type SignupTemplate,
 } from '@/lib/signups';
 import type { EventState, Team } from '@/types/domain';
-import { reconcileConfirmedSignupRoster } from '@/utils/rosterReconciliation';
+import { buildSignupRosterView } from '@/utils/signupRosterView';
 
 function inputDateTime(iso: string | null): string {
   if (!iso) return '';
@@ -99,7 +101,6 @@ export function EventSignupPanel({
   event,
   expectedTeams,
   teams,
-  onAddTeams,
   onSyncTeams,
   onRegistrationsChange,
   refreshRegistrationsVersion,
@@ -108,7 +109,8 @@ export function EventSignupPanel({
   event: EventState;
   expectedTeams: number;
   teams: Team[];
-  onAddTeams: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
+  /** Kept for compatibility with older callers; roster syncing is now automatic. */
+  onAddTeams?: (inputs: Array<{ name?: string; player1: string; player2: string; signupPairKey?: string; signupRegistrationId?: string }>) => void;
   onSyncTeams: (
     registrations: SignupRegistration[],
     capacity: number,
@@ -128,8 +130,10 @@ export function EventSignupPanel({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [waitlistDeleteTarget, setWaitlistDeleteTarget] = useState<SignupRegistration | null>(null);
+  const [registrationDeleteTarget, setRegistrationDeleteTarget] = useState<SignupRegistration | null>(null);
+  const [registrationEditTarget, setRegistrationEditTarget] = useState<SignupRegistration | null>(null);
   const [deletingRegistrationId, setDeletingRegistrationId] = useState<string | null>(null);
+  const [editingRegistrationId, setEditingRegistrationId] = useState<string | null>(null);
 
   const [title, setTitle] = useState(event.name);
   const [accountSlug, setAccountSlug] = useState('organiser');
@@ -138,7 +142,6 @@ export function EventSignupPanel({
   const [endsAt, setEndsAt] = useState('');
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
-  const [autoAddPairs, setAutoAddPairs] = useState(true);
   const [templates, setTemplates] = useState<SignupTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
@@ -150,14 +153,7 @@ export function EventSignupPanel({
   const appliedRosterVersionRef = useRef(-1);
   requestedRosterVersionRef.current = requestedRosterVersion;
   const signupMutationQueue = useRef<Promise<SignupEvent | null>>(Promise.resolve(null));
-  const manualTeamCount = useMemo(
-    () => teams.filter((team) =>
-      team.active
-      && !team.signupRegistrationId
-      && !team.signupPairKey).length,
-    [teams],
-  );
-  const onlineSignupCapacity = Math.max(0, expectedTeams - manualTeamCount);
+  const onlineSignupCapacity = expectedTeams;
 
   const enqueueSignupMutation = useCallback((
     fallback: SignupEvent | null,
@@ -198,7 +194,9 @@ export function EventSignupPanel({
         capacityTeams: capacity,
         details: current.details,
         prizes: current.prizes,
-        autoAddPairs: current.autoAddPairs,
+        // Retained only for backward-compatible schema writes; roster sync is
+        // now always automatic while the tournament is in setup.
+        autoAddPairs: true,
         signupEventId: current.id,
         baseRevision: current.capacityRevision,
         isOpen: current.isOpen,
@@ -206,6 +204,20 @@ export function EventSignupPanel({
     },
   ), [enqueueSignupMutation]);
 
+  const organizerRoster = useMemo(
+    () => teams
+      .filter((team) => team.active)
+      .map((team, index) => ({
+        registrationId: team.signupRegistrationId,
+        teamName: team.name,
+        playerOne: team.players[0].name,
+        playerTwo: team.players[1].name,
+        rank: index + 1,
+      })),
+    [teams],
+  );
+  const organizerRosterRef = useRef(organizerRoster);
+  organizerRosterRef.current = organizerRoster;
   const refreshRegistrations = useCallback(async (signupId: string) => {
     const refreshVersion = ++registrationsRefreshVersion.current;
     const rows = await getOrganizerRegistrations(signupId);
@@ -240,10 +252,10 @@ export function EventSignupPanel({
     setEndsAt('');
     setDetails('');
     setPrizes('');
-    setAutoAddPairs(true);
     setSelectedTemplateId('');
     setTemplateName('');
-    setWaitlistDeleteTarget(null);
+    setRegistrationDeleteTarget(null);
+    setRegistrationEditTarget(null);
     void Promise.all([
       getOwnedSignup(auth.user.id, event.id),
       getSignupAccountSlug(auth.user.id),
@@ -251,14 +263,14 @@ export function EventSignupPanel({
       .then(async ([row, savedAccountSlug]) => {
         if (cancelled) return;
         let currentRow = row;
-        if (row) {
-          const capacityResult = await syncCapacity(row, onlineSignupCapacity);
+        if (row && event.status === 'setup') {
+          const capacityResult = await syncCapacity(row, expectedTeams);
           currentRow = capacityResult.event;
           if (cancelled) return;
           if (capacityResult.conflict) {
             setError('This sign-up changed in another tab. Refresh before changing its team limit.');
           } else if (capacityResult.applied) {
-            setMessage(`Online team limit synced to ${onlineSignupCapacity}. Extra registrations will wait.`);
+            setMessage(`Team capacity synced to ${expectedTeams} from ${event.courts.length} courts.`);
           }
         }
         setSignup(currentRow);
@@ -274,7 +286,22 @@ export function EventSignupPanel({
         setEndsAt(inputDateTime(currentRow.endsAt));
         setDetails(currentRow.details);
         setPrizes(currentRow.prizes);
-        setAutoAddPairs(currentRow.autoAddPairs);
+        if (currentRow.rosterSeededAt == null) {
+          try {
+            await seedOrganizerSignupRoster(currentRow.id, organizerRosterRef.current);
+            currentRow = { ...currentRow, rosterSeededAt: new Date().toISOString() };
+            if (cancelled) return;
+            setSignup(currentRow);
+          } catch (seedError) {
+            // Keep the event locally marked as unseeded. A later save/load can
+            // safely retry because the server owns the one-time transition.
+            if (!cancelled) setError((seedError as Error).message);
+            // Do not reconcile an empty/partial server snapshot while the
+            // one-time import is still pending: that could erase local teams.
+            return;
+          }
+        }
+        if (cancelled) return;
         await refreshRegistrations(currentRow.id);
       })
       .catch((err: Error) => !cancelled && setError(err.message))
@@ -286,8 +313,10 @@ export function EventSignupPanel({
     auth.user,
     event.id,
     event.name,
+    event.status,
     event.venue,
-    onlineSignupCapacity,
+    event.courts.length,
+    expectedTeams,
     refreshRegistrations,
     syncCapacity,
   ]);
@@ -304,12 +333,12 @@ export function EventSignupPanel({
   }, [auth.user, expanded]);
 
   useEffect(() => {
-    if (!signup || (!expanded && !(autoAddPairs && event.status === 'setup'))) return;
+    if (!signup || (!expanded && event.status !== 'setup')) return;
     const timer = window.setInterval(() => {
       void refreshRegistrations(signup.id).catch(() => undefined);
     }, 8_000);
     return () => window.clearInterval(timer);
-  }, [autoAddPairs, event.status, expanded, refreshRegistrations, signup]);
+  }, [event.status, expanded, refreshRegistrations, signup]);
 
   useEffect(() => {
     if (!signup || !refreshRegistrationsVersion) return;
@@ -317,86 +346,25 @@ export function EventSignupPanel({
     void refreshRegistrations(signup.id).catch((err: Error) => setError(err.message));
   }, [refreshRegistrations, refreshRegistrationsVersion, signup]);
 
-  const confirmed = useMemo(
-    () => registrations.filter((registration) => registration.status === 'confirmed'),
-    [registrations],
+  const { confirmedPairs, waitlistedPairs, lookingForPartner } = useMemo(
+    () => buildSignupRosterView(registrations, expectedTeams),
+    [expectedTeams, registrations],
   );
-  const waitlisted = useMemo(
-    () => registrations.filter((registration) => registration.status === 'waitlisted'),
-    [registrations],
-  );
-  const autoSyncRegistrations = useMemo(() => {
-    const ignored = new Set(event.settings.ignoredAutoSignupPairKeys ?? []);
-    const ignoredRegistrationIds = new Set(
-      event.settings.ignoredAutoSignupRegistrationIds ?? [],
-    );
-    const alreadyLinked = new Set(
-      teams
-        .map((team) => team.signupRegistrationId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    return confirmed.filter((registration) =>
-      Boolean(registration.playerTwo)
-      && (
-        alreadyLinked.has(registration.id)
-        || (
-          !ignoredRegistrationIds.has(registration.id)
-          && !ignored.has(registrationPairKey(registration.playerOne, registration.playerTwo))
-        )
-      ));
-  }, [
-    confirmed,
-    event.settings.ignoredAutoSignupPairKeys,
-    event.settings.ignoredAutoSignupRegistrationIds,
-    teams,
-  ]);
-  const autoReconciliation = useMemo(
-    () => reconcileConfirmedSignupRoster({
-      confirmedRegistrations: autoSyncRegistrations,
-      localTeams: teams,
-      capacity: expectedTeams,
-    }),
-    [autoSyncRegistrations, expectedTeams, teams],
-  );
-  const manualReconciliation = useMemo(
-    () => reconcileConfirmedSignupRoster({
-      confirmedRegistrations: confirmed,
-      localTeams: teams,
-      capacity: expectedTeams,
-    }),
-    [confirmed, expectedTeams, teams],
-  );
-  const manualChangeCount = manualReconciliation.teamsToAdd.length
-    + manualReconciliation.teamUpdates.length
-    + manualReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
 
   useEffect(() => {
     if (
       !signup
       || !registrationsReady
       || appliedRosterVersionRef.current !== requestedRosterVersion
-      || !autoAddPairs
       || event.status !== 'setup'
     ) return;
-    const added = autoReconciliation.teamsToAdd.length;
-    const updated = autoReconciliation.teamUpdates.length;
-    const removed = autoReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
-    if (added + updated + removed === 0) return;
-
-    onSyncTeams(autoSyncRegistrations, expectedTeams);
-    const changes = [
-      added ? `${added} added` : '',
-      updated ? `${updated} updated` : '',
-      removed ? `${removed} removed` : '',
-    ].filter(Boolean).join(', ');
-    setMessage(`Online roster synced: ${changes}.`);
+    onSyncTeams(registrations, expectedTeams, { includeIgnored: true });
   }, [
-    autoAddPairs,
-    autoReconciliation,
-    autoSyncRegistrations,
+    confirmedPairs,
     event.status,
     expectedTeams,
     onSyncTeams,
+    registrations,
     registrationsReady,
     requestedRosterVersion,
     signup,
@@ -414,7 +382,6 @@ export function EventSignupPanel({
     setEndsAt(schedule.endsAt);
     setDetails(template.details);
     setPrizes(template.prizes);
-    setAutoAddPairs(template.autoAddPairs);
     setMessage(`${template.name} loaded. Check the date, then update the sign-up page.`);
     setError(null);
   }
@@ -435,12 +402,12 @@ export function EventSignupPanel({
         name: templateName,
         title,
         venue,
-        // Templates describe the complete tournament shape. The remaining
-        // online capacity is recalculated from manual teams when published.
+        // Capacity always describes the whole tournament and is recalculated
+        // from the selected court count when the template is published.
         capacityTeams: expectedTeams,
         details,
         prizes,
-        autoAddPairs,
+        autoAddPairs: true,
         ...schedule,
       });
       setTemplates((current) =>
@@ -499,17 +466,27 @@ export function EventSignupPanel({
           venue,
           startsAt: toIso(startsAt),
           endsAt: toIso(endsAt),
-          capacityTeams: onlineSignupCapacity,
+          capacityTeams: expectedTeams,
           details,
           prizes,
-          autoAddPairs,
+          autoAddPairs: true,
           signupEventId: current?.id,
           baseRevision: current?.capacityRevision ?? 0,
           isOpen: current?.isOpen,
         }));
-      const row = result.event;
+      let row = result.event;
       setSignup(row);
       setAccountSlug(row.accountSlug);
+      // New and legacy unseeded sign-ups both use the same durable handshake.
+      // Empty rosters must be seeded too: null means "not attempted", while a
+      // timestamp permanently prevents stale device state being replayed.
+      // This also runs for an authoritative conflict response: it is still a
+      // real signup row, and the server makes the transition exactly once.
+      if (row.rosterSeededAt == null) {
+        await seedOrganizerSignupRoster(row.id, organizerRoster);
+        row = { ...row, rosterSeededAt: new Date().toISOString() };
+        setSignup(row);
+      }
       if (result.conflict) {
         setTitle(row.title);
         setVenue(row.venue);
@@ -517,7 +494,6 @@ export function EventSignupPanel({
         setEndsAt(inputDateTime(row.endsAt));
         setDetails(row.details);
         setPrizes(row.prizes);
-        setAutoAddPairs(row.autoAddPairs);
         setError('This sign-up changed in another tab, so the latest version was reloaded. Review it before saving again.');
         return;
       }
@@ -532,6 +508,10 @@ export function EventSignupPanel({
 
   async function toggleOpen() {
     if (!signup) return;
+    if (event.status !== 'setup' && !signup.isOpen) {
+      setError('Registrations stay closed after the tournament starts.');
+      return;
+    }
     setError(null);
     try {
       const shouldOpen = !signup.isOpen;
@@ -555,19 +535,39 @@ export function EventSignupPanel({
     }
   }
 
-  async function removeWaitlistedRegistration() {
-    const registration = waitlistDeleteTarget;
-    if (!registration || registration.status !== 'waitlisted' || !signup || deletingRegistrationRef.current) return;
+  async function removeSelectedRegistration() {
+    const registration = registrationDeleteTarget;
+    if (!registration || !signup || deletingRegistrationRef.current) return;
+    if (registration.status === 'cancelled') {
+      setRegistrationDeleteTarget(null);
+      setError('This registration was already removed. The list has been refreshed.');
+      await refreshRegistrations(signup.id).catch(() => undefined);
+      return;
+    }
+    if (
+      event.status !== 'setup'
+      && registration.status === 'confirmed'
+      && Boolean(registration.playerTwo.trim())
+    ) {
+      setRegistrationDeleteTarget(null);
+      setError('The event is already running. Remove this team from the tournament roster below.');
+      return;
+    }
 
     deletingRegistrationRef.current = registration.id;
     setDeletingRegistrationId(registration.id);
     setError(null);
     setMessage(null);
     try {
-      await deleteOrganizerWaitlistedRegistration(registration.id);
+      await deleteOrganizerRegistrationIfStatus(
+        registration.id,
+        registration.status,
+        registration.updatedAt,
+        event.status !== 'setup',
+      );
       await refreshRegistrations(signup.id);
-      setWaitlistDeleteTarget(null);
-      setMessage(`${registrationLabel(registration)} removed from the waiting list.`);
+      setRegistrationDeleteTarget(null);
+      setMessage(`${registrationLabel(registration)} removed from this sign-up.`);
     } catch (err) {
       setError((err as Error).message);
       await refreshRegistrations(signup.id).catch(() => undefined);
@@ -577,21 +577,38 @@ export function EventSignupPanel({
     }
   }
 
-  function importTeams() {
-    const importable = manualReconciliation.teamsToAdd;
-    if (event.status === 'setup') {
-      onSyncTeams(confirmed, expectedTeams, { includeIgnored: true });
-      const updated = manualReconciliation.teamUpdates.length;
-      const removed = manualReconciliation.importedTeamIdsToRemoveOrDeactivate.length;
-      setMessage(
-        `Online roster reviewed: ${importable.length} added, ${updated} updated, ${removed} removed.`,
-      );
+  async function saveRegistrationEdit(draft: {
+    teamName: string;
+    playerOne: string;
+    playerTwo: string;
+    contact: string;
+  }) {
+    const registration = registrationEditTarget;
+    if (!registration || !signup || editingRegistrationId) return;
+    if (registration.status === 'cancelled') {
+      setRegistrationEditTarget(null);
+      setError('This registration was already removed. The list has been refreshed.');
+      await refreshRegistrations(signup.id).catch(() => undefined);
       return;
     }
-    onAddTeams(importable);
-    setMessage(
-      `${importable.length} team${importable.length === 1 ? '' : 's'} (${importable.length * 2} players) added to this event.`,
-    );
+    setEditingRegistrationId(registration.id);
+    setError(null);
+    setMessage(null);
+    try {
+      await updateOrganizerRegistration(registration.id, draft, {
+        status: registration.status,
+        updatedAt: registration.updatedAt,
+        allowLocked: event.status !== 'setup',
+      });
+      await refreshRegistrations(signup.id);
+      setRegistrationEditTarget(null);
+      setMessage(`${registrationLabel(registration)} updated on the live sign-up.`);
+    } catch (editError) {
+      setError((editError as Error).message);
+      await refreshRegistrations(signup.id).catch(() => undefined);
+    } finally {
+      setEditingRegistrationId(null);
+    }
   }
 
   return (
@@ -603,7 +620,7 @@ export function EventSignupPanel({
           <small>One live link for confirmed teams, solo players and the waiting list.</small>
         </span>
         <span className="signup-admin-toggle-meta">
-          {signup ? `${confirmed.length}/${onlineSignupCapacity}` : 'SET UP'}
+          {signup ? `${confirmedPairs.length}/${onlineSignupCapacity}` : 'SET UP'}
         </span>
       </button>
 
@@ -692,7 +709,7 @@ export function EventSignupPanel({
                   <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </div>
                 <div className="setup-field">
-                  <label>Online team limit</label>
+                  <label>Team capacity</label>
                   <input
                     className="setup-input"
                     type="number"
@@ -700,35 +717,8 @@ export function EventSignupPanel({
                     readOnly
                   />
                   <small className="setup-help">
-                    The tournament has {expectedTeams} places. {manualTeamCount
-                      ? `${manualTeamCount} manually added team${manualTeamCount === 1 ? '' : 's'} already ${manualTeamCount === 1 ? 'uses' : 'use'} ${manualTeamCount === 1 ? 'one' : manualTeamCount}, so the live link offers the remaining places.`
-                      : 'The live link offers all of them.'} Pairs have priority; every extra registration joins the waiting list.
-                  </small>
-                </div>
-                <div className="setup-field signup-wide">
-                  <label>Confirmed pairs</label>
-                  <div className="signup-import-mode" role="group" aria-label="Confirmed pair import mode">
-                    <button
-                      type="button"
-                      className={autoAddPairs ? 'active' : ''}
-                      aria-pressed={autoAddPairs}
-                      onClick={() => setAutoAddPairs(true)}
-                    >
-                      <strong>Auto-add</strong>
-                      <small>Add complete pairs to the tournament as they sign up</small>
-                    </button>
-                    <button
-                      type="button"
-                      className={!autoAddPairs ? 'active' : ''}
-                      aria-pressed={!autoAddPairs}
-                      onClick={() => setAutoAddPairs(false)}
-                    >
-                      <strong>Manual review</strong>
-                      <small>Keep the review button before adding pairs</small>
-                    </button>
-                  </div>
-                  <small className="setup-help">
-                    Saved with this sign-up page and its template. Solo players wait until they form a pair.
+                    Set automatically by {event.courts.length} court{event.courts.length === 1 ? '' : 's'} × 2 teams.
+                    Complete pairs fill these places; every extra pair joins the waiting list.
                   </small>
                 </div>
                 <div className="setup-field signup-wide">
@@ -762,9 +752,11 @@ export function EventSignupPanel({
                     >
                       Share link
                     </button>
-                    <button className="btn" type="button" onClick={toggleOpen}>
-                      {signup.isOpen ? 'Close registrations' : 'Reopen registrations'}
-                    </button>
+                    {(event.status === 'setup' || signup.isOpen) && (
+                      <button className="btn" type="button" onClick={toggleOpen}>
+                        {signup.isOpen ? 'Close registrations' : 'Reopen registrations'}
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -799,8 +791,9 @@ export function EventSignupPanel({
                     </a>
                   </div>
                   <div className="signup-admin-summary">
-                    <div><strong>{confirmed.length}</strong><span>Online teams / {onlineSignupCapacity}</span></div>
-                    <div><strong>{waitlisted.length}</strong><span>Waiting list</span></div>
+                    <div><strong>{confirmedPairs.length}</strong><span>Confirmed teams / {onlineSignupCapacity}</span></div>
+                    <div><strong>{waitlistedPairs.length}</strong><span>Teams waiting</span></div>
+                    <div><strong>{lookingForPartner.length}</strong><span>Looking for a partner</span></div>
                     <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
@@ -809,7 +802,11 @@ export function EventSignupPanel({
                       {registrations.map((registration) => (
                         <div className="signup-admin-row" key={registration.id}>
                           <span className={'signup-position ' + registration.status}>
-                            {registration.status === 'confirmed' ? registration.position : `W${registration.position}`}
+                            {!registration.playerTwo
+                              ? 'S'
+                              : registration.status === 'confirmed'
+                                ? registration.position
+                                : `W${registration.position}`}
                           </span>
                           <span>
                             <strong>
@@ -827,52 +824,47 @@ export function EventSignupPanel({
                             {registration.contact}
                             {registration.playerTwoContact ? ` · ${registration.playerTwoContact}` : ''}
                           </span>
-                          {registration.status === 'waitlisted' && (
-                            <button
-                              className="setup-team-action danger signup-admin-delete"
-                              type="button"
-                              aria-label={`Remove ${registrationLabel(registration)} from waiting list`}
-                              title="Remove from waiting list"
-                              disabled={deletingRegistrationId === registration.id}
-                              onClick={() => setWaitlistDeleteTarget(registration)}
-                            >
-                              <Icons.Trash className="icon" />
-                            </button>
-                          )}
+                          <span className="signup-admin-row-actions">
+                            {event.status === 'setup' ? (
+                                <button
+                                  className="setup-team-action"
+                                  type="button"
+                                  aria-label={`Edit ${registrationLabel(registration)}`}
+                                  title="Edit registration"
+                                  disabled={Boolean(editingRegistrationId || deletingRegistrationId)}
+                                  onClick={() => setRegistrationEditTarget(registration)}
+                                >
+                                  <Icons.Edit className="icon" />
+                                </button>
+                              ) : null}
+                          {event.status === 'setup'
+                            || registration.status !== 'confirmed'
+                            || !registration.playerTwo.trim() ? (
+                              <button
+                                className="setup-team-action danger signup-admin-delete"
+                                type="button"
+                                aria-label={`Remove ${registrationLabel(registration)} from sign-up`}
+                                title="Remove from sign-up"
+                                disabled={deletingRegistrationId === registration.id}
+                                onClick={() => setRegistrationDeleteTarget(registration)}
+                              >
+                                <Icons.Trash className="icon" />
+                              </button>
+                            ) : <span aria-label="Manage this confirmed team in the tournament roster" />}
+                          </span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {autoAddPairs && event.status === 'setup' ? (
-                    <div className="signup-auto-status">
-                      <strong>Auto-add is on</strong>
-                      <span>Complete confirmed pairs are added automatically. Solo players wait until they have a partner.</span>
-                    </div>
-                  ) : (
-                    <>
-                      {autoAddPairs && event.status !== 'setup' && (
-                        <div className="signup-auto-status paused">
-                          <strong>Auto-add is paused</strong>
-                          <span>The tournament has started, so late pairs need a manual review before joining.</span>
-                        </div>
-                      )}
-                      <button
-                        className="btn full"
-                        type="button"
-                        disabled={event.status === 'setup'
-                          ? manualChangeCount === 0
-                          : manualReconciliation.teamsToAdd.length === 0}
-                        onClick={importTeams}
-                      >
-                        {event.status === 'setup' && manualChangeCount > 0
-                          ? `Sync ${manualChangeCount} online roster change${manualChangeCount === 1 ? '' : 's'}`
-                          : manualReconciliation.teamsToAdd.length > 0
-                          ? `Add ${manualReconciliation.teamsToAdd.length} confirmed pair${manualReconciliation.teamsToAdd.length === 1 ? '' : 's'} (${manualReconciliation.teamsToAdd.length * 2} players) to tournament`
-                          : 'No new confirmed pairs ready to add'}
-                      </button>
-                    </>
-                  )}
+                  <div className={'signup-auto-status ' + (event.status === 'setup' ? '' : 'paused')}>
+                    <strong>{event.status === 'setup' ? 'One roster, kept in sync' : 'Roster locked for play'}</strong>
+                    <span>
+                      {event.status === 'setup'
+                        ? 'Complete pairs fill the tournament automatically. Overflow pairs wait, and solos stay in Looking for a partner.'
+                        : 'The tournament has started, so its playing roster is no longer changed by new registrations.'}
+                    </span>
+                  </div>
                 </>
               )}
             </>
@@ -883,18 +875,106 @@ export function EventSignupPanel({
         </div>
       )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {registrationEditTarget && (
+        <SignupRegistrationEditModal
+          registration={registrationEditTarget}
+          saving={editingRegistrationId === registrationEditTarget.id}
+          onSave={(draft) => void saveRegistrationEdit(draft)}
+          onClose={() => setRegistrationEditTarget(null)}
+        />
+      )}
       <ConfirmDialog
-        open={Boolean(waitlistDeleteTarget)}
-        title="Remove from waiting list?"
-        message={waitlistDeleteTarget
-          ? `${registrationLabel(waitlistDeleteTarget)} will be permanently removed from this sign-up's waiting list.`
+        open={Boolean(registrationDeleteTarget)}
+        title="Remove from sign-up?"
+        message={registrationDeleteTarget
+          ? `${registrationLabel(registrationDeleteTarget)} will be permanently removed. If this frees a team place, the first complete pair on the waiting list will move into the event.`
           : ''}
         confirmLabel={deletingRegistrationId ? 'Removing…' : 'Remove'}
         destructive
         busy={Boolean(deletingRegistrationId)}
-        onConfirm={() => void removeWaitlistedRegistration()}
-        onCancel={() => setWaitlistDeleteTarget(null)}
+        onConfirm={() => void removeSelectedRegistration()}
+        onCancel={() => setRegistrationDeleteTarget(null)}
       />
     </section>
+  );
+}
+
+function SignupRegistrationEditModal({
+  registration,
+  saving,
+  onSave,
+  onClose,
+}: {
+  registration: SignupRegistration;
+  saving: boolean;
+  onSave: (draft: {
+    teamName: string;
+    playerOne: string;
+    playerTwo: string;
+    contact: string;
+  }) => void;
+  onClose: () => void;
+}) {
+  const [teamName, setTeamName] = useState(registration.teamName);
+  const [playerOne, setPlayerOne] = useState(registration.playerOne);
+  const [playerTwo, setPlayerTwo] = useState(registration.playerTwo);
+  const [contact, setContact] = useState(registration.contact ?? '');
+  const valid = playerOne.trim().length > 0
+    && contact.trim().length >= 3
+    && (!playerTwo.trim() || playerTwo.trim().toLocaleLowerCase() !== playerOne.trim().toLocaleLowerCase());
+
+  useEffect(() => {
+    const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === 'Escape' && !saving) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose, saving]);
+
+  return (
+    <Portal>
+      <div className="modal-backdrop" onClick={() => !saving && onClose()}>
+        <div className="modal edit-team-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="edit-team-heading">
+            <div>
+              <h2>Edit registration</h2>
+              <p>Changes update the organiser roster and public sign-up link.</p>
+            </div>
+            <button className="op-score-btn" type="button" disabled={saving} onClick={onClose} aria-label="Close">
+              <Icons.Close className="icon" />
+            </button>
+          </div>
+          <div className="edit-team-fields">
+            <label>
+              <span>Team name <small>optional</small></span>
+              <input className="setup-input" value={teamName} onChange={(event) => setTeamName(event.target.value)} />
+            </label>
+            <label>
+              <span>Player one</span>
+              <input className="setup-input" value={playerOne} onChange={(event) => setPlayerOne(event.target.value)} />
+            </label>
+            <label>
+              <span>Player two <small>leave blank while looking</small></span>
+              <input className="setup-input" value={playerTwo} onChange={(event) => setPlayerTwo(event.target.value)} />
+            </label>
+            <label>
+              <span>WhatsApp number or email <small>kept private</small></span>
+              <input className="setup-input" value={contact} onChange={(event) => setContact(event.target.value)} />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button className="btn" type="button" disabled={saving} onClick={onClose}>Cancel</button>
+            <button
+              className="btn primary"
+              type="button"
+              disabled={!valid || saving}
+              onClick={() => onSave({ teamName, playerOne, playerTwo, contact })}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Portal>
   );
 }

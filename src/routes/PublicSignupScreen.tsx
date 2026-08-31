@@ -8,6 +8,7 @@ import {
   type PublicSignup,
   type SignupRegistration,
 } from '@/lib/signups';
+import { buildSignupRosterView } from '@/utils/signupRosterView';
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return 'Time to be confirmed';
@@ -21,7 +22,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 function registrationLabel(registration: SignupRegistration): string {
-  if (!registration.playerTwo) return registration.playerOne;
+  if (!registration.playerTwo.trim()) return registration.playerOne;
   return registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
@@ -41,7 +42,7 @@ export function PublicSignupScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    status: 'confirmed' | 'waitlisted';
+    status: 'confirmed' | 'waitlisted' | 'looking';
     position: number;
     kind: 'solo' | 'pair' | 'joined';
   } | null>(null);
@@ -219,23 +220,32 @@ export function PublicSignupScreen() {
     );
   }
 
-  const confirmed = data.registrations.filter((registration) => registration.status === 'confirmed');
-  const waitlisted = data.registrations.filter((registration) => registration.status === 'waitlisted');
-  const spaces = Math.max(0, data.event.capacityTeams - confirmed.length);
+  const {
+    confirmedPairs,
+    waitlistedPairs,
+    lookingForPartner,
+    confirmedPairCount,
+    pairSpacesLeft: spaces,
+  } = buildSignupRosterView(data.registrations, data.event.capacityTeams);
   const registrationsOpen = data.event.isOpen;
 
-  function rosterRow(registration: SignupRegistration, waiting = false) {
-    const isPair = Boolean(registration.playerTwo);
+  function rosterRow(
+    registration: SignupRegistration,
+    displayPosition: number,
+    kind: 'confirmed' | 'waiting' | 'solo',
+  ) {
+    const isPair = Boolean(registration.playerTwo.trim());
+    const waiting = kind === 'waiting';
     return (
       <div className="signup-public-team" key={registration.id}>
-        <span className={'signup-public-position ' + (waiting ? 'waiting' : '')}>{registration.position}</span>
+        <span className={'signup-public-position ' + (kind === 'confirmed' ? '' : 'waiting')}>{displayPosition}</span>
         <span>
           <strong>{registrationLabel(registration)}</strong>
           {isPair && registration.teamName && <small>{registration.playerOne} & {registration.playerTwo}</small>}
           {!isPair && <small>Solo player looking for a partner</small>}
         </span>
         <span className="signup-public-row-actions">
-          <span className={'signup-public-status ' + (waiting ? 'waiting' : 'confirmed')}>
+          <span className={'signup-public-status ' + (kind === 'confirmed' ? 'confirmed' : 'waiting')}>
             {isPair ? (waiting ? 'PAIR · WAITING' : 'PAIR · CONFIRMED') : 'NEEDS PARTNER'}
           </span>
           {!isPair && registrationsOpen && (
@@ -264,7 +274,9 @@ export function PublicSignupScreen() {
         </div>
         <div className={'signup-public-availability ' + (spaces > 0 ? 'open' : 'waiting')}>
           <strong>{spaces > 0 ? `${spaces} team space${spaces === 1 ? '' : 's'} left` : 'Confirmed teams full'}</strong>
-          <span>{spaces > 0 ? 'Register as a pair or solo player.' : 'New registrations join the waiting list automatically.'}</span>
+          <span>{spaces > 0
+            ? 'Register a pair, or join the partner list solo.'
+            : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
         </div>
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}
         {data.event.prizes && (
@@ -282,22 +294,31 @@ export function PublicSignupScreen() {
               <span>LIVE LIST</span>
               <h2>Teams</h2>
             </div>
-            <strong>{confirmed.length}/{data.event.capacityTeams}</strong>
+            <strong>{confirmedPairCount}/{data.event.capacityTeams}</strong>
           </div>
           <p className="signup-public-priority-note">Pairs have priority. Solo players can be joined by another player here.</p>
 
           <div className="signup-public-list">
-            {confirmed.map((registration) => rosterRow(registration))}
-            {confirmed.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
+            {confirmedPairs.map((registration, index) => rosterRow(registration, index + 1, 'confirmed'))}
+            {confirmedPairs.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
+          </div>
+
+          <div className="signup-public-waiting-head">
+            <span>LOOKING FOR A PARTNER</span>
+            <strong>{lookingForPartner.length}</strong>
+          </div>
+          <div className="signup-public-list waiting">
+            {lookingForPartner.map((registration, index) => rosterRow(registration, index + 1, 'solo'))}
+            {lookingForPartner.length === 0 && <div className="signup-public-empty">Nobody is looking for a partner.</div>}
           </div>
 
           <div className="signup-public-waiting-head">
             <span>WAITING LIST</span>
-            <strong>{waitlisted.length}</strong>
+            <strong>{waitlistedPairs.length}</strong>
           </div>
           <div className="signup-public-list waiting">
-            {waitlisted.map((registration) => rosterRow(registration, true))}
-            {waitlisted.length === 0 && <div className="signup-public-empty">Nobody waiting.</div>}
+            {waitlistedPairs.map((registration, index) => rosterRow(registration, index + 1, 'waiting'))}
+            {waitlistedPairs.length === 0 && <div className="signup-public-empty">Nobody waiting.</div>}
           </div>
         </section>
 
@@ -328,13 +349,17 @@ export function PublicSignupScreen() {
             </>
           ) : result ? (
             <div className={'signup-public-result ' + result.status}>
-              <span>{result.status === 'confirmed' ? '✓' : result.position}</span>
-              <h2>{result.status === 'confirmed' ? 'You’re confirmed!' : 'You’re on the waiting list'}</h2>
+              <span>{result.kind === 'solo' || result.status === 'confirmed' ? '✓' : result.position}</span>
+              <h2>{result.kind === 'solo'
+                ? 'You’re looking for a partner!'
+                : result.status === 'confirmed'
+                  ? 'You’re confirmed!'
+                  : 'You’re on the waiting list'}</h2>
               <p>
-                {result.status === 'confirmed'
-                  ? result.kind === 'solo'
-                    ? 'You are confirmed as a solo player. Another player can join you from the live list.'
-                    : 'Your pair is now on the live confirmed list.'
+                {result.kind === 'solo'
+                  ? 'Another player can join you from the live partner list. A team place is counted only after you form a pair.'
+                  : result.status === 'confirmed'
+                    ? 'Your pair is now on the live confirmed list.'
                   : `You are waiting-list position ${result.position}. The list updates automatically when places change.`}
               </p>
               <p className="signup-public-private">Need to change or cancel it? Message the organiser. Only the organiser can edit the live list.</p>
@@ -345,7 +370,11 @@ export function PublicSignupScreen() {
               <div className="signup-public-section-head">
                 <div>
                   <span>NO ACCOUNT NEEDED</span>
-                  <h2>{spaces > 0 ? 'Register to play' : 'Join the waiting list'}</h2>
+                  <h2>{signupMode === 'solo'
+                    ? 'Find a partner'
+                    : spaces > 0
+                      ? 'Register to play'
+                      : 'Join the waiting list'}</h2>
                 </div>
               </div>
               {!data.event.isOpen ? (

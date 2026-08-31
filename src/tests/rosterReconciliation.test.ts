@@ -116,6 +116,7 @@ describe('reconcileConfirmedSignupRoster', () => {
       .toEqual({
         teamsToAdd: [],
         teamUpdates: [],
+        orderedRegistrationIds: ['registration-1'],
         importedTeamIdsToRemoveOrDeactivate: [],
       });
   });
@@ -189,8 +190,8 @@ describe('reconcileConfirmedSignupRoster', () => {
       signupRegistrationId: 'registration-1',
       patch: {
         name: 'Current pair',
-        player1: 'Alex',
-        player2: 'Kriss',
+        player1: 'Kriss',
+        player2: 'Alex',
         signupPairKey: 'alex|kriss',
         signupRegistrationId: 'registration-1',
       },
@@ -199,7 +200,32 @@ describe('reconcileConfirmedSignupRoster', () => {
     expect(delta.importedTeamIdsToRemoveOrDeactivate).toEqual(['stale-id-team']);
   });
 
-  it('never imports more than the remaining space in a 16-team roster', () => {
+  it('adopts a legacy unlinked local team by an exact normalized unordered player pair', () => {
+    const localTeams = [team('legacy-team', '  KRISS ', 'Alex', {
+      name: 'Old local name',
+    })];
+    const confirmedRegistrations = [registration(
+      'registration-1', 1, 'alex', 'kriss', 'Canonical team',
+    )];
+
+    const delta = reconcileConfirmedSignupRoster({ confirmedRegistrations, localTeams, capacity: 1 });
+
+    expect(delta.teamsToAdd).toEqual([]);
+    expect(delta.importedTeamIdsToRemoveOrDeactivate).toEqual([]);
+    expect(delta.teamUpdates).toEqual([{
+      teamId: 'legacy-team',
+      signupRegistrationId: 'registration-1',
+      patch: {
+        name: 'Canonical team',
+        player1: 'kriss',
+        player2: 'alex',
+        signupPairKey: 'alex|kriss',
+        signupRegistrationId: 'registration-1',
+      },
+    }]);
+  });
+
+  it('uses the full court capacity instead of reserving space for a second manual roster', () => {
     const confirmedRegistrations = Array.from({ length: 17 }, (_, index) =>
       registration(
         `registration-${index + 1}`,
@@ -213,14 +239,50 @@ describe('reconcileConfirmedSignupRoster', () => {
     const delta = reconcileConfirmedSignupRoster({ confirmedRegistrations, localTeams, capacity: 16 });
     const reconciled = applySetupDelta(localTeams, delta);
 
-    expect(delta.teamsToAdd).toHaveLength(15);
-    expect(delta.teamsToAdd.at(-1)?.signupRegistrationId).toBe('registration-15');
+    expect(delta.teamsToAdd).toHaveLength(16);
+    expect(delta.teamsToAdd.at(-1)?.signupRegistrationId).toBe('registration-16');
+    expect(delta.importedTeamIdsToRemoveOrDeactivate).toEqual(['manual-team']);
     expect(reconciled.filter((row) => row.active)).toHaveLength(16);
     expect(reconcileConfirmedSignupRoster({ confirmedRegistrations, localTeams: reconciled, capacity: 16 }))
       .toEqual({
         teamsToAdd: [],
         teamUpdates: [],
+        orderedRegistrationIds: Array.from(
+          { length: 16 },
+          (_, index) => `registration-${index + 1}`,
+        ),
         importedTeamIdsToRemoveOrDeactivate: [],
       });
+  });
+
+  it('never projects waitlisted pairs or solo registrations into the local setup roster', () => {
+    const localTeams = [
+      team('confirmed-team', 'Confirmed One', 'Confirmed Two', {
+        signupRegistrationId: 'confirmed-registration',
+      }),
+      team('waiting-team', 'Waiting One', 'Waiting Two', {
+        signupRegistrationId: 'waiting-registration',
+      }),
+      team('solo-placeholder', 'Solo One', '', {
+        signupRegistrationId: 'solo-registration',
+      }),
+    ];
+    const registrations = [
+      registration('confirmed-registration', 1, 'Confirmed One', 'Confirmed Two'),
+      registration('waiting-registration', 1, 'Waiting One', 'Waiting Two', '', 'waitlisted'),
+      registration('solo-registration', 2, 'Solo One', '', '', 'confirmed'),
+    ];
+
+    const delta = reconcileConfirmedSignupRoster({
+      confirmedRegistrations: registrations,
+      localTeams,
+      capacity: 3,
+    });
+
+    expect(delta.teamsToAdd).toEqual([]);
+    expect(delta.importedTeamIdsToRemoveOrDeactivate).toEqual([
+      'solo-placeholder',
+      'waiting-team',
+    ]);
   });
 });

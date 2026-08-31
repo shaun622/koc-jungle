@@ -8,14 +8,19 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import {
+  addOrganizerSignupPair,
   buildSignupUrl,
   isPublicSignupPath,
   normaliseSignupLinkPart,
   publicSignupHashFromPath,
   registrationPairKey,
   findSignupRegistrationForTeam,
+  lockSignupRoster,
   saveSignupEvent,
+  seedOrganizerSignupRoster,
   setSignupOpen,
+  syncOrganizerSignupRoster,
+  unlockSignupRoster,
   updateOrganizerRegistration,
   type SaveSignupInput,
   type SignupRegistration,
@@ -39,6 +44,8 @@ const signupEventRow = {
   prizes: '',
   is_open: true,
   auto_add_pairs: true,
+  roster_seeded_at: '2026-08-30T00:00:00.000Z',
+  roster_locked_at: null,
 };
 
 const saveInput: SaveSignupInput = {
@@ -107,6 +114,24 @@ describe('public event sign-up helpers', () => {
     })?.id).toBe('registration-1');
   });
 
+  it('does not fall back to matching names when a stable registration id is stale', () => {
+    const registrations: SignupRegistration[] = [{
+      id: 'replacement-registration',
+      signupEventId: 'event-1',
+      teamName: 'Replacement team',
+      playerOne: 'Old one',
+      playerTwo: 'Old two',
+      status: 'confirmed',
+      position: 1,
+      createdAt: '2026-08-25T00:00:00Z',
+    }];
+    expect(findSignupRegistrationForTeam(registrations, {
+      signupRegistrationId: 'deleted-registration',
+      playerOne: 'Old one',
+      playerTwo: 'Old two',
+    })).toBeUndefined();
+  });
+
   it('uses the original pair key after a local rename', () => {
     const registrations: SignupRegistration[] = [{
       id: 'registration-2',
@@ -162,7 +187,12 @@ describe('locked organiser signup mutations', () => {
     expect(result).toMatchObject({
       applied: true,
       conflict: false,
-      event: { id: 'signup-1', capacityTeams: 4, capacityRevision: 8 },
+      event: {
+        id: 'signup-1',
+        capacityTeams: 4,
+        capacityRevision: 8,
+        rosterSeededAt: '2026-08-30T00:00:00.000Z',
+      },
     });
   });
 
@@ -215,6 +245,64 @@ describe('locked organiser signup mutations', () => {
     expect(result.event).toMatchObject({ isOpen: false, capacityRevision: 9 });
   });
 
+  it('atomically locks the roster to court capacity before play', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({
+      data: {
+        applied: true,
+        conflict: false,
+        capacityRevision: 9,
+        event: {
+          ...signupEventRow,
+          capacity_teams: 6,
+          capacity_revision: 9,
+          is_open: false,
+          roster_locked_at: '2026-08-31T01:00:00.000Z',
+        },
+      },
+      error: null,
+    });
+
+    const result = await lockSignupRoster('signup-1', 'event-1', 6, 8);
+
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_lock_signup_roster', {
+      p_signup_event_id: 'signup-1',
+      p_source_event_id: 'event-1',
+      p_expected_capacity: 6,
+      p_base_revision: 8,
+    });
+    expect(result.event).toMatchObject({
+      capacityTeams: 6,
+      isOpen: false,
+      rosterLockedAt: '2026-08-31T01:00:00.000Z',
+    });
+  });
+
+  it('unlocks only through the explicit reset mutation', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({
+      data: {
+        applied: true,
+        conflict: false,
+        capacityRevision: 10,
+        event: {
+          ...signupEventRow,
+          capacity_revision: 10,
+          is_open: false,
+          roster_locked_at: null,
+        },
+      },
+      error: null,
+    });
+
+    const result = await unlockSignupRoster('signup-1', 'event-1', 9);
+
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_unlock_signup_roster', {
+      p_signup_event_id: 'signup-1',
+      p_source_event_id: 'event-1',
+      p_base_revision: 9,
+    });
+    expect(result.event).toMatchObject({ isOpen: false, rosterLockedAt: null });
+  });
+
   it('edits a registration only through the owner-checked RPC', async () => {
     signupsSupabaseMocks.rpc.mockResolvedValueOnce({ data: {}, error: null });
 
@@ -223,14 +311,127 @@ describe('locked organiser signup mutations', () => {
       playerOne: ' Alex ',
       playerTwo: ' Kriss ',
       contact: ' +123 ',
+    }, {
+      status: 'confirmed',
+      updatedAt: '2026-08-31T00:00:00Z',
     });
 
-    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_update_signup_registration', {
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_update_signup_registration_guarded', {
       p_registration_id: 'registration-1',
       p_team_name: 'The Pair',
       p_player_one: 'Alex',
       p_player_two: 'Kriss',
       p_contact: '+123',
+      p_expected_status: 'confirmed',
+      p_expected_updated_at: '2026-08-31T00:00:00Z',
+      p_allow_locked: false,
+    });
+  });
+
+  it('adds one organiser pair without replaying the full roster', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'registration-2',
+        signupEventId: 'signup-1',
+        teamName: 'The Pair',
+        playerOne: 'Alex',
+        playerTwo: 'Kriss',
+        contact: '+123',
+        status: 'confirmed',
+        organizerRank: null,
+        pairCompletedAt: '2026-08-31T00:00:00Z',
+        createdAt: '2026-08-31T00:00:00Z',
+      },
+      error: null,
+    });
+
+    const result = await addOrganizerSignupPair('signup-1', {
+      teamName: ' The Pair ',
+      playerOne: ' Alex ',
+      playerTwo: ' Kriss ',
+      contact: ' +123 ',
+    });
+
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_add_signup_pair', {
+      p_signup_event_id: 'signup-1',
+      p_team_name: 'The Pair',
+      p_player_one: 'Alex',
+      p_player_two: 'Kriss',
+      p_contact: '+123',
+      p_allow_locked: false,
+    });
+    expect(result).toMatchObject({
+      id: 'registration-2',
+      status: 'confirmed',
+      pairCompletedAt: '2026-08-31T00:00:00Z',
+    });
+  });
+
+  it('adopts an organiser roster through one owner-checked transaction', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({ data: [], error: null });
+
+    await syncOrganizerSignupRoster('signup-1', [{
+      registrationId: 'registration-1',
+      teamName: ' The Pair ',
+      playerOne: ' Alex ',
+      playerTwo: ' Kriss ',
+      contact: ' +123 ',
+      rank: 1,
+    }]);
+
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_sync_signup_roster', {
+      p_signup_event_id: 'signup-1',
+      p_teams: [{
+        registrationId: 'registration-1',
+        teamName: 'The Pair',
+        playerOne: 'Alex',
+        playerTwo: 'Kriss',
+        contact: '+123',
+        rank: 1,
+      }],
+    });
+  });
+
+  it('seeds an organiser roster through the durable one-time RPC', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({
+      data: { seeded: true, roster: [] },
+      error: null,
+    });
+
+    const result = await seedOrganizerSignupRoster('signup-1', [{
+      registrationId: 'registration-1',
+      teamName: ' The Pair ',
+      playerOne: ' Alex ',
+      playerTwo: ' Kriss ',
+      contact: ' +123 ',
+      rank: 1,
+    }]);
+
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_seed_signup_roster', {
+      p_signup_event_id: 'signup-1',
+      p_teams: [{
+        registrationId: 'registration-1',
+        teamName: 'The Pair',
+        playerOne: 'Alex',
+        playerTwo: 'Kriss',
+        contact: '+123',
+        rank: 1,
+      }],
+    });
+    expect(result).toEqual({ seeded: true });
+  });
+
+  it('accepts an already-seeded retry without replaying the payload', async () => {
+    signupsSupabaseMocks.rpc.mockResolvedValueOnce({
+      data: { seeded: false, roster: [] },
+      error: null,
+    });
+
+    await expect(seedOrganizerSignupRoster('signup-1', []))
+      .resolves.toEqual({ seeded: false });
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_seed_signup_roster', {
+      p_signup_event_id: 'signup-1',
+      p_teams: [],
     });
   });
 });

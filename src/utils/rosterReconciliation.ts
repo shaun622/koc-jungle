@@ -27,7 +27,13 @@ export interface SignupRosterTeamUpdate {
 export interface SignupRosterReconciliation {
   teamsToAdd: SignupRosterTeamInput[];
   teamUpdates: SignupRosterTeamUpdate[];
-  /** Remove these during setup, or deactivate them after play has started. */
+  /** Stable server order for the active setup roster. */
+  orderedRegistrationIds: string[];
+  /**
+   * Remove these during setup, or deactivate them after play has started.
+   * Once a sign-up snapshot is being reconciled, its confirmed pairs are the
+   * complete source of truth for the setup roster.
+   */
   importedTeamIdsToRemoveOrDeactivate: string[];
 }
 
@@ -41,11 +47,25 @@ function clean(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
+function normalizedName(value: string | undefined): string {
+  return clean(value)
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase();
+}
+
 function pairKey(playerOne: string, playerTwo: string): string {
   return [playerOne, playerTwo]
-    .map((name) => clean(name).toLocaleLowerCase())
+    .map(normalizedName)
     .sort()
     .join('|');
+}
+
+function normalizeStoredPairKey(value: string): string {
+  const names = value.split('|');
+  return names.length === 2
+    ? pairKey(names[0], names[1])
+    : normalizedName(value);
 }
 
 function finiteOrder(value: number | null | undefined): number {
@@ -58,6 +78,10 @@ function compareRegistrations(a: SignupRegistration, b: SignupRegistration): num
 
   const rank = finiteOrder(a.organizerRank) - finiteOrder(b.organizerRank);
   if (rank !== 0) return rank;
+
+  const completed = (a.pairCompletedAt ?? a.createdAt)
+    .localeCompare(b.pairCompletedAt ?? b.createdAt);
+  if (completed !== 0) return completed;
 
   const created = a.createdAt.localeCompare(b.createdAt);
   if (created !== 0) return created;
@@ -89,8 +113,23 @@ function desiredTeam(registration: SignupRegistration): SignupRosterTeamInput {
   };
 }
 
+function preserveExistingPlayerOrder(
+  team: Team,
+  desired: SignupRosterTeamInput,
+): SignupRosterTeamInput {
+  const localOne = normalizedName(team.players[0].name);
+  const localTwo = normalizedName(team.players[1].name);
+  const desiredOne = normalizedName(desired.player1);
+  const desiredTwo = normalizedName(desired.player2);
+  if (localOne === desiredTwo && localTwo === desiredOne) {
+    return { ...desired, player1: desired.player2, player2: desired.player1 };
+  }
+  return desired;
+}
+
 function needsUpdate(team: Team, desired: SignupRosterTeamInput): boolean {
-  return clean(team.name) !== clean(desired.name)
+  return !team.active
+    || clean(team.name) !== clean(desired.name)
     || team.players[0].name !== desired.player1
     || team.players[1].name !== desired.player2
     || team.signupPairKey !== desired.signupPairKey
@@ -101,9 +140,15 @@ function needsUpdate(team: Team, desired: SignupRosterTeamInput): boolean {
  * Reconcile the active local roster with a complete authoritative sign-up
  * snapshot. The helper is pure: it creates no IDs and mutates no input.
  *
- * Stable registration IDs always win. Pair-key fallback is limited to legacy
- * imported teams that have an explicit signupPairKey but no registration ID.
- * Unlinked/manual teams are never edited or removed, but they consume capacity.
+ * Stable registration IDs always win. An explicit pair key comes next. A final
+ * exact, normalized unordered player-pair match adopts legacy local teams that
+ * predate registration IDs. That last fallback is deliberately unavailable to
+ * teams carrying a stale registration ID: a strong identity must never be
+ * silently rebound to a different public row.
+ *
+ * Capacity is the tournament's complete court capacity. It is never reduced by
+ * local/manual teams. The confirmed server snapshot projects the entire setup
+ * roster, while waiting pairs and solo registrations never enter it.
  */
 export function reconcileConfirmedSignupRoster({
   confirmedRegistrations,
@@ -132,26 +177,39 @@ export function reconcileConfirmedSignupRoster({
   });
 
   const activeTeams = localTeams.filter((team) => team.active);
-  const manualActiveCount = activeTeams.filter(
-    (team) => !team.signupRegistrationId && !team.signupPairKey,
-  ).length;
-  const onlineCapacity = Math.max(0, safeCapacity - manualActiveCount);
-  const desiredRegistrations = uniqueRegistrations.slice(0, onlineCapacity);
+  const candidateTeams = localTeams.slice().sort((a, b) =>
+    Number(b.active) - Number(a.active) || compareTeams(a, b));
+  const desiredRegistrations = uniqueRegistrations.slice(0, safeCapacity);
 
   const exactCandidates = new Map<string, Team[]>();
-  const legacyCandidates = new Map<string, Team[]>();
+  const explicitPairKeyCandidates = new Map<string, Team[]>();
+  const legacyPlayerPairCandidates = new Map<string, Team[]>();
 
-  for (const team of activeTeams.slice().sort(compareTeams)) {
+  for (const team of candidateTeams) {
     if (team.signupRegistrationId) {
       const candidates = exactCandidates.get(team.signupRegistrationId) ?? [];
       candidates.push(team);
       exactCandidates.set(team.signupRegistrationId, candidates);
-    } else if (team.signupPairKey) {
-      const key = clean(team.signupPairKey).toLocaleLowerCase();
-      const candidates = legacyCandidates.get(key) ?? [];
-      candidates.push(team);
-      legacyCandidates.set(key, candidates);
+      continue;
     }
+
+    if (team.signupPairKey) {
+      const key = normalizeStoredPairKey(team.signupPairKey);
+      const candidates = explicitPairKeyCandidates.get(key) ?? [];
+      candidates.push(team);
+      explicitPairKeyCandidates.set(key, candidates);
+    }
+
+    const legacyKey = pairKey(team.players[0].name, team.players[1].name);
+    const candidates = legacyPlayerPairCandidates.get(legacyKey) ?? [];
+    candidates.push(team);
+    legacyPlayerPairCandidates.set(legacyKey, candidates);
+  }
+
+  const desiredPairKeyCounts = new Map<string, number>();
+  for (const registration of desiredRegistrations) {
+    const key = pairKey(registration.playerOne, registration.playerTwo);
+    desiredPairKeyCounts.set(key, (desiredPairKeyCounts.get(key) ?? 0) + 1);
   }
 
   const claimedTeamIds = new Set<string>();
@@ -159,20 +217,30 @@ export function reconcileConfirmedSignupRoster({
   const teamUpdates: SignupRosterTeamUpdate[] = [];
 
   for (const registration of desiredRegistrations) {
-    const desired = desiredTeam(registration);
+    const canonicalDesired = desiredTeam(registration);
     const exact = (exactCandidates.get(registration.id) ?? [])
       .find((team) => !claimedTeamIds.has(team.id));
-    const legacy = exact
+    const explicitPairKey = exact
       ? undefined
-      : (legacyCandidates.get(desired.signupPairKey) ?? [])
+      : (explicitPairKeyCandidates.get(canonicalDesired.signupPairKey) ?? [])
         .find((team) => !claimedTeamIds.has(team.id));
-    const existing = exact ?? legacy;
+    // Player names are not durable identity. Use them only for a unique
+    // confirmed pair, and only against local teams with no registration ID.
+    const legacyPlayerPair = exact || explicitPairKey
+      || desiredPairKeyCounts.get(canonicalDesired.signupPairKey) !== 1
+      ? undefined
+      : (legacyPlayerPairCandidates.get(canonicalDesired.signupPairKey) ?? [])
+        .find((team) => !claimedTeamIds.has(team.id));
+    const existing = exact ?? explicitPairKey ?? legacyPlayerPair;
 
     if (!existing) {
-      teamsToAdd.push(desired);
+      teamsToAdd.push(canonicalDesired);
       continue;
     }
 
+    // Team order is cosmetic but player objects carry stable ids and avatars.
+    // A reversed legacy pair must not swap names across those player objects.
+    const desired = preserveExistingPlayerOrder(existing, canonicalDesired);
     claimedTeamIds.add(existing.id);
     if (needsUpdate(existing, desired)) {
       teamUpdates.push({
@@ -189,12 +257,12 @@ export function reconcileConfirmedSignupRoster({
     }
   }
 
-  // Any active team managed by sign-up identity that was not claimed by the
-  // authoritative, capacity-limited set is stale, duplicated, or overflow.
+  // Any active team not claimed by the authoritative, capacity-limited set is
+  // stale, duplicated, or overflow. Organizer-created teams are written to the
+  // same server roster before this projection, so there is no second/manual
+  // capacity bucket to preserve here.
   const importedTeamIdsToRemoveOrDeactivate = activeTeams
-    .filter((team) =>
-      Boolean(team.signupRegistrationId || team.signupPairKey)
-      && !claimedTeamIds.has(team.id))
+    .filter((team) => !claimedTeamIds.has(team.id))
     .slice()
     .sort(compareTeams)
     .map((team) => team.id);
@@ -202,6 +270,7 @@ export function reconcileConfirmedSignupRoster({
   return {
     teamsToAdd,
     teamUpdates,
+    orderedRegistrationIds: desiredRegistrations.map((registration) => registration.id),
     importedTeamIdsToRemoveOrDeactivate,
   };
 }

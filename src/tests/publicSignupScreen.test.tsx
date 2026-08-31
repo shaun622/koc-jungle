@@ -103,4 +103,67 @@ describe('public sign-up loading', () => {
     });
     expect(signupMocks.getPublicSignup).toHaveBeenCalledTimes(2);
   });
+
+  it('renders pair capacity, partner seekers and waiting pairs as disjoint lists', async () => {
+    signupMocks.getPublicSignup.mockResolvedValue({
+      ...publicSignup,
+      event: { ...publicSignup.event, capacityTeams: 2 },
+      registrations: [
+        {
+          id: 'confirmed-pair',
+          signupEventId: 'signup-1',
+          teamName: 'Confirmed Pair',
+          playerOne: 'Alex',
+          playerTwo: 'Kriss',
+          status: 'confirmed',
+          position: 1,
+          createdAt: '2026-08-31T00:00:00.000Z',
+        },
+        {
+          id: 'confirmed-solo',
+          signupEventId: 'signup-1',
+          teamName: '',
+          playerOne: 'Legacy Confirmed Solo',
+          playerTwo: '',
+          status: 'confirmed',
+          position: 2,
+          createdAt: '2026-08-31T00:01:00.000Z',
+        },
+        {
+          id: 'waiting-pair',
+          signupEventId: 'signup-1',
+          teamName: 'Waiting Pair',
+          playerOne: 'Pat',
+          playerTwo: 'Sam',
+          status: 'waitlisted',
+          position: 1,
+          createdAt: '2026-08-31T00:02:00.000Z',
+        },
+        {
+          id: 'waiting-solo',
+          signupEventId: 'signup-1',
+          teamName: '',
+          playerOne: 'Legacy Waiting Solo',
+          playerTwo: '   ',
+          status: 'waitlisted',
+          position: 2,
+          createdAt: '2026-08-31T00:03:00.000Z',
+        },
+      ],
+    });
+
+    renderSignup();
+
+    expect(await screen.findByRole('heading', { name: 'Silver King of the Court' }))
+      .toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('1 team space left')).toBeInTheDocument();
+    expect(screen.getAllByText('Confirmed Pair')).toHaveLength(1);
+    expect(screen.getAllByText('Waiting Pair')).toHaveLength(1);
+    expect(screen.getAllByText('Legacy Confirmed Solo')).toHaveLength(1);
+    expect(screen.getAllByText('Legacy Waiting Solo')).toHaveLength(1);
+    expect(screen.getByText('LOOKING FOR A PARTNER')).toBeInTheDocument();
+    expect(screen.getAllByText('NEEDS PARTNER')).toHaveLength(2);
+    expect(screen.getAllByText('PAIR · WAITING')).toHaveLength(1);
+  });
 });

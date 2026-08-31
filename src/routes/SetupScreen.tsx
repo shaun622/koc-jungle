@@ -31,12 +31,16 @@ import { Portal } from '@/components/Portal';
 import { RosterShareModal } from '@/components/RosterShareModal';
 import { buildRosterShareText } from '@/utils/rosterShare';
 import {
-  deleteOrganizerRegistration,
+  addOrganizerSignupPair,
+  deleteOrganizerRegistrationIfStatus,
   findSignupRegistrationForTeam,
   getOrganizerRegistrations,
   getOwnedSignup,
+  lockSignupRoster,
   registrationPairKey,
   reorderOrganizerRegistrations,
+  seedOrganizerSignupRoster,
+  unlockSignupRoster,
   updateOrganizerRegistration,
   type SignupEvent,
   type SignupRegistration,
@@ -86,6 +90,16 @@ export function SetupScreen() {
   const [teamActionError, setTeamActionError] = useState<string | null>(null);
   const [refreshRegistrationsVersion, setRefreshRegistrationsVersion] = useState(0);
 
+  useEffect(() => {
+    setSignupDetails(null);
+    setOnlineRegistrations([]);
+    setEditingTeamId(null);
+    setConfirmRemoveTeamId(null);
+    setTeamActionBusyId(null);
+    setTeamActionError(null);
+    setRefreshRegistrationsVersion(0);
+  }, [event?.id]);
+
   const requestRemoveTeam = (id: string) => {
     setConfirmRemoveTeamId(id);
   };
@@ -99,36 +113,13 @@ export function SetupScreen() {
   if (!event) return null;
 
   const teams = activeTeams(event);
-  const directRegistrationForTeamIn = (team: Team, registrations: SignupRegistration[]) =>
+  const registrationForTeamIn = (team: Team, registrations: SignupRegistration[]) =>
     findSignupRegistrationForTeam(registrations, {
       signupRegistrationId: team.signupRegistrationId,
       signupPairKey: team.signupPairKey,
       playerOne: team.players[0].name,
       playerTwo: team.players[1].name,
     });
-  const registrationForTeamIn = (team: Team, registrations: SignupRegistration[]) => {
-    const direct = directRegistrationForTeamIn(team, registrations);
-    if (direct) return direct;
-
-    // Legacy imported teams (created before signupRegistrationId existed) may
-    // already have been renamed locally, so names are no longer enough to
-    // identify their public row. Preserve any exact matches first, then pair
-    // the remaining local roster and confirmed online rows in their original
-    // display order. Saving the next edit records the stable id permanently.
-    const claimedRegistrationIds = new Set(
-      teams
-        .map((candidate) => directRegistrationForTeamIn(candidate, registrations)?.id)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const unmatchedTeams = teams.filter((candidate) =>
-      !directRegistrationForTeamIn(candidate, registrations));
-    const availableRegistrations = registrations.filter((registration) =>
-      registration.status === 'confirmed'
-      && Boolean(registration.playerTwo)
-      && !claimedRegistrationIds.has(registration.id));
-    const legacyIndex = unmatchedTeams.findIndex((candidate) => candidate.id === team.id);
-    return legacyIndex >= 0 ? availableRegistrations[legacyIndex] : undefined;
-  };
   const registrationForTeam = (team: Team): SignupRegistration | undefined =>
     registrationForTeamIn(team, onlineRegistrations);
   const confirmedRegistration = confirmedTeam ? registrationForTeam(confirmedTeam) : undefined;
@@ -138,9 +129,11 @@ export function SetupScreen() {
     signup: SignupEvent | null;
     registrations: SignupRegistration[];
   }> => {
-    let signup = signupDetails;
+    let signup = signupDetails?.sourceEventId === event.id ? signupDetails : null;
     if (auth.user) {
-      signup = await getOwnedSignup(auth.user.id, event.id) ?? signup;
+      // An authoritative null means this event has no sign-up. Never fall back
+      // to component state from a previously opened tournament.
+      signup = await getOwnedSignup(auth.user.id, event.id);
     }
     if (!signup) return { signup: null, registrations: [] };
     const registrations = await getOrganizerRegistrations(signup.id);
@@ -152,12 +145,84 @@ export function SetupScreen() {
   const resolveRegistrationForTeam = async (team: Team): Promise<{
     signup: SignupEvent | null;
     registration?: SignupRegistration;
+    registrations: SignupRegistration[];
   }> => {
     const authoritative = await loadAuthoritativeRegistrations();
+    const registration = registrationForTeamIn(team, authoritative.registrations);
     return {
       signup: authoritative.signup,
-      registration: registrationForTeamIn(team, authoritative.registrations),
+      registration,
+      registrations: authoritative.registrations,
     };
+  };
+
+  const addTeamFromSetup = async (draft: {
+    teamName: string;
+    playerOne: string;
+    playerTwo: string;
+    contact: string;
+  }) => {
+    setTeamActionBusyId('add');
+    setTeamActionError(null);
+    try {
+      const authoritative = await loadAuthoritativeRegistrations();
+      if (!authoritative.signup) {
+        addTeam({
+          name: draft.teamName.trim() || undefined,
+          player1: draft.playerOne,
+          player2: draft.playerTwo,
+        });
+        return;
+      }
+
+      // Add exactly one row. A narrow server mutation cannot overwrite edits
+      // made in another organiser tab while this screen was loading.
+      let addedRegistration = findSignupRegistrationForTeam(authoritative.registrations, {
+        playerOne: draft.playerOne,
+        playerTwo: draft.playerTwo,
+      });
+      if (!addedRegistration) {
+        addedRegistration = await addOrganizerSignupPair(
+          authoritative.signup.id,
+          draft,
+          event.status !== 'setup',
+        );
+      }
+      if (
+        addedRegistration.status === 'confirmed'
+        && !teams.some((team) => registrationForTeamIn(team, [addedRegistration!]))
+      ) {
+        addTeams([{
+          name: addedRegistration.teamName || undefined,
+          player1: addedRegistration.playerOne,
+          player2: addedRegistration.playerTwo,
+          signupPairKey: registrationPairKey(
+            addedRegistration.playerOne,
+            addedRegistration.playerTwo,
+          ),
+          signupRegistrationId: addedRegistration.id,
+        }]);
+      }
+      let registrations: SignupRegistration[];
+      try {
+        registrations = await getOrganizerRegistrations(authoritative.signup.id);
+      } catch {
+        registrations = [
+          ...authoritative.registrations.filter((row) => row.id !== addedRegistration.id),
+          addedRegistration,
+        ];
+      }
+      setOnlineRegistrations(registrations);
+      if (event.status === 'setup') {
+        syncConfirmedSignupTeams(registrations, event.courts.length * 2, { includeIgnored: true });
+      }
+      setRefreshRegistrationsVersion((version) => version + 1);
+    } catch (err) {
+      setTeamActionError((err as Error).message);
+      throw err;
+    } finally {
+      setTeamActionBusyId(null);
+    }
   };
 
   const openTeamEdit = async (teamId: string) => {
@@ -180,16 +245,71 @@ export function SetupScreen() {
     setTeamActionBusyId(confirmedTeam.id);
     setTeamActionError(null);
     try {
-      const { signup, registration } = await resolveRegistrationForTeam(confirmedTeam);
+      const { signup, registration, registrations: authoritativeRegistrations } =
+        await resolveRegistrationForTeam(confirmedTeam);
       if (registration) {
-        await deleteOrganizerRegistration(registration.id);
-        setOnlineRegistrations((current) =>
-          current.filter((row) => row.id !== registration.id));
+        if (registration.status === 'cancelled') {
+          throw new Error('This registration was already removed. Refresh and try again.');
+        }
+        await deleteOrganizerRegistrationIfStatus(
+          registration.id,
+          registration.status,
+          registration.updatedAt,
+          event.status !== 'setup',
+        );
+        const registrations = signup
+          ? await getOrganizerRegistrations(signup.id)
+          : onlineRegistrations.filter((row) => row.id !== registration.id);
+        setOnlineRegistrations(registrations);
+        if (event.status === 'setup') {
+          syncConfirmedSignupTeams(registrations, event.courts.length * 2, { includeIgnored: true });
+        } else {
+          removeTeam(confirmedTeam.id);
+          const remainingTeams = teams.filter((team) => team.id !== confirmedTeam.id);
+          const promoted = registrations.filter((candidate) =>
+            candidate.status === 'confirmed'
+            && Boolean(candidate.playerTwo.trim())
+            && !remainingTeams.some((team) => registrationForTeamIn(team, [candidate])));
+          if (promoted.length > 0) {
+            addTeams(promoted.map((candidate) => ({
+              name: candidate.teamName || undefined,
+              player1: candidate.playerOne,
+              player2: candidate.playerTwo,
+              signupPairKey: registrationPairKey(candidate.playerOne, candidate.playerTwo),
+              signupRegistrationId: candidate.id,
+            })));
+          }
+        }
         setRefreshRegistrationsVersion((version) => version + 1);
-      } else if (signup && (confirmedTeam.signupRegistrationId || confirmedTeam.signupPairKey)) {
-        throw new Error('This team is linked to the public sign-up but its server record could not be found. Refresh and try again.');
+      } else if (signup) {
+        // The previous delete may have committed even if its response/follow-up
+        // fetch was lost. Reconcile the current authoritative snapshot instead
+        // of mutating a replacement that merely has the same player names.
+        setOnlineRegistrations(authoritativeRegistrations);
+        if (event.status === 'setup') {
+          syncConfirmedSignupTeams(
+            authoritativeRegistrations,
+            event.courts.length * 2,
+            { includeIgnored: true },
+          );
+        } else {
+          removeTeam(confirmedTeam.id);
+          const remainingTeams = teams.filter((team) => team.id !== confirmedTeam.id);
+          const promoted = authoritativeRegistrations.filter((candidate) =>
+            candidate.status === 'confirmed'
+            && Boolean(candidate.playerTwo.trim())
+            && !remainingTeams.some((team) => registrationForTeamIn(team, [candidate])));
+          addTeams(promoted.map((candidate) => ({
+            name: candidate.teamName || undefined,
+            player1: candidate.playerOne,
+            player2: candidate.playerTwo,
+            signupPairKey: registrationPairKey(candidate.playerOne, candidate.playerTwo),
+            signupRegistrationId: candidate.id,
+          })));
+        }
+      } else {
+        removeTeam(confirmedTeam.id);
       }
-      removeTeam(confirmedTeam.id);
       setConfirmRemoveTeamId(null);
     } catch (err) {
       setTeamActionError((err as Error).message);
@@ -210,8 +330,15 @@ export function SetupScreen() {
     try {
       const { signup, registration } = await resolveRegistrationForTeam(editingTeam);
       if (registration) {
+        if (registration.status === 'cancelled') {
+          throw new Error('This registration was already removed. Refresh and try again.');
+        }
         const contact = draft.contact.trim() || registration.contact || '';
-        await updateOrganizerRegistration(registration.id, { ...draft, contact });
+        await updateOrganizerRegistration(registration.id, { ...draft, contact }, {
+          status: registration.status,
+          updatedAt: registration.updatedAt,
+          allowLocked: event.status !== 'setup',
+        });
         setOnlineRegistrations((current) => current.map((row) =>
           row.id === registration.id
             ? {
@@ -223,8 +350,8 @@ export function SetupScreen() {
               }
             : row));
         setRefreshRegistrationsVersion((version) => version + 1);
-      } else if (signup && (editingTeam.signupRegistrationId || editingTeam.signupPairKey)) {
-        throw new Error('This team is linked to the public sign-up but its server record could not be found. Refresh and try again.');
+      } else if (signup && event.status === 'setup') {
+        throw new Error('This team could not be matched to the live sign-up. Refresh and try again.');
       }
       updateTeam(editingTeam.id, {
         name: draft.teamName,
@@ -248,17 +375,21 @@ export function SetupScreen() {
     setTeamActionError(null);
     try {
       const { signup, registrations } = await loadAuthoritativeRegistrations();
-      const registrationIds = orderedIds
-        .map((id) => teams.find((team) => team.id === id))
-        .map((team) => team ? registrationForTeamIn(team, registrations)?.id : undefined)
-        .filter((id): id is string => Boolean(id));
-      if (signup && registrationIds.length >= 2) {
-        await reorderOrganizerRegistrations(signup.id, registrationIds);
-        const ranks = new Map(registrationIds.map((id, index) => [id, index + 1]));
-        setOnlineRegistrations((current) => current.map((registration) => ({
-          ...registration,
-          organizerRank: ranks.get(registration.id) ?? registration.organizerRank,
-        })));
+      if (signup) {
+        const orderedTeams = orderedIds
+          .map((id) => teams.find((team) => team.id === id))
+          .filter((team): team is Team => Boolean(team));
+        const orderedRegistrations = orderedTeams.map((team) =>
+          registrationForTeamIn(team, registrations));
+        if (orderedRegistrations.some((registration) => !registration)) {
+          throw new Error('The live roster changed. Refresh before reordering teams.');
+        }
+        await reorderOrganizerRegistrations(
+          signup.id,
+          orderedRegistrations.map((registration) => registration!.id),
+        );
+        const refreshed = await getOrganizerRegistrations(signup.id);
+        setOnlineRegistrations(refreshed);
         setRefreshRegistrationsVersion((version) => version + 1);
       }
       reorderTeams(orderedIds);
@@ -295,7 +426,154 @@ export function SetupScreen() {
     ...activeTeamIds.filter((id) => !savedSeedOrder.includes(id)),
   ];
   const canStartNonQualifier =
-    !format.usesQualifier && event.status === 'setup' && teams.length >= 2;
+    !format.usesQualifier
+    && event.status === 'setup'
+    && teams.length >= 2
+    && teams.length <= expectedTeams;
+
+  const closeSignupBeforePlay = async (): Promise<boolean> => {
+    setTeamActionBusyId('start');
+    setTeamActionError(null);
+    try {
+      const hasLinkedSignup = teams.some((team) => Boolean(team.signupRegistrationId))
+        || Boolean(event.settings.publishedSignupId)
+        || signupDetails?.sourceEventId === event.id;
+      if (!auth.user && hasLinkedSignup) {
+        throw new Error('Sign in as the organiser so the public sign-up can be closed first.');
+      }
+      let current = auth.user
+        ? await getOwnedSignup(auth.user.id, event.id)
+        : signupDetails?.sourceEventId === event.id ? signupDetails : null;
+      if (!current) {
+        if (hasLinkedSignup) {
+          throw new Error('Sign in with the account that published this sign-up.');
+        }
+        return true;
+      }
+
+      // A first publish can succeed before its one-time local roster import
+      // reaches the server. Complete that durable handshake before locking so
+      // an interrupted publish can never turn an empty snapshot into truth.
+      if (current.rosterSeededAt == null) {
+        await seedOrganizerSignupRoster(
+          current.id,
+          teams.map((team, index) => ({
+            registrationId: team.signupRegistrationId,
+            teamName: team.name,
+            playerOne: team.players[0].name,
+            playerTwo: team.players[1].name,
+            rank: index + 1,
+          })),
+        );
+        current = await getOwnedSignup(auth.user!.id, event.id) ?? current;
+      }
+
+      // One server transaction fixes capacity from the court count, rebalances
+      // the queue, closes registrations and durably locks the roster. Retry a
+      // fresh authoritative revision if another organiser tab just changed it.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const result = await lockSignupRoster(
+          current.id,
+          current.sourceEventId,
+          expectedTeams,
+          current.capacityRevision,
+        );
+        current = result.event;
+        if (!result.conflict) break;
+      }
+      setSignupDetails(current);
+      if (
+        current.isOpen
+        || current.capacityTeams !== expectedTeams
+        || !current.rosterLockedAt
+      ) {
+        throw new Error('Registrations could not be locked to the current courts. Refresh and try starting again.');
+      }
+      // The event lock used to close registrations serializes after any public
+      // sign-up already in flight. Fetch that final queue and project it into
+      // the local roster before changing status, so no just-confirmed pair is
+      // stranded only on the public link.
+      const finalRegistrations = await getOrganizerRegistrations(current.id);
+      setOnlineRegistrations(finalRegistrations);
+      syncConfirmedSignupTeams(
+        finalRegistrations,
+        event.courts.length * 2,
+        { includeIgnored: true },
+      );
+      return true;
+    } catch (closeError) {
+      setTeamActionError(
+        `The tournament was not started because the public sign-up could not be closed: ${(closeError as Error).message}`,
+      );
+      return false;
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
+
+  const resetScoresAndRounds = async () => {
+    setTeamActionBusyId('reset');
+    setTeamActionError(null);
+    try {
+      const hasLinkedSignup = Boolean(event.settings.publishedSignupId)
+        || teams.some((team) => Boolean(team.signupRegistrationId))
+        || signupDetails?.sourceEventId === event.id;
+      if (!auth.user && hasLinkedSignup) {
+        throw new Error('Sign in as the organiser to unlock the linked public roster before resetting.');
+      }
+      let current = auth.user ? await getOwnedSignup(auth.user.id, event.id) : null;
+      if (!current && hasLinkedSignup) {
+        throw new Error('Sign in with the account that published this sign-up.');
+      }
+      for (let attempt = 0; current?.rosterLockedAt && attempt < 3; attempt += 1) {
+        const result = await unlockSignupRoster(
+          current.id,
+          current.sourceEventId,
+          current.capacityRevision,
+        );
+        current = result.event;
+        if (!result.conflict) break;
+      }
+      if (current?.rosterLockedAt) {
+        throw new Error('The public roster could not be unlocked. Refresh and try again.');
+      }
+      if (current) setSignupDetails(current);
+      loadEvent({
+        ...event,
+        status: 'setup',
+        qualifier: undefined,
+        rounds: [],
+        pendingAssignments: undefined,
+      });
+      setConfirmReset(false);
+    } catch (resetError) {
+      setTeamActionError((resetError as Error).message);
+    } finally {
+      setTeamActionBusyId(null);
+    }
+  };
+
+  const beginQualifierFlow = async () => {
+    if (!await closeSignupBeforePlay()) return;
+    if (qualifierEnabled) {
+      startQualifier();
+      setTimeout(() => navigate(eventRoute(event.id, 'qualifier')), 0);
+    } else {
+      skipQualifierToSeeding();
+      setTimeout(() => navigate(eventRoute(event.id, 'seeding')), 0);
+    }
+  };
+
+  const beginTournament = async () => {
+    if (!await closeSignupBeforePlay()) return;
+    startTournament();
+    setTimeout(() => {
+      const next = useEventStore.getState().event;
+      if (next?.status === 'round-in-progress') {
+        navigate(eventRoute(next.id, 'display'));
+      }
+    }, 0);
+  };
 
   // Setup is reachable mid-event (the display's "Setup & teams" menu item, or
   // navigating back). When the event has already moved past setup, the start
@@ -523,7 +801,7 @@ export function SetupScreen() {
           Teams ({teams.length} / {expectedTeams})
         </h2>
         <div className="setup-sub">
-          Each team is a fixed pair. Solo online sign-ups can find a partner before you add them here.
+          Court count sets the team capacity. Complete pairs fill this roster automatically; overflow pairs wait, and solos stay in Looking for a partner.
         </div>
         <EventSignupPanel
           event={event}
@@ -533,7 +811,12 @@ export function SetupScreen() {
           onSyncTeams={syncConfirmedSignupTeams}
           onRegistrationsChange={setOnlineRegistrations}
           refreshRegistrationsVersion={refreshRegistrationsVersion}
-          onSignupChange={setSignupDetails}
+          onSignupChange={(signup) => {
+            setSignupDetails(signup);
+            if (signup && event.settings.publishedSignupId !== signup.id) {
+              updateSettings({ publishedSignupId: signup.id });
+            }
+          }}
         />
         {event.status !== 'setup' && (
           <div className="setup-mid-event-banner">
@@ -548,7 +831,10 @@ export function SetupScreen() {
                 : "Adding or removing a team won't change the current round; removed teams are skipped in future rotations, and an added team needs to be dragged into a court on the next rotation preview."}
           </div>
         )}
-        <NewTeamForm onAdd={(p1, p2) => addTeam({ player1: p1, player2: p2 })} />
+        <NewTeamForm
+          busy={teamActionBusyId === 'add'}
+          onAdd={addTeamFromSetup}
+        />
         <SortableTeamList
           teams={teams}
           canReorder={event.status === 'setup'}
@@ -581,16 +867,8 @@ export function SetupScreen() {
           ) : format.usesQualifier ? (
             <button
               className="btn full primary lg"
-              disabled={!canStartQualifier}
-              onClick={() => {
-                if (qualifierEnabled) {
-                  startQualifier();
-                  setTimeout(() => navigate(eventRoute(event.id, 'qualifier')), 0);
-                } else {
-                  skipQualifierToSeeding();
-                  setTimeout(() => navigate(eventRoute(event.id, 'seeding')), 0);
-                }
-              }}
+              disabled={!canStartQualifier || teamActionBusyId === 'start'}
+              onClick={() => void beginQualifierFlow()}
             >
               {canStartQualifier
                 ? qualifierEnabled
@@ -603,22 +881,14 @@ export function SetupScreen() {
           ) : (
             <button
               className="btn full primary lg"
-              disabled={!canStartNonQualifier}
-              onClick={() => {
-                startTournament();
-                // If startTournament set a lastError it stayed on setup,
-                // so check status before navigating.
-                setTimeout(() => {
-                  const next = useEventStore.getState().event;
-                  if (next?.status === 'round-in-progress') {
-                    navigate(eventRoute(next.id, 'display'));
-                  }
-                }, 0);
-              }}
+              disabled={!canStartNonQualifier || teamActionBusyId === 'start'}
+              onClick={() => void beginTournament()}
             >
               {canStartNonQualifier
                 ? 'Start tournament →'
-                : `Need ${Math.max(0, 2 - teams.length)} more team(s)`}
+                : teams.length > expectedTeams
+                  ? `Remove ${teams.length - expectedTeams} team(s)`
+                  : `Need ${Math.max(0, 2 - teams.length)} more team(s)`}
             </button>
           )}
         </div>
@@ -631,21 +901,11 @@ export function SetupScreen() {
 
       <ConfirmDialog
         open={confirmReset}
-        title="Reset entire event?"
-        message="This permanently clears teams, scores, and all rounds. Export first if you need a backup."
-        confirmLabel="Reset"
+        title="Reset scores and rounds?"
+        message="This clears scores and all rounds, then returns to setup. The organiser roster and public sign-up stay intact."
+        confirmLabel={teamActionBusyId === 'reset' ? 'Resetting…' : 'Reset'}
         destructive
-        onConfirm={() => {
-          loadEvent({
-            ...event,
-            status: 'setup',
-            teams: [],
-            qualifier: undefined,
-            rounds: [],
-            pendingAssignments: undefined,
-          });
-          setConfirmReset(false);
-        }}
+        onConfirm={() => void resetScoresAndRounds()}
         onCancel={() => setConfirmReset(false)}
       />
 
@@ -1056,34 +1316,53 @@ function DurationField({
 
 function NewTeamForm({
   onAdd,
+  busy,
 }: {
-  onAdd: (player1: string, player2: string) => void;
+  onAdd: (draft: {
+    teamName: string;
+    playerOne: string;
+    playerTwo: string;
+    contact: string;
+  }) => Promise<void>;
+  busy: boolean;
 }) {
+  const [teamName, setTeamName] = useState('');
   const [p1, setP1] = useState('');
   const [p2, setP2] = useState('');
+  const [contact, setContact] = useState('');
   const valid = p1.trim() && p2.trim();
-  const submit = () => {
-    if (!valid) return;
-    onAdd(p1, p2);
-    setP1('');
-    setP2('');
+  const submit = async () => {
+    if (!valid || busy) return;
+    try {
+      await onAdd({
+        teamName: teamName.trim(),
+        playerOne: p1.trim(),
+        playerTwo: p2.trim(),
+        contact: contact.trim(),
+      });
+      setTeamName('');
+      setP1('');
+      setP2('');
+      setContact('');
+    } catch {
+      // SetupScreen shows the authoritative server error beside the roster.
+    }
   };
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr auto',
-        gap: 6,
-        marginBottom: 12,
-      }}
-    >
+    <div className="setup-team-add-form">
+      <input
+        className="setup-input"
+        placeholder="Team name (optional)"
+        value={teamName}
+        onChange={(e) => setTeamName(e.target.value)}
+      />
       <input
         className="setup-input"
         placeholder="Player A"
         value={p1}
         onChange={(e) => setP1(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') submit();
+          if (e.key === 'Enter') void submit();
         }}
       />
       <input
@@ -1092,11 +1371,24 @@ function NewTeamForm({
         value={p2}
         onChange={(e) => setP2(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') submit();
+          if (e.key === 'Enter') void submit();
         }}
       />
-      <button className="btn primary team-add-button" disabled={!valid} onClick={submit}>
-        + Add
+      <input
+        className="setup-input"
+        placeholder="WhatsApp or phone (optional)"
+        value={contact}
+        onChange={(e) => setContact(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void submit();
+        }}
+      />
+      <button
+        className="btn primary team-add-button"
+        disabled={!valid || busy}
+        onClick={() => void submit()}
+      >
+        {busy ? 'Adding…' : '+ Add team'}
       </button>
     </div>
   );

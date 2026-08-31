@@ -19,6 +19,12 @@ export interface SignupEvent {
   prizes: string;
   isOpen: boolean;
   autoAddPairs: boolean;
+  /** Non-null once the legacy/local tournament roster has completed its
+   * one-time, server-guarded import into the canonical registration list. */
+  rosterSeededAt: string | null;
+  /** Non-null once starting play has atomically fixed capacity and closed the
+   * public roster. Only an explicit organiser reset can unlock it. */
+  rosterLockedAt: string | null;
 }
 
 export interface SignupRegistration {
@@ -29,9 +35,13 @@ export interface SignupRegistration {
   playerTwo: string;
   contact?: string;
   playerTwoContact?: string;
-  status: 'confirmed' | 'waitlisted' | 'cancelled';
+  status: 'confirmed' | 'waitlisted' | 'looking' | 'cancelled';
   position: number;
   createdAt: string;
+  updatedAt?: string;
+  /** When this entry first became a complete pair. A solo joining later must
+   * enter the pair queue at that later time, not at the solo's sign-up time. */
+  pairCompletedAt?: string | null;
   organizerRank?: number | null;
 }
 
@@ -58,7 +68,15 @@ export interface SignupTemplate {
 }
 
 export interface PublicSignup {
-  event: Omit<SignupEvent, 'ownerUserId' | 'sourceEventId' | 'autoAddPairs' | 'capacityRevision'>;
+  event: Omit<
+    SignupEvent,
+    | 'ownerUserId'
+    | 'sourceEventId'
+    | 'autoAddPairs'
+    | 'capacityRevision'
+    | 'rosterSeededAt'
+    | 'rosterLockedAt'
+  >;
   registrations: SignupRegistration[];
 }
 
@@ -80,6 +98,18 @@ export interface SaveSignupInput {
   baseRevision: number;
   /** Preserve the current open state when omitted. */
   isOpen?: boolean;
+}
+
+/** One complete pair in the organiser's tournament roster. The database id is
+ * deliberately optional: legacy/local teams are adopted by their exact pair
+ * once, then the returned registration id becomes their stable identity. */
+export interface OrganizerSignupRosterTeam {
+  registrationId?: string;
+  teamName?: string;
+  playerOne: string;
+  playerTwo: string;
+  contact?: string;
+  rank: number;
 }
 
 /** The current authoritative event is returned on both success and conflict. */
@@ -109,6 +139,8 @@ interface SignupEventRow {
   prizes: string | null;
   is_open: boolean;
   auto_add_pairs: boolean;
+  roster_seeded_at?: string | null;
+  roster_locked_at?: string | null;
 }
 
 interface SignupRegistrationRow {
@@ -121,6 +153,8 @@ interface SignupRegistrationRow {
   player_two_contact: string | null;
   status: SignupRegistration['status'];
   created_at: string;
+  updated_at?: string;
+  pair_completed_at?: string | null;
   organizer_rank?: number | null;
 }
 
@@ -157,6 +191,8 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     prizes: row.prizes ?? '',
     isOpen: row.is_open,
     autoAddPairs: row.auto_add_pairs ?? true,
+    rosterSeededAt: row.roster_seeded_at ?? null,
+    rosterLockedAt: row.roster_locked_at ?? null,
   };
 }
 
@@ -200,6 +236,8 @@ function mapRegistration(row: SignupRegistrationRow, position: number): SignupRe
     status: row.status,
     position,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    pairCompletedAt: row.pair_completed_at ?? null,
     organizerRank: row.organizer_rank ?? null,
   };
 }
@@ -353,6 +391,54 @@ export async function setSignupOpen(
   return mapSignupMutation(data);
 }
 
+/** Atomically set the court-derived capacity, rebalance, close registrations,
+ * and lock the roster before local play starts. */
+export async function lockSignupRoster(
+  id: string,
+  sourceEventId: string,
+  capacityTeams: number,
+  baseRevision: number,
+): Promise<SignupEventMutationResult> {
+  const client = requireSupabase();
+  if (
+    !sourceEventId
+    || !Number.isSafeInteger(capacityTeams)
+    || capacityTeams < 0
+    || !Number.isSafeInteger(baseRevision)
+    || baseRevision < 0
+  ) {
+    throw new Error('Refresh this sign-up before starting the tournament.');
+  }
+  const { data, error } = await client.rpc('organizer_lock_signup_roster', {
+    p_signup_event_id: id,
+    p_source_event_id: sourceEventId,
+    p_expected_capacity: capacityTeams,
+    p_base_revision: baseRevision,
+  });
+  if (error) throw new Error(error.message);
+  return mapSignupMutation(data);
+}
+
+/** Unlock a roster only as part of an explicit organiser reset. It remains
+ * closed until the organiser chooses to reopen registrations. */
+export async function unlockSignupRoster(
+  id: string,
+  sourceEventId: string,
+  baseRevision: number,
+): Promise<SignupEventMutationResult> {
+  const client = requireSupabase();
+  if (!sourceEventId || !Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+    throw new Error('Refresh this sign-up before resetting the tournament.');
+  }
+  const { data, error } = await client.rpc('organizer_unlock_signup_roster', {
+    p_signup_event_id: id,
+    p_source_event_id: sourceEventId,
+    p_base_revision: baseRevision,
+  });
+  if (error) throw new Error(error.message);
+  return mapSignupMutation(data);
+}
+
 export async function getOrganizerRegistrations(
   signupEventId: string,
 ): Promise<SignupRegistration[]> {
@@ -365,7 +451,7 @@ export async function getOrganizerRegistrations(
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   const rows = ((data ?? []) as SignupRegistrationRow[]).sort((a, b) => {
-    const statusOrder = { confirmed: 0, waitlisted: 1, cancelled: 2 };
+    const statusOrder = { confirmed: 0, waitlisted: 1, looking: 2, cancelled: 3 };
     const statusDifference = statusOrder[a.status] - statusOrder[b.status];
     if (statusDifference) return statusDifference;
     const pairDifference = Number(Boolean(b.player_two?.trim())) - Number(Boolean(a.player_two?.trim()));
@@ -373,9 +459,12 @@ export async function getOrganizerRegistrations(
     const rankDifference = (a.organizer_rank ?? Number.MAX_SAFE_INTEGER)
       - (b.organizer_rank ?? Number.MAX_SAFE_INTEGER);
     if (rankDifference) return rankDifference;
+    const completedDifference = (a.pair_completed_at ?? a.created_at)
+      .localeCompare(b.pair_completed_at ?? b.created_at);
+    if (completedDifference) return completedDifference;
     return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
   });
-  const counters = { confirmed: 0, waitlisted: 0, cancelled: 0 };
+  const counters = { confirmed: 0, waitlisted: 0, looking: 0, cancelled: 0 };
   return rows.map((row) => {
     counters[row.status] += 1;
     return mapRegistration(row, counters[row.status]);
@@ -385,16 +474,71 @@ export async function getOrganizerRegistrations(
 export async function updateOrganizerRegistration(
   registrationId: string,
   patch: { teamName: string; playerOne: string; playerTwo: string; contact?: string },
+  expected: {
+    status: Exclude<SignupRegistration['status'], 'cancelled'>;
+    updatedAt: string | undefined;
+    allowLocked?: boolean;
+  },
 ): Promise<void> {
+  if (!expected.updatedAt) {
+    throw new Error('Refresh this registration before editing it.');
+  }
   const client = requireSupabase();
-  const { error } = await client.rpc('organizer_update_signup_registration', {
+  const { error } = await client.rpc('organizer_update_signup_registration_guarded', {
     p_registration_id: registrationId,
     p_team_name: patch.teamName.trim(),
     p_player_one: patch.playerOne.trim(),
     p_player_two: patch.playerTwo.trim(),
     p_contact: patch.contact === undefined ? null : patch.contact.trim(),
+    p_expected_status: expected.status,
+    p_expected_updated_at: expected.updatedAt,
+    p_allow_locked: expected.allowLocked ?? false,
   });
   if (error) throw new Error(error.message);
+}
+
+export async function addOrganizerSignupPair(
+  signupEventId: string,
+  input: { teamName: string; playerOne: string; playerTwo: string; contact?: string },
+  allowLocked = false,
+): Promise<SignupRegistration> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('organizer_add_signup_pair', {
+    p_signup_event_id: signupEventId,
+    p_team_name: input.teamName.trim(),
+    p_player_one: input.playerOne.trim(),
+    p_player_two: input.playerTwo.trim(),
+    p_contact: input.contact?.trim() || null,
+    p_allow_locked: allowLocked,
+  });
+  if (error) throw new Error(error.message);
+  if (!data || typeof data !== 'object') {
+    throw new Error('The sign-up server returned an invalid team. Refresh and try again.');
+  }
+  const row = data as Record<string, unknown>;
+  if (
+    typeof row.id !== 'string'
+    || typeof row.signupEventId !== 'string'
+    || typeof row.playerOne !== 'string'
+    || typeof row.playerTwo !== 'string'
+    || !['confirmed', 'waitlisted', 'looking', 'cancelled'].includes(String(row.status))
+  ) {
+    throw new Error('The sign-up server returned an invalid team. Refresh and try again.');
+  }
+  return {
+    id: row.id,
+    signupEventId: row.signupEventId,
+    teamName: typeof row.teamName === 'string' ? row.teamName : '',
+    playerOne: row.playerOne,
+    playerTwo: row.playerTwo,
+    contact: typeof row.contact === 'string' ? row.contact : undefined,
+    status: row.status as SignupRegistration['status'],
+    position: 0,
+    createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date().toISOString(),
+    updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : undefined,
+    pairCompletedAt: typeof row.pairCompletedAt === 'string' ? row.pairCompletedAt : null,
+    organizerRank: typeof row.organizerRank === 'number' ? row.organizerRank : null,
+  };
 }
 
 export async function deleteOrganizerRegistration(registrationId: string): Promise<void> {
@@ -426,6 +570,81 @@ export async function reorderOrganizerRegistrations(
   if (error) throw new Error(error.message);
 }
 
+function normalizeOrganizerRosterTeams(teams: OrganizerSignupRosterTeam[]) {
+  return teams.map((team, index) => ({
+    registrationId: team.registrationId || null,
+    teamName: team.teamName?.trim() || '',
+    playerOne: team.playerOne.trim(),
+    playerTwo: team.playerTwo.trim(),
+    contact: team.contact?.trim() || '',
+    rank: Number.isSafeInteger(team.rank) && team.rank > 0 ? team.rank : index + 1,
+  }));
+}
+
+export interface OrganizerSignupRosterSeedResult {
+  /** True when this request performed the import. False means another request
+   * had already completed it, so retrying after an uncertain network result is
+   * safe and never replays stale device state. */
+  seeded: boolean;
+}
+
+/**
+ * Import a local roster exactly once. The server owns the null-to-seeded
+ * transition, including when `teams` is empty, making an interrupted first
+ * publish safely retryable.
+ */
+export async function seedOrganizerSignupRoster(
+  signupEventId: string,
+  teams: OrganizerSignupRosterTeam[],
+): Promise<OrganizerSignupRosterSeedResult> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('organizer_seed_signup_roster', {
+    p_signup_event_id: signupEventId,
+    p_teams: normalizeOrganizerRosterTeams(teams),
+  });
+  if (error) throw new Error(error.message);
+  if (!data || typeof data !== 'object' || typeof (data as { seeded?: unknown }).seeded !== 'boolean') {
+    throw new Error('The sign-up server returned an invalid roster response. Refresh and try again.');
+  }
+  return { seeded: (data as { seeded: boolean }).seeded };
+}
+
+/**
+ * Make the organiser's visible setup roster canonical for an online sign-up.
+ * Existing public registrations are adopted rather than duplicated; complete
+ * pairs not present in this array remain in their server-managed waiting order.
+ */
+export async function syncOrganizerSignupRoster(
+  signupEventId: string,
+  teams: OrganizerSignupRosterTeam[],
+): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_sync_signup_roster', {
+    p_signup_event_id: signupEventId,
+    p_teams: normalizeOrganizerRosterTeams(teams),
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteOrganizerRegistrationIfStatus(
+  registrationId: string,
+  expectedStatus: Exclude<SignupRegistration['status'], 'cancelled'>,
+  expectedUpdatedAt: string | undefined,
+  allowLocked = false,
+): Promise<void> {
+  if (!expectedUpdatedAt) {
+    throw new Error('Refresh this registration before removing it.');
+  }
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_delete_signup_registration_if_status', {
+    p_registration_id: registrationId,
+    p_expected_status: expectedStatus,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_allow_locked: allowLocked,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
   const client = requirePublicSupabase();
   const args = accountSlug
@@ -444,7 +663,7 @@ export async function registerPublicTeam(input: {
   playerOne: string;
   playerTwo: string;
   contact: string;
-}): Promise<{ registrationId: string; cancelToken: string; status: 'confirmed' | 'waitlisted'; position: number }> {
+}): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number }> {
   const client = requirePublicSupabase();
   const slugArgs = input.accountSlug
     ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
@@ -459,8 +678,7 @@ export async function registerPublicTeam(input: {
   if (error) throw new Error(error.message);
   return data as {
     registrationId: string;
-    cancelToken: string;
-    status: 'confirmed' | 'waitlisted';
+    status: 'confirmed' | 'waitlisted' | 'looking';
     position: number;
   };
 }
@@ -471,7 +689,7 @@ export async function joinPublicSingle(input: {
   registrationId: string;
   playerName: string;
   contact: string;
-}): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted'; position: number }> {
+}): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number }> {
   const client = requirePublicSupabase();
   const slugArgs = input.accountSlug
     ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
@@ -485,25 +703,9 @@ export async function joinPublicSingle(input: {
   if (error) throw new Error(error.message);
   return data as {
     registrationId: string;
-    status: 'confirmed' | 'waitlisted';
+    status: 'confirmed' | 'waitlisted' | 'looking';
     position: number;
   };
-}
-
-export async function cancelPublicRegistration(
-  publicSlug: string,
-  cancelToken: string,
-  accountSlug?: string,
-): Promise<void> {
-  const client = requirePublicSupabase();
-  const slugArgs = accountSlug
-    ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
-    : { p_share_slug: publicSlug };
-  const { error } = await client.rpc('cancel_public_registration', {
-    ...slugArgs,
-    p_cancel_token: cancelToken,
-  });
-  if (error) throw new Error(error.message);
 }
 
 export function normaliseSignupLinkPart(value: string, fallback = 'event'): string {
@@ -594,8 +796,10 @@ export function findSignupRegistrationForTeam(
   team: SignupTeamIdentity,
 ): SignupRegistration | undefined {
   if (team.signupRegistrationId) {
-    const exact = registrations.find((registration) => registration.id === team.signupRegistrationId);
-    if (exact) return exact;
+    // A persisted id is an ownership link, not merely a hint. If it no longer
+    // exists, the local team is stale and must never fall through to a newly
+    // registered pair with the same names.
+    return registrations.find((registration) => registration.id === team.signupRegistrationId);
   }
   const pairKey = team.signupPairKey
     ?? registrationPairKey(team.playerOne, team.playerTwo);

@@ -547,50 +547,63 @@ export const useEventStore = create<EventStore>()(
         });
       },
 
-      syncConfirmedSignupTeams: (registrations, capacity, options) => {
+      syncConfirmedSignupTeams: (registrations, capacity) => {
         const event = get().event;
         if (!event || event.status !== 'setup') return;
 
-        const ignoredPairKeys = new Set(event.settings.ignoredAutoSignupPairKeys ?? []);
-        const ignoredRegistrationIds = new Set(
-          event.settings.ignoredAutoSignupRegistrationIds ?? [],
-        );
-        const linkedRegistrationIds = new Set(
-          event.teams
-            .map((team) => team.signupRegistrationId)
-            .filter((id): id is string => Boolean(id)),
-        );
-        const eligibleRegistrations = options?.includeIgnored
-          ? registrations
-          : registrations.filter((registration) =>
-            !registration.playerTwo
-            || linkedRegistrationIds.has(registration.id)
-            || (
-              !ignoredRegistrationIds.has(registration.id)
-              && !ignoredPairKeys.has(rosterPairKey(registration.playerOne, registration.playerTwo))
-            ));
         const reconciliation = reconcileConfirmedSignupRoster({
-          confirmedRegistrations: eligibleRegistrations,
+          confirmedRegistrations: registrations,
           localTeams: event.teams,
           capacity,
         });
+        const currentActiveRegistrationIds = event.teams
+          .filter((team) => team.active)
+          .map((team) => team.signupRegistrationId)
+          .filter((id): id is string => Boolean(id));
+        const orderChanged = currentActiveRegistrationIds.length
+          !== reconciliation.orderedRegistrationIds.length
+          || currentActiveRegistrationIds.some(
+            (id, index) => id !== reconciliation.orderedRegistrationIds[index],
+          );
         if (
           reconciliation.teamsToAdd.length === 0
           && reconciliation.teamUpdates.length === 0
           && reconciliation.importedTeamIdsToRemoveOrDeactivate.length === 0
+          && !orderChanged
         ) return;
 
         const removals = new Set(reconciliation.importedTeamIdsToRemoveOrDeactivate);
+        const knownRegistrationIds = new Set(
+          registrations
+            .filter((registration) => registration.status !== 'cancelled')
+            .map((registration) => registration.id),
+        );
         const updates = new Map(
           reconciliation.teamUpdates.map((update) => [update.teamId, update.patch]),
         );
         const retainedTeams = event.teams
-          .filter((team) => !removals.has(team.id))
+          .filter((team) => {
+            if (removals.has(team.id)) {
+              return Boolean(
+                team.signupRegistrationId
+                && knownRegistrationIds.has(team.signupRegistrationId),
+              );
+            }
+            if (
+              !team.active
+              && team.signupRegistrationId
+              && !knownRegistrationIds.has(team.signupRegistrationId)
+            ) return false;
+            return true;
+          })
           .map((team): Team => {
             const patch = updates.get(team.id);
-            if (!patch) return team;
+            if (!patch) {
+              return removals.has(team.id) ? { ...team, active: false } : team;
+            }
             return {
               ...team,
+              active: true,
               name: patch.name.trim() || undefined,
               players: [
                 { ...team.players[0], name: patch.player1.trim() },
@@ -610,7 +623,19 @@ export const useEventStore = create<EventStore>()(
           signupPairKey: input.signupPairKey,
           signupRegistrationId: input.signupRegistrationId,
         }));
-        const teams = [...retainedTeams, ...addedTeams];
+        const unsortedTeams = [...retainedTeams, ...addedTeams];
+        const orderByRegistrationId = new Map(
+          reconciliation.orderedRegistrationIds.map((id, index) => [id, index]),
+        );
+        const activeOrderedTeams = unsortedTeams
+          .filter((team) => team.active)
+          .sort((a, b) =>
+            (orderByRegistrationId.get(a.signupRegistrationId ?? '') ?? Number.MAX_SAFE_INTEGER)
+            - (orderByRegistrationId.get(b.signupRegistrationId ?? '') ?? Number.MAX_SAFE_INTEGER));
+        const teams = [
+          ...activeOrderedTeams,
+          ...unsortedTeams.filter((team) => !team.active),
+        ];
         const acceptedSignupPairKeys = new Set(
           teams
             .filter((team) => team.active && Boolean(team.signupRegistrationId))

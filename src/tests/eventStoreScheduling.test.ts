@@ -45,7 +45,7 @@ describe('Americano mid-event roster corrections', () => {
     ]);
   });
 
-  it('keeps a deleted online pair out of Auto-add until it is manually restored', () => {
+  it('preserves and clears legacy suppression identity when old saved events are edited', () => {
     useEventStore.getState().createEvent('Imported signup teams', 'koc');
     const signupPairKey = 'coello|tapia';
 

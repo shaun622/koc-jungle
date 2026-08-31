@@ -9,12 +9,14 @@ import type {
 } from '@/lib/signups';
 
 const signupMocks = vi.hoisted(() => ({
-  deleteOrganizerWaitlistedRegistration: vi.fn(),
+  deleteOrganizerRegistrationIfStatus: vi.fn(),
   getOrganizerRegistrations: vi.fn(),
   getOwnedSignup: vi.fn(),
   getSignupAccountSlug: vi.fn(),
   getSignupTemplates: vi.fn(),
   saveSignupEvent: vi.fn(),
+  seedOrganizerSignupRoster: vi.fn(),
+  updateOrganizerRegistration: vi.fn(),
 }));
 
 const authUser = vi.hoisted(() => ({ id: 'owner-1', email: 'owner@example.com' }));
@@ -70,6 +72,8 @@ const signup: SignupEvent = {
   prizes: '',
   isOpen: true,
   autoAddPairs: false,
+  rosterSeededAt: '2026-08-30T00:00:00.000Z',
+  rosterLockedAt: null,
 };
 
 const registrations: SignupRegistration[] = [
@@ -83,6 +87,7 @@ const registrations: SignupRegistration[] = [
     status: 'confirmed',
     position: 1,
     createdAt: '2026-08-29T00:00:00Z',
+    updatedAt: '2026-08-29T00:00:00Z',
   },
   {
     id: 'waiting-pair',
@@ -94,6 +99,7 @@ const registrations: SignupRegistration[] = [
     status: 'waitlisted',
     position: 1,
     createdAt: '2026-08-29T00:01:00Z',
+    updatedAt: '2026-08-29T00:01:00Z',
   },
   {
     id: 'waiting-solo',
@@ -105,6 +111,7 @@ const registrations: SignupRegistration[] = [
     status: 'waitlisted',
     position: 2,
     createdAt: '2026-08-29T00:02:00Z',
+    updatedAt: '2026-08-29T00:02:00Z',
   },
 ];
 
@@ -145,32 +152,60 @@ async function loadPanel() {
   return view;
 }
 
-describe('organiser waiting-list deletion', () => {
+describe('organiser registration deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     signupMocks.getOwnedSignup.mockResolvedValue(signup);
     signupMocks.getSignupAccountSlug.mockResolvedValue('shaun');
     signupMocks.getSignupTemplates.mockResolvedValue([]);
     signupMocks.getOrganizerRegistrations.mockResolvedValue(registrations);
-    signupMocks.deleteOrganizerWaitlistedRegistration.mockResolvedValue(undefined);
+    signupMocks.deleteOrganizerRegistrationIfStatus.mockResolvedValue(undefined);
+    signupMocks.seedOrganizerSignupRoster.mockResolvedValue({ seeded: true });
+    signupMocks.updateOrganizerRegistration.mockResolvedValue(undefined);
   });
 
-  it('offers delete controls for waitlisted pairs and solos, but not confirmed teams', async () => {
+  it('offers organiser delete controls for confirmed, waiting, and solo registrations', async () => {
     await loadPanel();
 
-    expect(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove Shaun from waiting list' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove Confirmed Pair from waiting list' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Confirmed Pair from sign-up' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Shaun from sign-up' })).toBeInTheDocument();
+  });
+
+  it('lets the organiser edit a waiting registration on the canonical live list', async () => {
+    await loadPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Waiting Pair' }));
+
+    expect(screen.getByRole('heading', { name: 'Edit registration' })).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('Waiting Pair'), {
+      target: { value: 'Corrected waiting pair' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(signupMocks.updateOrganizerRegistration).toHaveBeenCalledWith(
+      'waiting-pair',
+      expect.objectContaining({
+        teamName: 'Corrected waiting pair',
+        playerOne: 'Alex',
+        playerTwo: 'Kriss',
+        contact: 'waiting@example.com',
+      }),
+      {
+        status: 'waitlisted',
+        updatedAt: '2026-08-29T00:01:00Z',
+        allowLocked: false,
+      },
+    ));
   });
 
   it('does not delete when the organiser cancels confirmation', async () => {
     await loadPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' }));
 
-    expect(screen.getByRole('heading', { name: 'Remove from waiting list?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Remove from sign-up?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(signupMocks.deleteOrganizerWaitlistedRegistration).not.toHaveBeenCalled();
+    expect(signupMocks.deleteOrganizerRegistrationIfStatus).not.toHaveBeenCalled();
     expect(screen.getByText('Waiting Pair')).toBeInTheDocument();
   });
 
@@ -179,30 +214,35 @@ describe('organiser waiting-list deletion', () => {
       .mockResolvedValueOnce(registrations)
       .mockResolvedValueOnce([registrations[0], registrations[2]]);
     await loadPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(signupMocks.deleteOrganizerWaitlistedRegistration).toHaveBeenCalledTimes(1));
-    expect(signupMocks.deleteOrganizerWaitlistedRegistration).toHaveBeenCalledWith('waiting-pair');
+    await waitFor(() => expect(signupMocks.deleteOrganizerRegistrationIfStatus).toHaveBeenCalledTimes(1));
+    expect(signupMocks.deleteOrganizerRegistrationIfStatus).toHaveBeenCalledWith(
+      'waiting-pair',
+      'waitlisted',
+      '2026-08-29T00:01:00Z',
+      false,
+    );
     await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Waiting Pair removed from the waiting list.')).toBeInTheDocument();
+    expect(await screen.findByText('Waiting Pair removed from this sign-up.')).toBeInTheDocument();
     expect(screen.queryByText('Waiting Pair')).not.toBeInTheDocument();
   });
 
   it('locks the confirmation while deleting and leaves the row visible on failure', async () => {
     let rejectDelete: (error: Error) => void = () => undefined;
-    signupMocks.deleteOrganizerWaitlistedRegistration.mockImplementationOnce(() =>
+    signupMocks.deleteOrganizerRegistrationIfStatus.mockImplementationOnce(() =>
       new Promise<void>((_resolve, reject) => {
         rejectDelete = reject;
       }));
     await loadPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     const busyButton = await screen.findByRole('button', { name: 'Removing…' });
     expect(busyButton).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
-    expect(signupMocks.deleteOrganizerWaitlistedRegistration).toHaveBeenCalledTimes(1);
+    expect(signupMocks.deleteOrganizerRegistrationIfStatus).toHaveBeenCalledTimes(1);
 
     await act(async () => rejectDelete(new Error('Could not remove this registration.')));
 
@@ -211,27 +251,23 @@ describe('organiser waiting-list deletion', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled();
   });
 
-  it('cannot delete a registration promoted while confirmation was open', async () => {
-    const promoted: SignupRegistration = {
-      ...registrations[1],
-      status: 'confirmed',
-      position: 2,
-    };
+  it('deletes by stable id even if the queue is rebalanced while confirmation is open', async () => {
     signupMocks.getOrganizerRegistrations
       .mockResolvedValueOnce(registrations)
-      .mockResolvedValueOnce([registrations[0], promoted, registrations[2]]);
-    signupMocks.deleteOrganizerWaitlistedRegistration.mockRejectedValueOnce(
-      new Error('This registration is no longer on the waiting list. Refresh and try again.'),
-    );
+      .mockResolvedValueOnce([registrations[0], registrations[2]]);
     await loadPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    expect(await screen.findByText('This registration is no longer on the waiting list. Refresh and try again.'))
-      .toBeInTheDocument();
+    expect(await screen.findByText('Waiting Pair removed from this sign-up.')).toBeInTheDocument();
+    expect(signupMocks.deleteOrganizerRegistrationIfStatus).toHaveBeenCalledWith(
+      'waiting-pair',
+      'waitlisted',
+      '2026-08-29T00:01:00Z',
+      false,
+    );
     await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('Waiting Pair')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove Waiting Pair from waiting list' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Waiting Pair')).not.toBeInTheDocument();
   });
 
   it('ignores an older refresh that resolves after the post-delete refresh', async () => {
@@ -246,10 +282,10 @@ describe('organiser waiting-list deletion', () => {
 
     view.rerender(panel({ refreshRegistrationsVersion: 1 }));
     await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from waiting list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Waiting Pair from sign-up' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    expect(await screen.findByText('Waiting Pair removed from the waiting list.')).toBeInTheDocument();
+    expect(await screen.findByText('Waiting Pair removed from this sign-up.')).toBeInTheDocument();
     expect(screen.queryByText('Waiting Pair')).not.toBeInTheDocument();
 
     await act(async () => resolveOldRefresh(registrations));
@@ -265,46 +301,17 @@ describe('online signup synchronisation regressions', () => {
     signupMocks.getSignupAccountSlug.mockResolvedValue('shaun');
     signupMocks.getSignupTemplates.mockResolvedValue([]);
     signupMocks.getOrganizerRegistrations.mockResolvedValue([registrations[0]]);
+    signupMocks.seedOrganizerSignupRoster.mockResolvedValue({ seeded: true });
   });
 
-  it('routes a renamed signup through stable-id reconciliation instead of emitting another add', async () => {
+  it('syncs every complete confirmed pair into the one tournament roster', async () => {
     signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, autoAddPairs: true });
-    const onAddTeams = vi.fn();
     const onSyncTeams = vi.fn();
-    const originalImportedTeam: Team = {
-      id: 'local-confirmed-1',
-      name: 'Confirmed Pair',
-      players: [
-        { id: 'player-tapia', name: 'Tapia' },
-        { id: 'player-coello', name: 'Coello' },
-      ],
-      createdAt: 1,
-      active: true,
-      signupPairKey: 'coello|tapia',
-      signupRegistrationId: 'confirmed-1',
-    };
-    const renamedImportedTeam: Team = {
-      ...originalImportedTeam,
-      name: 'Renamed Pair',
-      players: [
-        { ...originalImportedTeam.players[0], name: 'Renamed Tapia' },
-        { ...originalImportedTeam.players[1], name: 'Renamed Coello' },
-      ],
-      signupPairKey: 'renamed coello|renamed tapia',
-    };
-
-    const view = render(panel({ teams: [], onAddTeams, onSyncTeams }));
+    render(panel({ teams: [], onSyncTeams }));
     await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(1));
     expect(onSyncTeams.mock.calls[0][0]).toEqual([
       expect.objectContaining({ id: 'confirmed-1' }),
     ]);
-
-    view.rerender(panel({ teams: [originalImportedTeam], onAddTeams, onSyncTeams }));
-    await act(async () => undefined);
-    view.rerender(panel({ teams: [renamedImportedTeam], onAddTeams, onSyncTeams }));
-    await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(2));
-
-    expect(onAddTeams).not.toHaveBeenCalled();
   });
 
   it('does not reconcile a local organiser edit against the previous server snapshot', async () => {
@@ -338,7 +345,7 @@ describe('online signup synchronisation regressions', () => {
       }));
     const onSyncTeams = vi.fn();
     const view = render(panel({ teams: [originalImportedTeam], onSyncTeams }));
-    await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(1));
 
     view.rerender(panel({
       teams: [renamedImportedTeam],
@@ -348,7 +355,7 @@ describe('online signup synchronisation regressions', () => {
     await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalledTimes(2));
     await act(async () => undefined);
 
-    expect(onSyncTeams).not.toHaveBeenCalled();
+    expect(onSyncTeams).toHaveBeenCalledTimes(1);
 
     await act(async () => resolveFreshSnapshot([{
       ...registrations[0],
@@ -356,8 +363,15 @@ describe('online signup synchronisation regressions', () => {
       playerOne: 'Renamed Tapia',
       playerTwo: 'Renamed Coello',
     }]));
-    await act(async () => undefined);
-    expect(onSyncTeams).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSyncTeams).toHaveBeenCalledTimes(2));
+    expect(onSyncTeams.mock.calls[1][0]).toEqual([
+      expect.objectContaining({
+        id: 'confirmed-1',
+        teamName: 'Renamed Pair',
+        playerOne: 'Renamed Tapia',
+        playerTwo: 'Renamed Coello',
+      }),
+    ]);
   });
 
   it('does not let an older capacity write beat the latest expected team count', async () => {
@@ -407,17 +421,8 @@ describe('online signup synchronisation regressions', () => {
     expect(remoteCapacity).toBe(4);
   });
 
-  it('reserves online signup capacity for teams added manually by the organiser', async () => {
+  it('does not replay local teams into an existing online roster', async () => {
     signupMocks.getOwnedSignup.mockResolvedValue(signup);
-    signupMocks.saveSignupEvent.mockImplementation(async (input: SaveSignupInput) => ({
-      event: {
-        ...signup,
-        capacityTeams: input.capacityTeams,
-        capacityRevision: 2,
-      },
-      applied: true,
-      conflict: false,
-    }));
     const manualTeam: Team = {
       id: 'manual-team',
       name: 'Invited pair',
@@ -431,9 +436,125 @@ describe('online signup synchronisation regressions', () => {
 
     render(panel({ teams: [manualTeam] }));
 
-    await waitFor(() => expect(signupMocks.saveSignupEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ capacityTeams: 3 }),
+    await waitFor(() => expect(signupMocks.getOrganizerRegistrations).toHaveBeenCalled());
+    expect(signupMocks.seedOrganizerSignupRoster).not.toHaveBeenCalled();
+    expect(signupMocks.saveSignupEvent).not.toHaveBeenCalled();
+  });
+
+  it('never seeds again when an established sign-up is updated', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+    signupMocks.saveSignupEvent.mockResolvedValue({
+      event: { ...signup, capacityRevision: 2 },
+      applied: true,
+      conflict: false,
+    });
+
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Update sign-up page' }));
+
+    await waitFor(() => expect(signupMocks.saveSignupEvent).toHaveBeenCalledTimes(1));
+    expect(signupMocks.seedOrganizerSignupRoster).not.toHaveBeenCalled();
+  });
+
+  it('seeds an unseeded existing sign-up during initial load', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, rosterSeededAt: null });
+    const manualTeam: Team = {
+      id: 'manual-team',
+      name: 'Invited pair',
+      players: [
+        { id: 'manual-player-1', name: 'Manual One' },
+        { id: 'manual-player-2', name: 'Manual Two' },
+      ],
+      createdAt: 1,
+      active: true,
+    };
+
+    render(panel({ teams: [manualTeam] }));
+
+    await waitFor(() => expect(signupMocks.seedOrganizerSignupRoster).toHaveBeenCalledWith(
+      'signup-1',
+      [expect.objectContaining({
+        playerOne: 'Manual One',
+        playerTwo: 'Manual Two',
+        rank: 1,
+      })],
     ));
+  });
+
+  it('adopts local teams once when the online sign-up is first published', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(null);
+    signupMocks.saveSignupEvent.mockResolvedValue({
+      event: { ...signup, rosterSeededAt: null },
+      applied: true,
+      conflict: false,
+    });
+    const manualTeam: Team = {
+      id: 'manual-team',
+      name: 'Invited pair',
+      players: [
+        { id: 'manual-player-1', name: 'Manual One' },
+        { id: 'manual-player-2', name: 'Manual Two' },
+      ],
+      createdAt: 1,
+      active: true,
+    };
+
+    render(panel({ teams: [manualTeam] }));
+    fireEvent.click(await screen.findByRole('button', { name: /Online team sign-up/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish sign-up page' }));
+
+    await waitFor(() => expect(signupMocks.seedOrganizerSignupRoster).toHaveBeenCalledWith(
+      'signup-1',
+      [expect.objectContaining({
+        playerOne: 'Manual One',
+        playerTwo: 'Manual Two',
+        rank: 1,
+      })],
+    ));
+  });
+
+  it('durably seeds an empty roster on first publish', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(null);
+    signupMocks.saveSignupEvent.mockResolvedValue({
+      event: { ...signup, rosterSeededAt: null },
+      applied: true,
+      conflict: false,
+    });
+
+    render(panel());
+    fireEvent.click(await screen.findByRole('button', { name: /Online team sign-up/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish sign-up page' }));
+
+    await waitFor(() => expect(signupMocks.seedOrganizerSignupRoster).toHaveBeenCalledWith(
+      'signup-1',
+      [],
+    ));
+  });
+
+  it('retries the one-time seed safely after a publish network failure', async () => {
+    const published = { ...signup, rosterSeededAt: null };
+    signupMocks.getOwnedSignup.mockResolvedValue(null);
+    signupMocks.saveSignupEvent.mockResolvedValue({
+      event: published,
+      applied: true,
+      conflict: false,
+    });
+    signupMocks.seedOrganizerSignupRoster
+      .mockRejectedValueOnce(new Error('Connection lost after publishing.'))
+      .mockResolvedValueOnce({ seeded: false });
+
+    render(panel());
+    fireEvent.click(await screen.findByRole('button', { name: /Online team sign-up/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish sign-up page' }));
+
+    expect(await screen.findByText('Connection lost after publishing.')).toBeInTheDocument();
+    expect(signupMocks.seedOrganizerSignupRoster).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update sign-up page' }));
+
+    await waitFor(() => expect(signupMocks.seedOrganizerSignupRoster).toHaveBeenCalledTimes(2));
+    expect(signupMocks.seedOrganizerSignupRoster.mock.calls[1]).toEqual(['signup-1', []]);
+    expect(await screen.findByText('Sign-up page updated.')).toBeInTheDocument();
   });
 
   it('reloads the authoritative form after a save conflict instead of enabling a stale retry', async () => {

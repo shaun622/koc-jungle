@@ -5408,6 +5408,12 @@ button {
   line-height: 1.4;
 }
 .signup-textarea { min-height: 70px; resize: vertical; line-height: 1.45; }
+.setup-team-add-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 6px;
+  margin-bottom: 12px;
+}
 .signup-admin-actions {
   display: flex;
   flex-wrap: wrap;
@@ -5492,6 +5498,7 @@ button {
 }
 .signup-position.waitlisted { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, var(--bg)); }
 .signup-contact { color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+.signup-admin-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .signup-admin-delete { width: 36px; height: 36px; }
 .signup-auto-status {
   display: grid;
@@ -5703,7 +5710,8 @@ button {
 .signup-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .signup-public-result { padding: 18px 8px; text-align: center; }
 .signup-public-result > span { width: 54px; height: 54px; margin: 0 auto 13px; display: grid; place-items: center; border-radius: 50%; font-size: 23px; font-weight: 900; }
-.signup-public-result.confirmed > span { color: #061007; background: #9eff3d; }
+.signup-public-result.confirmed > span,
+.signup-public-result.looking > span { color: #061007; background: #9eff3d; }
 .signup-public-result.waitlisted > span { color: #061007; background: #ffb72e; }
 .signup-public-result h2 { margin: 0; font-size: 25px; }
 .signup-public-result p { margin: 8px auto 18px; max-width: 360px; color: #9db1bc; line-height: 1.55; }
@@ -5717,6 +5725,8 @@ button {
 .signup-public-error > div { width: 62px; height: 62px; margin: auto; }
 
 @media (max-width: 760px) {
+  .setup-team-add-form { grid-template-columns: 1fr 1fr; }
+  .setup-team-add-form .team-add-button { grid-column: 1 / -1; }
   .signup-template-heading { display: block; }
   .signup-template-heading small { display: block; margin-top: 3px; text-align: left; }
   .signup-template-controls { grid-template-columns: 1fr 1fr; }
@@ -5730,7 +5740,7 @@ button {
   .signup-admin-summary > div:last-child { grid-column: 1 / -1; }
   .signup-admin-row { grid-template-columns: 30px minmax(0, 1fr) auto; }
   .signup-contact { grid-column: 2; text-align: left; }
-  .signup-admin-delete { grid-column: 3; grid-row: 1 / span 2; }
+  .signup-admin-row-actions { grid-column: 3; grid-row: 1 / span 2; }
   .signup-public { padding: 16px 12px 26px; }
   .signup-public-header { margin-bottom: 14px; padding: 0 4px; }
   .signup-public-hero { border-radius: 17px; }
@@ -5739,6 +5749,8 @@ button {
 }
 
 @media (max-width: 440px) {
+  .setup-team-add-form { grid-template-columns: 1fr; }
+  .setup-team-add-form .team-add-button { grid-column: auto; }
   .signup-admin-toggle { grid-template-columns: 36px minmax(0, 1fr); }
   .signup-admin-toggle-meta { grid-column: 2; }
   .signup-public-team { grid-template-columns: 31px minmax(0, 1fr); }

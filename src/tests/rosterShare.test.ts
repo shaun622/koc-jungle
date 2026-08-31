@@ -41,14 +41,14 @@ const signup: SignupEvent = {
   venue: 'Jungle Padel Sanur',
   startsAt: null,
   endsAt: null,
-  // One tournament place was filled manually, so only three were offered by
-  // the public link. The shared tournament roster still reports four places.
-  capacityTeams: 3,
+  capacityTeams: 4,
   capacityRevision: 1,
   details: '',
   prizes: '',
   isOpen: true,
   autoAddPairs: true,
+    rosterSeededAt: '2026-08-30T00:00:00.000Z',
+    rosterLockedAt: null,
 };
 
 const registrations: SignupRegistration[] = [
@@ -115,5 +115,68 @@ describe('plain-text roster sharing', () => {
     expect(text).toContain('10. Team 10');
     expect(text).toContain('11. Team 11');
     expect(text).not.toContain('🔟');
+  });
+
+  it('never repeats a local roster pair in the waiting list', () => {
+    const stableIdentityTeam = {
+      ...team('team-stable', 'Organiser renamed this team', 'New One', 'New Two'),
+      signupRegistrationId: 'waiting-stable',
+    };
+    const legacyUnlinkedTeam = team(
+      'team-legacy',
+      'Legacy local team',
+      '  KRISS',
+      'Alex  ',
+    );
+    const actualWaiting: SignupRegistration = {
+      id: 'waiting-actual',
+      signupEventId: signup.id,
+      teamName: 'Actually waiting',
+      playerOne: 'Waiting One',
+      playerTwo: 'Waiting Two',
+      status: 'waitlisted',
+      position: 3,
+      createdAt: '2026-08-25T00:03:00Z',
+    };
+    const text = buildRosterShareText({
+      event,
+      signup,
+      teams: [stableIdentityTeam, legacyUnlinkedTeam],
+      registrations: [
+        {
+          ...actualWaiting,
+          id: 'waiting-stable',
+          teamName: 'Old public team name',
+          playerOne: 'Old One',
+          playerTwo: 'Old Two',
+          position: 1,
+        },
+        {
+          ...actualWaiting,
+          id: 'waiting-legacy',
+          teamName: 'Legacy server copy',
+          playerOne: 'alex',
+          playerTwo: 'kriss',
+          position: 2,
+        },
+        actualWaiting,
+        actualWaiting,
+      ],
+    });
+
+    expect(text.match(/Organiser renamed this team/g)).toHaveLength(1);
+    expect(text.match(/Legacy local team/g)).toHaveLength(1);
+    expect(text).not.toContain('Old public team name');
+    expect(text).not.toContain('Legacy server copy');
+    expect(text.match(/Actually waiting/g)).toHaveLength(1);
+    expect(text).toContain('⏳ WAITING LIST');
+  });
+
+  it('does not count or print inactive local teams as confirmed', () => {
+    const inactive = { ...team('inactive', 'Dropped team', 'Gone One', 'Gone Two'), active: false };
+    const text = buildRosterShareText({ event, teams: [inactive] });
+
+    expect(text).toContain('👥 0 of 4 teams confirmed');
+    expect(text).not.toContain('Dropped team');
   });
 });
