@@ -5365,6 +5365,65 @@ button {
   font-size: 11px;
   line-height: 1.45;
 }
+.signup-date-time-field {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 76%, var(--bg));
+}
+.signup-date-time-field > label {
+  display: block;
+  margin-bottom: 9px;
+  color: color-mix(in srgb, var(--green) 66%, var(--text));
+  font-weight: 800;
+}
+.signup-date-time-control {
+  display: grid;
+  grid-template-columns: minmax(145px, 1.25fr) minmax(120px, .75fr);
+  gap: 8px;
+}
+.signup-date-time-control label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.signup-date-time-control label > span {
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.signup-date-time-control .setup-input {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.signup-duration-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+.signup-duration-row > span {
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.signup-duration-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.signup-duration-row .btn {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
 .signup-import-mode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5795,6 +5854,8 @@ button {
   .signup-template-controls > input { grid-column: 1 / -1; }
   .signup-admin-form { grid-template-columns: 1fr; }
   .signup-admin-form .signup-wide { grid-column: auto; }
+  .signup-duration-row { align-items: flex-start; flex-direction: column; }
+  .signup-duration-row > div { justify-content: flex-start; }
   .signup-admin-link-row { grid-template-columns: minmax(0, 1fr) auto; }
   .signup-admin-link-row > a { grid-column: 1 / -1; text-align: center; }
   .signup-admin-summary { grid-template-columns: 1fr 1fr; }
@@ -5815,6 +5876,7 @@ button {
   .setup-team-add-form .team-add-button { grid-column: auto; }
   .signup-admin-toggle { grid-template-columns: 36px minmax(0, 1fr); }
   .signup-admin-toggle-meta { grid-column: 2; }
+  .signup-date-time-control { grid-template-columns: 1fr; }
   .signup-public-team { grid-template-columns: 31px minmax(0, 1fr); }
   .signup-public-row-actions { grid-column: 2; justify-items: start; }
   .signup-public-meta { display: grid; }

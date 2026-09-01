@@ -306,6 +306,32 @@ describe('online signup synchronisation regressions', () => {
     signupMocks.seedOrganizerSignupRoster.mockResolvedValue({ seeded: true });
   });
 
+  it('uses clear date controls and five-minute time intervals', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+
+    renderPanel();
+    const startsTime = await screen.findByRole('combobox', { name: 'Starts time' });
+    const options = Array.from((startsTime as HTMLSelectElement).options).map((option) => option.value);
+
+    expect(screen.getByLabelText('Starts date')).toHaveAttribute('type', 'date');
+    expect(screen.getByLabelText('Ends date')).toHaveAttribute('type', 'date');
+    expect(options).toContain('18:00');
+    expect(options).toContain('18:05');
+    expect(options).not.toContain('18:01');
+  });
+
+  it('sets the end time from a useful duration shortcut', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue(signup);
+
+    renderPanel();
+    fireEvent.change(await screen.findByLabelText('Starts date'), { target: { value: '2026-09-07' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Starts time' }), { target: { value: '18:05' } });
+    fireEvent.click(screen.getByRole('button', { name: '2 hours' }));
+
+    expect(screen.getByLabelText('Ends date')).toHaveValue('2026-09-07');
+    expect(screen.getByRole('combobox', { name: 'Ends time' })).toHaveValue('20:05');
+  });
+
   it('syncs every complete confirmed pair into the one tournament roster', async () => {
     signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, autoAddPairs: true });
     const onSyncTeams = vi.fn();

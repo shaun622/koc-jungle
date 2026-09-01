@@ -42,6 +42,76 @@ function toIso(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+const FIVE_MINUTE_TIMES = Array.from({ length: 24 * 12 }, (_, index) => {
+  const hours = Math.floor(index / 12);
+  const minutes = (index % 12) * 5;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+});
+
+function formatTimeOption(value: string): string {
+  const [hours, minutes] = value.split(':').map(Number);
+  const suffix = hours >= 12 ? 'pm' : 'am';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${String(minutes).padStart(2, '0')} ${suffix}`;
+}
+
+function DateTimeControl({
+  label,
+  value,
+  defaultTime,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  defaultTime: string;
+  onChange: (value: string) => void;
+}) {
+  const dateValue = value.slice(0, 10);
+  const timeValue = value.slice(11, 16);
+  const timeOptions = timeValue && !FIVE_MINUTE_TIMES.includes(timeValue)
+    ? [...FIVE_MINUTE_TIMES, timeValue].sort()
+    : FIVE_MINUTE_TIMES;
+
+  return (
+    <div className="setup-field signup-date-time-field">
+      <label>{label}</label>
+      <div className="signup-date-time-control">
+        <label className="signup-date-part">
+          <span>Date</span>
+          <input
+            className="setup-input"
+            type="date"
+            aria-label={`${label} date`}
+            value={dateValue}
+            onChange={(event) => {
+              const date = event.target.value;
+              onChange(date ? `${date}T${timeValue || defaultTime}` : '');
+            }}
+          />
+        </label>
+        <label className="signup-time-part">
+          <span>Time</span>
+          <select
+            className="setup-input"
+            aria-label={`${label} time`}
+            value={timeValue}
+            onChange={(event) => {
+              const time = event.target.value;
+              const date = dateValue || inputDateTime(new Date().toISOString()).slice(0, 10);
+              onChange(time ? `${date}T${time}` : '');
+            }}
+          >
+            <option value="">Select time</option>
+            {timeOptions.map((time) => (
+              <option value={time} key={time}>{formatTimeOption(time)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function formatWhen(startsAt: string | null, endsAt: string | null): string {
   if (!startsAt) return 'Date not set';
   const start = new Date(startsAt);
@@ -154,6 +224,16 @@ export function EventSignupPanel({
   requestedRosterVersionRef.current = requestedRosterVersion;
   const signupMutationQueue = useRef<Promise<SignupEvent | null>>(Promise.resolve(null));
   const onlineSignupCapacity = expectedTeams;
+
+  function setEventDuration(minutes: number) {
+    const start = new Date(startsAt);
+    if (Number.isNaN(start.getTime())) {
+      setError('Choose the start date and time first.');
+      return;
+    }
+    setEndsAt(inputDateTime(new Date(start.getTime() + minutes * 60_000).toISOString()));
+    setError(null);
+  }
 
   const enqueueSignupMutation = useCallback((
     fallback: SignupEvent | null,
@@ -701,13 +781,16 @@ export function EventSignupPanel({
                   <label>Venue</label>
                   <input className="setup-input" value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
-                <div className="setup-field">
-                  <label>Starts</label>
-                  <input className="setup-input" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-                </div>
-                <div className="setup-field">
-                  <label>Ends</label>
-                  <input className="setup-input" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+                <DateTimeControl label="Starts" value={startsAt} defaultTime="18:00" onChange={setStartsAt} />
+                <DateTimeControl label="Ends" value={endsAt} defaultTime="20:00" onChange={setEndsAt} />
+                <div className="signup-duration-row signup-wide">
+                  <span>Set duration from start</span>
+                  <div>
+                    <button className="btn ghost" type="button" onClick={() => setEventDuration(60)}>1 hour</button>
+                    <button className="btn ghost" type="button" onClick={() => setEventDuration(90)}>1.5 hours</button>
+                    <button className="btn ghost" type="button" onClick={() => setEventDuration(120)}>2 hours</button>
+                    <button className="btn ghost" type="button" onClick={() => setEventDuration(180)}>3 hours</button>
+                  </div>
                 </div>
                 <div className="setup-field">
                   <label>Team capacity</label>
