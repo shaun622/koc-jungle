@@ -332,6 +332,23 @@ describe('online signup synchronisation regressions', () => {
     expect(screen.getByRole('combobox', { name: 'Ends time' })).toHaveValue('20:05');
   });
 
+  it('highlights and focuses the exact schedule field that needs fixing', async () => {
+    signupMocks.getOwnedSignup.mockResolvedValue({
+      ...signup,
+      startsAt: '2026-09-07T12:00:00.000Z',
+      endsAt: '2026-09-07T10:00:00.000Z',
+    });
+
+    renderPanel();
+    const endsDate = await screen.findByLabelText('Ends date');
+    fireEvent.click(screen.getByRole('button', { name: 'Update sign-up page' }));
+
+    expect(screen.getByText('End time must be after the start time.')).toBeInTheDocument();
+    expect(endsDate).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(endsDate).toHaveFocus());
+    expect(signupMocks.saveSignupEvent).not.toHaveBeenCalled();
+  });
+
   it('syncs every complete confirmed pair into the one tournament roster', async () => {
     signupMocks.getOwnedSignup.mockResolvedValue({ ...signup, autoAddPairs: true });
     const onSyncTeams = vi.fn();

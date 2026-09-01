@@ -5371,6 +5371,19 @@ button {
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 76%, var(--bg));
 }
+.signup-admin-form .setup-field.has-error .setup-input,
+.signup-date-time-field.has-error {
+  border-color: color-mix(in srgb, var(--red) 70%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 14%, transparent);
+}
+.signup-field-error {
+  display: block;
+  margin-top: 6px;
+  color: color-mix(in srgb, var(--red) 82%, white);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
 .signup-date-time-field > label {
   display: block;
   margin-bottom: 9px;

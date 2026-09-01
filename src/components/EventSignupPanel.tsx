@@ -59,11 +59,15 @@ function DateTimeControl({
   label,
   value,
   defaultTime,
+  fieldName,
+  error,
   onChange,
 }: {
   label: string;
   value: string;
   defaultTime: string;
+  fieldName: 'startsAt' | 'endsAt';
+  error?: string;
   onChange: (value: string) => void;
 }) {
   const dateValue = value.slice(0, 10);
@@ -73,7 +77,10 @@ function DateTimeControl({
     : FIVE_MINUTE_TIMES;
 
   return (
-    <div className="setup-field signup-date-time-field">
+    <div
+      className={'setup-field signup-date-time-field ' + (error ? 'has-error' : '')}
+      data-signup-field={fieldName}
+    >
       <label>{label}</label>
       <div className="signup-date-time-control">
         <label className="signup-date-part">
@@ -82,6 +89,7 @@ function DateTimeControl({
             className="setup-input"
             type="date"
             aria-label={`${label} date`}
+            aria-invalid={Boolean(error)}
             value={dateValue}
             onChange={(event) => {
               const date = event.target.value;
@@ -94,6 +102,7 @@ function DateTimeControl({
           <select
             className="setup-input"
             aria-label={`${label} time`}
+            aria-invalid={Boolean(error)}
             value={timeValue}
             onChange={(event) => {
               const time = event.target.value;
@@ -108,8 +117,26 @@ function DateTimeControl({
           </select>
         </label>
       </div>
+      {error && <small className="signup-field-error">{error}</small>}
     </div>
   );
+}
+
+type SignupFormField = 'title' | 'accountSlug' | 'startsAt' | 'endsAt';
+
+function saveErrorField(message: string): SignupFormField | null {
+  if (/end time|ends? at|after (the )?start/i.test(message)) return 'endsAt';
+  if (/start date|start time|starts? at/i.test(message)) return 'startsAt';
+  if (/account link|account name|account slug/i.test(message)) return 'accountSlug';
+  if (/event name|event title|public title/i.test(message)) return 'title';
+  return null;
+}
+
+function friendlySignupError(message: string): string {
+  if (/column reference|ambiguous|sqlstate|database error/i.test(message)) {
+    return 'The event details were saved, but the team list could not be refreshed. Reload the page and try again.';
+  }
+  return message;
 }
 
 function formatWhen(startsAt: string | null, endsAt: string | null): string {
@@ -204,6 +231,7 @@ export function EventSignupPanel({
   const [registrationEditTarget, setRegistrationEditTarget] = useState<SignupRegistration | null>(null);
   const [deletingRegistrationId, setDeletingRegistrationId] = useState<string | null>(null);
   const [editingRegistrationId, setEditingRegistrationId] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupFormField, string>>>({});
 
   const [title, setTitle] = useState(event.name);
   const [accountSlug, setAccountSlug] = useState('organiser');
@@ -225,14 +253,34 @@ export function EventSignupPanel({
   const signupMutationQueue = useRef<Promise<SignupEvent | null>>(Promise.resolve(null));
   const onlineSignupCapacity = expectedTeams;
 
+  function clearFieldError(field: SignupFormField) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function showFieldError(field: SignupFormField, message: string) {
+    setFieldErrors((current) => ({ ...current, [field]: message }));
+    setError(null);
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>(
+        `[data-signup-field="${field}"] input, [data-signup-field="${field}"] select`,
+      )?.focus();
+    }, 0);
+  }
+
   function setEventDuration(minutes: number) {
     const start = new Date(startsAt);
     if (Number.isNaN(start.getTime())) {
-      setError('Choose the start date and time first.');
+      showFieldError('startsAt', 'Choose the start date and time first.');
       return;
     }
     setEndsAt(inputDateTime(new Date(start.getTime() + minutes * 60_000).toISOString()));
     setError(null);
+    clearFieldError('endsAt');
   }
 
   const enqueueSignupMutation = useCallback((
@@ -330,6 +378,7 @@ export function EventSignupPanel({
     setVenue(event.venue ?? '');
     setStartsAt('');
     setEndsAt('');
+    setFieldErrors({});
     setDetails('');
     setPrizes('');
     setSelectedTemplateId('');
@@ -465,6 +514,7 @@ export function EventSignupPanel({
     setPrizes(template.prizes);
     setMessage(`${template.name} loaded. Check the date, then update the sign-up page.`);
     setError(null);
+    setFieldErrors({});
   }
 
   async function saveCurrentTemplate() {
@@ -527,16 +577,25 @@ export function EventSignupPanel({
     if (!auth.user) return;
     const ownerUserId = auth.user.id;
     if (!title.trim()) {
-      setError('Give the event a name first.');
+      showFieldError('title', 'Give the event a name first.');
       return;
     }
     if (!accountSlug.trim()) {
-      setError('Give the account link a name first.');
+      showFieldError('accountSlug', 'Give the account link a name first.');
+      return;
+    }
+    if (endsAt && !startsAt) {
+      showFieldError('startsAt', 'Choose the start date and time before setting an end time.');
+      return;
+    }
+    if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+      showFieldError('endsAt', 'End time must be after the start time.');
       return;
     }
     setSaving(true);
     setMessage(null);
     setError(null);
+    setFieldErrors({});
     try {
       const result = await enqueueSignupMutation(signup, event.id, (current) =>
         saveSignupEvent({
@@ -581,7 +640,10 @@ export function EventSignupPanel({
       await refreshRegistrations(row.id);
       setMessage(signup ? 'Sign-up page updated.' : 'Sign-up page is live. Share the link with every group.');
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      const field = saveErrorField(message);
+      if (field) showFieldError(field, message);
+      else setError(friendlySignupError(message));
     } finally {
       setSaving(false);
     }
@@ -761,28 +823,68 @@ export function EventSignupPanel({
               </div>
 
               <div className="signup-admin-form">
-                <div className="setup-field signup-wide">
+                <div
+                  className={'setup-field signup-wide ' + (fieldErrors.accountSlug ? 'has-error' : '')}
+                  data-signup-field="accountSlug"
+                >
                   <label>Account link name</label>
                   <input
                     className="setup-input"
+                    aria-invalid={Boolean(fieldErrors.accountSlug)}
                     value={accountSlug}
-                    onChange={(e) => setAccountSlug(normaliseSignupLinkPart(e.target.value, ''))}
+                    onChange={(e) => {
+                      clearFieldError('accountSlug');
+                      setAccountSlug(normaliseSignupLinkPart(e.target.value, ''));
+                    }}
                     placeholder="jungle-padel"
                   />
+                  {fieldErrors.accountSlug && <small className="signup-field-error">{fieldErrors.accountSlug}</small>}
                   <small className="setup-help">
                     Your links start with signup/{accountSlug || 'account-name'}/
                   </small>
                 </div>
-                <div className="setup-field signup-wide">
+                <div
+                  className={'setup-field signup-wide ' + (fieldErrors.title ? 'has-error' : '')}
+                  data-signup-field="title"
+                >
                   <label>Public event title</label>
-                  <input className="setup-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+                  <input
+                    className="setup-input"
+                    aria-invalid={Boolean(fieldErrors.title)}
+                    value={title}
+                    onChange={(e) => {
+                      clearFieldError('title');
+                      setTitle(e.target.value);
+                    }}
+                  />
+                  {fieldErrors.title && <small className="signup-field-error">{fieldErrors.title}</small>}
                 </div>
                 <div className="setup-field signup-wide">
                   <label>Venue</label>
                   <input className="setup-input" value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
-                <DateTimeControl label="Starts" value={startsAt} defaultTime="18:00" onChange={setStartsAt} />
-                <DateTimeControl label="Ends" value={endsAt} defaultTime="20:00" onChange={setEndsAt} />
+                <DateTimeControl
+                  label="Starts"
+                  fieldName="startsAt"
+                  value={startsAt}
+                  defaultTime="18:00"
+                  error={fieldErrors.startsAt}
+                  onChange={(value) => {
+                    clearFieldError('startsAt');
+                    setStartsAt(value);
+                  }}
+                />
+                <DateTimeControl
+                  label="Ends"
+                  fieldName="endsAt"
+                  value={endsAt}
+                  defaultTime="20:00"
+                  error={fieldErrors.endsAt}
+                  onChange={(value) => {
+                    clearFieldError('endsAt');
+                    setEndsAt(value);
+                  }}
+                />
                 <div className="signup-duration-row signup-wide">
                   <span>Set duration from start</span>
                   <div>
