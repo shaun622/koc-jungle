@@ -23,8 +23,8 @@ const publicSignup = {
     eventSlug: '31-aug-2026-silver-king-of-the-court',
     title: 'Silver King of the Court',
     venue: 'Jungle Padel Sanur',
-    startsAt: '2026-08-31T10:00:00.000Z',
-    endsAt: '2026-08-31T12:00:00.000Z',
+    startsAt: '2099-08-31T10:00:00.000Z',
+    endsAt: '2099-08-31T12:00:00.000Z',
     capacityTeams: 16,
     details: '',
     prizes: '',
@@ -165,5 +165,41 @@ describe('public sign-up loading', () => {
     expect(screen.getByText('LOOKING FOR A PARTNER')).toBeInTheDocument();
     expect(screen.getAllByText('NEEDS PARTNER')).toHaveLength(2);
     expect(screen.getAllByText('PAIR · WAITING')).toHaveLength(1);
+  });
+
+  it('shows the live countdown before an event starts', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2099-08-29T08:57:56.000Z'));
+    signupMocks.getPublicSignup.mockResolvedValue(publicSignup);
+
+    renderSignup();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('EVENT STARTS IN')).toBeInTheDocument();
+    expect(screen.getByText('Days').closest('.signup-public-countdown-unit')).toHaveTextContent('02Days');
+    expect(screen.getByText('Hours').closest('.signup-public-countdown-unit')).toHaveTextContent('01Hours');
+    expect(screen.getByText('Minutes').closest('.signup-public-countdown-unit')).toHaveTextContent('02Minutes');
+    expect(screen.getByText('Seconds').closest('.signup-public-countdown-unit')).toHaveTextContent('04Seconds');
+  });
+
+  it('closes registration when the event start time has passed', async () => {
+    signupMocks.getPublicSignup.mockResolvedValue({
+      ...publicSignup,
+      event: {
+        ...publicSignup.event,
+        startsAt: '2020-08-31T10:00:00.000Z',
+        endsAt: '2020-08-31T12:00:00.000Z',
+        isOpen: true,
+      },
+    });
+
+    renderSignup();
+
+    expect(await screen.findByText('EVENT STARTED')).toBeInTheDocument();
+    expect(screen.getByText('Registration closed')).toBeInTheDocument();
+    expect(screen.getByText('This event has started, so registrations are closed.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Register our pair' })).not.toBeInTheDocument();
   });
 });

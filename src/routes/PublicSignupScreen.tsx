@@ -34,6 +34,33 @@ function publicLoadError(error: unknown): string {
   return message;
 }
 
+interface CountdownParts {
+  started: boolean;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+export function getCountdownParts(startsAt: string | null, now: number): CountdownParts | null {
+  if (!startsAt) return null;
+  const target = Date.parse(startsAt);
+  if (!Number.isFinite(target)) return null;
+
+  const remaining = Math.max(0, target - now);
+  return {
+    started: target <= now,
+    days: Math.floor(remaining / 86_400_000),
+    hours: Math.floor((remaining % 86_400_000) / 3_600_000),
+    minutes: Math.floor((remaining % 3_600_000) / 60_000),
+    seconds: Math.floor((remaining % 60_000) / 1_000),
+  };
+}
+
+function countdownValue(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
 export function PublicSignupScreen() {
   const { accountSlug = '', slug = '' } = useParams();
   const navigate = useNavigate();
@@ -55,6 +82,7 @@ export function PublicSignupScreen() {
   const [joinTarget, setJoinTarget] = useState<SignupRegistration | null>(null);
   const [joinName, setJoinName] = useState('');
   const [joinContact, setJoinContact] = useState('');
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   const routeKey = `${accountSlug}/${slug}`;
   const currentRouteKey = useRef(routeKey);
@@ -125,6 +153,15 @@ export function PublicSignupScreen() {
     if (accountSlug || !data?.event.accountSlug || !data.event.eventSlug) return;
     navigate(`/signup/${data.event.accountSlug}/${data.event.eventSlug}`, { replace: true });
   }, [accountSlug, data, navigate]);
+
+  useEffect(() => {
+    const startsAt = data?.event.startsAt;
+    if (!startsAt || !Number.isFinite(Date.parse(startsAt))) return;
+
+    setClockNow(Date.now());
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [data?.event.startsAt]);
 
   async function register() {
     if (!data || website) return;
@@ -227,7 +264,8 @@ export function PublicSignupScreen() {
     confirmedPairCount,
     pairSpacesLeft: spaces,
   } = buildSignupRosterView(data.registrations, data.event.capacityTeams);
-  const registrationsOpen = data.event.isOpen;
+  const countdown = getCountdownParts(data.event.startsAt, clockNow);
+  const registrationsOpen = data.event.isOpen && !countdown?.started;
 
   function rosterRow(
     registration: SignupRegistration,
@@ -272,11 +310,42 @@ export function PublicSignupScreen() {
           <span>{formatDateTime(data.event.startsAt)}</span>
           {data.event.venue && <span>{data.event.venue}</span>}
         </div>
-        <div className={'signup-public-availability ' + (spaces > 0 ? 'open' : 'waiting')}>
-          <strong>{spaces > 0 ? `${spaces} team space${spaces === 1 ? '' : 's'} left` : 'Confirmed teams full'}</strong>
-          <span>{spaces > 0
-            ? 'Register a pair, or join the partner list solo.'
-            : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
+        {countdown && (
+          <div
+            className={'signup-public-countdown ' + (countdown.started ? 'started' : '')}
+            aria-label={countdown.started ? 'Event started' : 'Countdown to event start'}
+          >
+            <span className="signup-public-countdown-label">
+              {countdown.started ? 'EVENT STARTED' : 'EVENT STARTS IN'}
+            </span>
+            <div className="signup-public-countdown-units" aria-live="polite">
+              {([
+                ['Days', countdown.days],
+                ['Hours', countdown.hours],
+                ['Minutes', countdown.minutes],
+                ['Seconds', countdown.seconds],
+              ] as const).map(([label, value]) => (
+                <span className="signup-public-countdown-unit" key={label}>
+                  <strong>{countdownValue(value)}</strong>
+                  <small>{label}</small>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className={'signup-public-availability ' + (!registrationsOpen ? 'closed' : spaces > 0 ? 'open' : 'waiting')}>
+          <strong>{!registrationsOpen
+            ? 'Registration closed'
+            : spaces > 0
+              ? `${spaces} team space${spaces === 1 ? '' : 's'} left`
+              : 'Confirmed teams full'}</strong>
+          <span>{!registrationsOpen
+            ? countdown?.started
+              ? 'This event has already started.'
+              : 'Registrations have been closed by the organiser.'
+            : spaces > 0
+              ? 'Register a pair, or join the partner list solo.'
+              : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
         </div>
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}
         {data.event.prizes && (
@@ -377,8 +446,12 @@ export function PublicSignupScreen() {
                       : 'Join the waiting list'}</h2>
                 </div>
               </div>
-              {!data.event.isOpen ? (
-                <div className="signup-public-closed">Registrations are currently closed by the organiser.</div>
+              {!registrationsOpen ? (
+                <div className="signup-public-closed">
+                  {countdown?.started
+                    ? 'This event has started, so registrations are closed.'
+                    : 'Registrations are currently closed by the organiser.'}
+                </div>
               ) : (
                 <div className="signup-public-form">
                   <div className="signup-public-mode" role="group" aria-label="Sign-up type">

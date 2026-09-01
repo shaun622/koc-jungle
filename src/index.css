@@ -5590,6 +5590,55 @@ button {
   border: 1px solid #1c4054;
   font-size: 13px;
 }
+.signup-public-countdown {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(158, 255, 61, .28);
+  border-radius: 14px;
+  background: linear-gradient(100deg, rgba(158, 255, 61, .08), rgba(7, 31, 43, .72));
+}
+.signup-public-countdown-label {
+  color: #bdf28a;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+.signup-public-countdown-units {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(58px, 1fr));
+  gap: 8px;
+}
+.signup-public-countdown-unit {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  background: rgba(2, 13, 21, .55);
+  border: 1px solid rgba(96, 139, 157, .25);
+}
+.signup-public-countdown-unit strong {
+  color: #f5f7f8;
+  font-family: var(--font-mono);
+  font-size: clamp(20px, 3vw, 29px);
+  line-height: 1;
+}
+.signup-public-countdown-unit small {
+  color: #8fa8b5;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.signup-public-countdown.started {
+  border-color: rgba(255, 183, 46, .34);
+  background: rgba(255, 183, 46, .07);
+}
+.signup-public-countdown.started .signup-public-countdown-label { color: #ffb72e; }
 .signup-public-availability {
   margin-top: 18px;
   padding: 12px 14px;
@@ -5604,6 +5653,8 @@ button {
 .signup-public-availability.open strong { color: #edf4f6; }
 .signup-public-availability.waiting { border-color: rgba(255, 183, 46, .45); background: rgba(255, 183, 46, .08); }
 .signup-public-availability.waiting strong { color: #ffb72e; }
+.signup-public-availability.closed { border-color: rgba(255, 183, 46, .45); background: rgba(255, 183, 46, .08); }
+.signup-public-availability.closed strong { color: #ffb72e; }
 .signup-public-copy,
 .signup-public-prizes p { white-space: pre-line; color: #c3d1d8; line-height: 1.6; }
 .signup-public-copy { max-width: 760px; margin: 18px 0 0; font-size: 15px; }
@@ -5754,6 +5805,7 @@ button {
   .signup-public { padding: 16px 12px 26px; }
   .signup-public-header { margin-bottom: 14px; padding: 0 4px; }
   .signup-public-hero { border-radius: 17px; }
+  .signup-public-countdown { grid-template-columns: 1fr; gap: 10px; }
   .signup-public-grid { grid-template-columns: 1fr; }
   .signup-public-form-card { order: -1; }
 }
@@ -5766,6 +5818,10 @@ button {
   .signup-public-team { grid-template-columns: 31px minmax(0, 1fr); }
   .signup-public-row-actions { grid-column: 2; justify-items: start; }
   .signup-public-meta { display: grid; }
+  .signup-public-countdown { padding: 12px; }
+  .signup-public-countdown-units { gap: 5px; }
+  .signup-public-countdown-unit { padding: 8px 3px; }
+  .signup-public-countdown-unit small { font-size: 8px; letter-spacing: .04em; }
 }
 
 /* Rotate-to-mirror hint (one-time, phone portrait, round 1) */
