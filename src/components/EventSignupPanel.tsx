@@ -6,15 +6,19 @@ import { Portal } from '@/components/Portal';
 import { useAuth } from '@/hooks/useAuth';
 import {
   buildSignupUrl,
+  acknowledgeSignupPromotion,
+  cancelSignupEvent,
   copySignupLink,
   defaultSignupAccountSlug,
   deleteOrganizerRegistrationIfStatus,
   deleteSignupTemplate,
   getOrganizerRegistrations,
   getOwnedSignup,
+  getSignupPromotionNotices,
   getSignupAccountSlug,
   getSignupTemplates,
   normaliseSignupLinkPart,
+  promotionMessage,
   saveSignupEvent,
   saveSignupTemplate,
   seedOrganizerSignupRoster,
@@ -24,22 +28,19 @@ import {
   type SignupEvent,
   type SignupEventMutationResult,
   type SignupRegistration,
+  type SignupPromotionNotice,
   type SignupTemplate,
 } from '@/lib/signups';
 import type { EventState, Team } from '@/types/domain';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
+import { browserTimeZone, isoToZonedLocalInput, supportedTimeZones, zonedLocalToIso } from '@/lib/eventTime';
+import { useEventStore } from '@/store/eventStore';
 
 function inputDateTime(iso: string | null): string {
   if (!iso) return '';
   const date = new Date(iso);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
-}
-
-function toIso(value: string): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 const FIVE_MINUTE_TIMES = Array.from({ length: 24 * 12 }, (_, index) => {
@@ -122,13 +123,16 @@ function DateTimeControl({
   );
 }
 
-type SignupFormField = 'title' | 'accountSlug' | 'startsAt' | 'endsAt';
+type SignupFormField = 'title' | 'accountSlug' | 'startsAt' | 'endsAt' | 'timeZone' | 'publicContactMethod' | 'publicContactValue';
 
 function saveErrorField(message: string): SignupFormField | null {
   if (/end time|ends? at|after (the )?start/i.test(message)) return 'endsAt';
   if (/start date|start time|starts? at/i.test(message)) return 'startsAt';
   if (/account link|account name|account slug/i.test(message)) return 'accountSlug';
   if (/event name|event title|public title/i.test(message)) return 'title';
+  if (/time zone/i.test(message)) return 'timeZone';
+  if (/contact method/i.test(message)) return 'publicContactMethod';
+  if (/public contact|whatsapp|email/i.test(message)) return 'publicContactValue';
   return null;
 }
 
@@ -139,17 +143,18 @@ function friendlySignupError(message: string): string {
   return message;
 }
 
-function formatWhen(startsAt: string | null, endsAt: string | null): string {
+function formatWhen(startsAt: string | null, endsAt: string | null, timeZone?: string | null): string {
   if (!startsAt) return 'Date not set';
   const start = new Date(startsAt);
   const end = endsAt ? new Date(endsAt) : null;
   const day = start.toLocaleDateString(undefined, {
+    ...(timeZone ? { timeZone } : {}),
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
-  const startTime = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const endTime = end?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const startTime = start.toLocaleTimeString(undefined, { ...(timeZone ? { timeZone } : {}), hour: 'numeric', minute: '2-digit' });
+  const endTime = end?.toLocaleTimeString(undefined, { ...(timeZone ? { timeZone } : {}), hour: 'numeric', minute: '2-digit' });
   return `${day} · ${startTime}${endTime ? `–${endTime}` : ''}`;
 }
 
@@ -218,10 +223,12 @@ export function EventSignupPanel({
   onSignupChange?: (signup: SignupEvent | null) => void;
 }) {
   const auth = useAuth();
+  const updateEventSettings = useEventStore((state) => state.updateSettings);
   const [expanded, setExpanded] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [signup, setSignup] = useState<SignupEvent | null>(null);
   const [registrations, setRegistrations] = useState<SignupRegistration[]>([]);
+  const [promotionNotices, setPromotionNotices] = useState<SignupPromotionNotice[]>([]);
   const [registrationsReady, setRegistrationsReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -231,6 +238,8 @@ export function EventSignupPanel({
   const [registrationEditTarget, setRegistrationEditTarget] = useState<SignupRegistration | null>(null);
   const [deletingRegistrationId, setDeletingRegistrationId] = useState<string | null>(null);
   const [editingRegistrationId, setEditingRegistrationId] = useState<string | null>(null);
+  const [cancelTargetOpen, setCancelTargetOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupFormField, string>>>({});
 
   const [title, setTitle] = useState(event.name);
@@ -240,6 +249,10 @@ export function EventSignupPanel({
   const [endsAt, setEndsAt] = useState('');
   const [details, setDetails] = useState('');
   const [prizes, setPrizes] = useState('');
+  const [timeZone, setTimeZone] = useState(browserTimeZone());
+  const [organizerName, setOrganizerName] = useState('');
+  const [publicContactMethod, setPublicContactMethod] = useState<'whatsapp' | 'email' | ''>('');
+  const [publicContactValue, setPublicContactValue] = useState('');
   const [templates, setTemplates] = useState<SignupTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
@@ -328,6 +341,10 @@ export function EventSignupPanel({
         signupEventId: current.id,
         baseRevision: current.capacityRevision,
         isOpen: current.isOpen,
+        timeZone: current.timeZone,
+        organizerName: current.organizerName,
+        publicContactMethod: current.publicContactMethod,
+        publicContactValue: current.publicContactValue,
       });
     },
   ), [enqueueSignupMutation]);
@@ -348,10 +365,14 @@ export function EventSignupPanel({
   organizerRosterRef.current = organizerRoster;
   const refreshRegistrations = useCallback(async (signupId: string) => {
     const refreshVersion = ++registrationsRefreshVersion.current;
-    const rows = await getOrganizerRegistrations(signupId);
+    const [rows, notices] = await Promise.all([
+      getOrganizerRegistrations(signupId),
+      getSignupPromotionNotices(signupId),
+    ]);
     if (refreshVersion === registrationsRefreshVersion.current) {
       appliedRosterVersionRef.current = requestedRosterVersionRef.current;
       setRegistrations(rows);
+      setPromotionNotices(notices);
       setRegistrationsReady(true);
     }
   }, []);
@@ -372,12 +393,17 @@ export function EventSignupPanel({
     setError(null);
     setSignup(null);
     setRegistrations([]);
+    setPromotionNotices([]);
     setRegistrationsReady(false);
     appliedRosterVersionRef.current = -1;
     setTitle(event.name);
     setVenue(event.venue ?? '');
     setStartsAt('');
     setEndsAt('');
+    setTimeZone(browserTimeZone());
+    setOrganizerName('');
+    setPublicContactMethod('');
+    setPublicContactValue('');
     setFieldErrors({});
     setDetails('');
     setPrizes('');
@@ -411,8 +437,12 @@ export function EventSignupPanel({
         if (!currentRow) return;
         setTitle(currentRow.title);
         setVenue(currentRow.venue);
-        setStartsAt(inputDateTime(currentRow.startsAt));
-        setEndsAt(inputDateTime(currentRow.endsAt));
+        setStartsAt(isoToZonedLocalInput(currentRow.startsAt, currentRow.timeZone));
+        setEndsAt(isoToZonedLocalInput(currentRow.endsAt, currentRow.timeZone));
+        setTimeZone(currentRow.timeZone || '');
+        setOrganizerName(currentRow.organizerName ?? '');
+        setPublicContactMethod(currentRow.publicContactMethod ?? '');
+        setPublicContactValue(currentRow.publicContactValue ?? '');
         setDetails(currentRow.details);
         setPrizes(currentRow.prizes);
         if (currentRow.rosterSeededAt == null) {
@@ -512,6 +542,10 @@ export function EventSignupPanel({
     setEndsAt(schedule.endsAt);
     setDetails(template.details);
     setPrizes(template.prizes);
+    setTimeZone(template.timeZone || browserTimeZone());
+    setOrganizerName(template.organizerName ?? '');
+    setPublicContactMethod(template.publicContactMethod ?? '');
+    setPublicContactValue(template.publicContactValue ?? '');
     setMessage(`${template.name} loaded. Check the date, then update the sign-up page.`);
     setError(null);
     setFieldErrors({});
@@ -539,6 +573,10 @@ export function EventSignupPanel({
         details,
         prizes,
         autoAddPairs: true,
+        timeZone: timeZone || null,
+        organizerName,
+        publicContactMethod: publicContactMethod || null,
+        publicContactValue,
         ...schedule,
       });
       setTemplates((current) =>
@@ -592,11 +630,29 @@ export function EventSignupPanel({
       showFieldError('endsAt', 'End time must be after the start time.');
       return;
     }
+    if (Boolean(publicContactMethod) !== Boolean(publicContactValue.trim())) {
+      if (!publicContactMethod) showFieldError('publicContactMethod', 'Choose WhatsApp or email, or clear the contact value.');
+      else showFieldError('publicContactValue', `Enter the public ${publicContactMethod === 'email' ? 'email' : 'WhatsApp number'}.`);
+      return;
+    }
+    if (publicContactMethod === 'email' && !/^\S+@\S+\.\S+$/.test(publicContactValue.trim())) {
+      showFieldError('publicContactValue', 'Enter a valid public email address.');
+      return;
+    }
+    if (publicContactMethod === 'whatsapp' && publicContactValue.replace(/\D/g, '').length < 7) {
+      showFieldError('publicContactValue', 'Enter a complete WhatsApp number including country code.');
+      return;
+    }
     setSaving(true);
     setMessage(null);
     setError(null);
     setFieldErrors({});
     try {
+      const scheduledIso = (value: string, current: string | null, currentZone?: string | null) => {
+        const nextZone = timeZone || null;
+        if (current && nextZone === (currentZone || null) && value === isoToZonedLocalInput(current, currentZone)) return current;
+        return value ? zonedLocalToIso(value, timeZone || browserTimeZone()) : null;
+      };
       const result = await enqueueSignupMutation(signup, event.id, (current) =>
         saveSignupEvent({
           ownerUserId,
@@ -604,8 +660,8 @@ export function EventSignupPanel({
           accountSlug,
           title,
           venue,
-          startsAt: toIso(startsAt),
-          endsAt: toIso(endsAt),
+          startsAt: scheduledIso(startsAt, current?.startsAt ?? null, current?.timeZone),
+          endsAt: scheduledIso(endsAt, current?.endsAt ?? null, current?.timeZone),
           capacityTeams: expectedTeams,
           details,
           prizes,
@@ -613,9 +669,20 @@ export function EventSignupPanel({
           signupEventId: current?.id,
           baseRevision: current?.capacityRevision ?? 0,
           isOpen: current?.isOpen,
+          timeZone: timeZone || null,
+          organizerName,
+          publicContactMethod: publicContactMethod || null,
+          publicContactValue,
         }));
       let row = result.event;
       setSignup(row);
+      updateEventSettings({
+        publishedSignupId: row.id,
+        publishedStartsAt: row.startsAt,
+        publishedEndsAt: row.endsAt,
+        publishedSignupOpen: row.isOpen,
+        publishedCancelledAt: row.cancelledAt ?? null,
+      });
       setAccountSlug(row.accountSlug);
       // New and legacy unseeded sign-ups both use the same durable handshake.
       // Empty rosters must be seeded too: null means "not attempted", while a
@@ -630,8 +697,12 @@ export function EventSignupPanel({
       if (result.conflict) {
         setTitle(row.title);
         setVenue(row.venue);
-        setStartsAt(inputDateTime(row.startsAt));
-        setEndsAt(inputDateTime(row.endsAt));
+        setStartsAt(isoToZonedLocalInput(row.startsAt, row.timeZone));
+        setEndsAt(isoToZonedLocalInput(row.endsAt, row.timeZone));
+        setTimeZone(row.timeZone || '');
+        setOrganizerName(row.organizerName ?? '');
+        setPublicContactMethod(row.publicContactMethod ?? '');
+        setPublicContactValue(row.publicContactValue ?? '');
         setDetails(row.details);
         setPrizes(row.prizes);
         setError('This sign-up changed in another tab, so the latest version was reloaded. Review it before saving again.');
@@ -668,6 +739,7 @@ export function EventSignupPanel({
         );
       });
       setSignup(result.event);
+      updateEventSettings({ publishedSignupOpen: result.event.isOpen, publishedCancelledAt: result.event.cancelledAt ?? null });
       if (result.conflict) {
         setError('This sign-up changed in another tab. Refresh before opening or closing it.');
         return;
@@ -717,6 +789,35 @@ export function EventSignupPanel({
     } finally {
       deletingRegistrationRef.current = null;
       setDeletingRegistrationId(null);
+    }
+  }
+
+  async function cancelPublishedEvent() {
+    if (!signup || cancelling) return;
+    setCancelling(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await enqueueSignupMutation(signup, event.id, (current) => {
+        const authoritative = current?.id === signup.id ? current : signup;
+        return cancelSignupEvent(
+          authoritative.id,
+          authoritative.sourceEventId,
+          authoritative.capacityRevision,
+        );
+      });
+      setSignup(result.event);
+      updateEventSettings({ publishedSignupOpen: result.event.isOpen, publishedCancelledAt: result.event.cancelledAt ?? null });
+      if (result.conflict) {
+        setError('This sign-up changed in another tab. Review the latest version before cancelling it.');
+      } else {
+        setCancelTargetOpen(false);
+        setMessage('Event cancelled. The public link now shows the cancellation and keeps the roster history.');
+      }
+    } catch (cancelError) {
+      setError((cancelError as Error).message);
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -863,6 +964,15 @@ export function EventSignupPanel({
                   <label>Venue</label>
                   <input className="setup-input" value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
+                <div className={'setup-field signup-wide ' + (fieldErrors.timeZone ? 'has-error' : '')} data-signup-field="timeZone">
+                  <label>Event time zone</label>
+                  <select className="setup-input" aria-invalid={Boolean(fieldErrors.timeZone)} value={timeZone} onChange={(event) => { clearFieldError('timeZone'); setTimeZone(event.target.value); }}>
+                    {!timeZone && <option value="">Legacy viewer time zone (choose before rescheduling)</option>}
+                    {supportedTimeZones().map((zone) => <option value={zone} key={zone}>{zone.replaceAll('_', ' ')}</option>)}
+                  </select>
+                  {fieldErrors.timeZone && <small className="signup-field-error">{fieldErrors.timeZone}</small>}
+                  <small className="setup-help">Dates, countdowns and shared times use this location.</small>
+                </div>
                 <DateTimeControl
                   label="Starts"
                   fieldName="startsAt"
@@ -915,6 +1025,25 @@ export function EventSignupPanel({
                   <label>Prizes or extras</label>
                   <textarea className="setup-input signup-textarea" value={prizes} onChange={(e) => setPrizes(e.target.value)} placeholder="Winner prizes, food, drinks…" />
                 </div>
+                <div className="setup-field signup-wide">
+                  <label>Organiser name <small>optional</small></label>
+                  <input className="setup-input" value={organizerName} onChange={(event) => setOrganizerName(event.target.value)} placeholder="Shown beside the contact action" />
+                </div>
+                <div className={'setup-field ' + (fieldErrors.publicContactMethod ? 'has-error' : '')} data-signup-field="publicContactMethod">
+                  <label>Public contact <small>optional</small></label>
+                  <select className="setup-input" aria-invalid={Boolean(fieldErrors.publicContactMethod)} value={publicContactMethod} onChange={(event) => { clearFieldError('publicContactMethod'); setPublicContactMethod(event.target.value as typeof publicContactMethod); }}>
+                    <option value="">Do not publish contact</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="email">Email</option>
+                  </select>
+                  {fieldErrors.publicContactMethod && <small className="signup-field-error">{fieldErrors.publicContactMethod}</small>}
+                </div>
+                <div className={'setup-field ' + (fieldErrors.publicContactValue ? 'has-error' : '')} data-signup-field="publicContactValue">
+                  <label>{publicContactMethod === 'email' ? 'Public email' : 'Public WhatsApp number'}</label>
+                  <input className="setup-input" aria-invalid={Boolean(fieldErrors.publicContactValue)} disabled={!publicContactMethod} value={publicContactValue} onChange={(event) => { clearFieldError('publicContactValue'); setPublicContactValue(event.target.value); }} placeholder={publicContactMethod === 'email' ? 'organiser@example.com' : '+62…'} />
+                  {fieldErrors.publicContactValue && <small className="signup-field-error">{fieldErrors.publicContactValue}</small>}
+                  <small className="setup-help">Only this opted-in value appears publicly. Player contacts remain private.</small>
+                </div>
               </div>
 
               <div className="signup-admin-actions">
@@ -938,9 +1067,14 @@ export function EventSignupPanel({
                     >
                       Share link
                     </button>
-                    {(event.status === 'setup' || signup.isOpen) && (
+                    {!signup.cancelledAt && (event.status === 'setup' || signup.isOpen) && (
                       <button className="btn" type="button" onClick={toggleOpen}>
                         {signup.isOpen ? 'Close registrations' : 'Reopen registrations'}
+                      </button>
+                    )}
+                    {!signup.cancelledAt && (
+                      <button className="btn danger" type="button" onClick={() => setCancelTargetOpen(true)}>
+                        Cancel event
                       </button>
                     )}
                   </>
@@ -980,7 +1114,7 @@ export function EventSignupPanel({
                     <div><strong>{confirmedPairs.length}</strong><span>Confirmed teams / {onlineSignupCapacity}</span></div>
                     <div><strong>{waitlistedPairs.length}</strong><span>Teams waiting</span></div>
                     <div><strong>{lookingForPartner.length}</strong><span>Looking for a partner</span></div>
-                    <div><strong>{formatWhen(signup.startsAt, signup.endsAt)}</strong><span>{signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
+                    <div><strong>{formatWhen(signup.startsAt, signup.endsAt, signup.timeZone)}</strong><span>{signup.cancelledAt ? 'Event cancelled' : signup.isOpen ? 'Sign-up open' : 'Sign-up closed'}</span></div>
                   </div>
 
                   {pendingRegistrations.length > 0 && (
@@ -1045,6 +1179,38 @@ export function EventSignupPanel({
                     </section>
                   )}
 
+                  {promotionNotices.length > 0 && (
+                    <section className="signup-admin-pending" aria-label="Promoted teams to contact">
+                      <div className="signup-admin-pending-heading">
+                        <strong>Newly promoted</strong>
+                        <span>Contact these teams, then mark them contacted.</span>
+                      </div>
+                      <div className="signup-admin-roster">
+                        {promotionNotices.map((notice) => {
+                          const text = promotionMessage(notice, signup);
+                          return (
+                            <div className="signup-admin-row" key={notice.id}>
+                              <span className="signup-position confirmed">↑</span>
+                              <span><strong>{notice.teamName || `${notice.playerOne} & ${notice.playerTwo}`}</strong><small>{notice.contact}{notice.playerTwoContact ? ` · ${notice.playerTwoContact}` : ''}</small></span>
+                              <span className="signup-admin-row-actions">
+                                <button className="btn sm" type="button" onClick={async () => {
+                                  if (navigator.share) await navigator.share({ title: signup.title, text }).catch(() => undefined);
+                                  else await navigator.clipboard.writeText(text);
+                                }}>Share message</button>
+                                <button className="btn ghost sm" type="button" onClick={async () => {
+                                  try {
+                                    await acknowledgeSignupPromotion(notice.id);
+                                    setPromotionNotices((current) => current.filter((item) => item.id !== notice.id));
+                                  } catch (noticeError) { setError((noticeError as Error).message); }
+                                }}>Mark contacted</button>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
                   <div className={'signup-auto-status ' + (event.status === 'setup' ? '' : 'paused')}>
                     <strong>{event.status === 'setup' ? 'One roster, kept in sync' : 'Roster locked for play'}</strong>
                     <span>
@@ -1071,6 +1237,16 @@ export function EventSignupPanel({
           onClose={() => setRegistrationEditTarget(null)}
         />
       )}
+      <ConfirmDialog
+        open={cancelTargetOpen}
+        title="Cancel this event?"
+        message="Registration will close immediately. The public link and roster will remain available with an event-cancelled notice. This cannot be reopened."
+        confirmLabel={cancelling ? 'Cancelling…' : 'Cancel event'}
+        destructive
+        busy={cancelling}
+        onConfirm={() => void cancelPublishedEvent()}
+        onCancel={() => setCancelTargetOpen(false)}
+      />
       <ConfirmDialog
         open={Boolean(registrationDeleteTarget)}
         title="Remove from sign-up?"

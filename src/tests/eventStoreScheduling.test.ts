@@ -164,3 +164,31 @@ describe('Americano mid-event roster corrections', () => {
     expect((event.formatConfig as { teams: string[] }).teams).toHaveLength(6);
   });
 });
+
+describe('timed qualifier result guard', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useEventStore.getState().resetEvent();
+    useEventStore.getState().createEvent('Timed qualifier', 'koc');
+    useEventStore.getState().setCourts([{ id: 'court-1', position: 1, name: 'Centre Court', pointValue: 5 }]);
+    useEventStore.getState().addTeams([
+      { player1: 'Alex', player2: 'Kriss' },
+      { player1: 'Tapia', player2: 'Coello' },
+    ]);
+    useEventStore.getState().updateSettings({ qualifierUnit: 'time', qualifierTarget: 10 });
+    useEventStore.getState().startQualifier();
+  });
+
+  it('blocks an untouched 0–0 but accepts an explicitly confirmed 0–0', () => {
+    useEventStore.getState().confirmQualifierResults();
+    expect(useEventStore.getState().event?.status).toBe('qualifier');
+    expect(useEventStore.getState().lastError).toMatch(/every timed qualifier result/i);
+
+    const matchId = useEventStore.getState().event!.qualifier!.matches[0].id;
+    useEventStore.getState().setQualifierScore(matchId, 0, 0);
+    useEventStore.getState().confirmQualifierResults();
+
+    expect(useEventStore.getState().event?.status).toBe('seeding');
+    expect(useEventStore.getState().lastError).toBeNull();
+  });
+});

@@ -29,10 +29,12 @@ export function QualifierScreen() {
   const noun = unit === 'games' ? 'games' : unit === 'time' ? 'points' : 'points';
 
   const allValid = event.qualifier.matches.every(
-    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule),
+    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule)
+      && (!isTimed || m.resultEntered || m.scoreA !== 0 || m.scoreB !== 0),
   );
   const validCount = event.qualifier.matches.filter(
-    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule),
+    (m) => !validateQualifierScore(m.scoreA, m.scoreB, rule)
+      && (!isTimed || m.resultEntered || m.scoreA !== 0 || m.scoreB !== 0),
   ).length;
   const total = event.qualifier.matches.length;
 
@@ -112,7 +114,9 @@ export function QualifierScreen() {
                 />
               </div>
               {isTimed ? (
-                <div className="qual-sum ok">FINAL {m.scoreA}–{m.scoreB}</div>
+                <div className={'qual-sum ' + (m.resultEntered || m.scoreA !== 0 || m.scoreB !== 0 ? 'ok' : 'bad')}>
+                  {m.resultEntered || m.scoreA !== 0 || m.scoreB !== 0 ? `FINAL ${m.scoreA}–${m.scoreB}` : 'RESULT NEEDED'}
+                </div>
               ) : (
                 <div className={'qual-sum ' + (valid ? 'ok' : sum > 0 || !valid ? 'bad' : '')}>
                   SUM {sum} / {target}{' '}

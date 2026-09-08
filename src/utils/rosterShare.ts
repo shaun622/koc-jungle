@@ -33,16 +33,18 @@ function formatSchedule(signup?: SignupEvent | null): string[] {
   const start = new Date(signup.startsAt);
   if (Number.isNaN(start.getTime())) return [];
   const end = signup.endsAt ? new Date(signup.endsAt) : null;
+  const zone = signup.timeZone ? { timeZone: signup.timeZone } : {};
   const day = start.toLocaleDateString('en-AU', {
+    ...zone,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   });
-  const startTime = start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  const startTime = start.toLocaleTimeString('en-AU', { ...zone, hour: 'numeric', minute: '2-digit' });
   const endTime = end && !Number.isNaN(end.getTime())
-    ? end.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
+    ? end.toLocaleTimeString('en-AU', { ...zone, hour: 'numeric', minute: '2-digit' })
     : null;
-  return [`📅 ${day}`, `⏰ ${startTime}${endTime ? `–${endTime}` : ''}`];
+  return [`📅 ${day}`, `⏰ ${startTime}${endTime ? `–${endTime}` : ''}${signup.timeZone ? ` (${signup.timeZone})` : ''}`];
 }
 
 function teamLines(team: Team, index: number): string[] {

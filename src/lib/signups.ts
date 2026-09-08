@@ -18,6 +18,12 @@ export interface SignupEvent {
   details: string;
   prizes: string;
   isOpen: boolean;
+  cancelledAt?: string | null;
+  cancellationMessage?: string;
+  timeZone?: string | null;
+  organizerName?: string;
+  publicContactMethod?: 'whatsapp' | 'email' | null;
+  publicContactValue?: string;
   autoAddPairs: boolean;
   /** Non-null once the legacy/local tournament roster has completed its
    * one-time, server-guarded import into the canonical registration list. */
@@ -65,6 +71,10 @@ export interface SignupTemplate {
   startsTime: string;
   durationMinutes: number | null;
   autoAddPairs: boolean;
+  timeZone?: string | null;
+  organizerName?: string;
+  publicContactMethod?: 'whatsapp' | 'email' | null;
+  publicContactValue?: string;
 }
 
 export interface PublicSignup {
@@ -98,6 +108,21 @@ export interface SaveSignupInput {
   baseRevision: number;
   /** Preserve the current open state when omitted. */
   isOpen?: boolean;
+  timeZone?: string | null;
+  organizerName?: string;
+  publicContactMethod?: 'whatsapp' | 'email' | null;
+  publicContactValue?: string;
+}
+
+export interface SignupPromotionNotice {
+  id: string;
+  registrationId: string;
+  promotedAt: string;
+  teamName: string;
+  playerOne: string;
+  playerTwo: string;
+  contact: string;
+  playerTwoContact?: string;
 }
 
 /** One complete pair in the organiser's tournament roster. The database id is
@@ -141,6 +166,12 @@ interface SignupEventRow {
   auto_add_pairs: boolean;
   roster_seeded_at?: string | null;
   roster_locked_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_message?: string | null;
+  time_zone?: string | null;
+  organizer_name?: string | null;
+  public_contact_method?: 'whatsapp' | 'email' | null;
+  public_contact_value?: string | null;
 }
 
 interface SignupRegistrationRow {
@@ -171,6 +202,10 @@ interface SignupTemplateRow {
   starts_time: string | null;
   duration_minutes: number | null;
   auto_add_pairs: boolean;
+  time_zone?: string | null;
+  organizer_name?: string | null;
+  public_contact_method?: 'whatsapp' | 'email' | null;
+  public_contact_value?: string | null;
 }
 
 function mapEvent(row: SignupEventRow): SignupEvent {
@@ -190,6 +225,12 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     details: row.details ?? '',
     prizes: row.prizes ?? '',
     isOpen: row.is_open,
+    cancelledAt: row.cancelled_at ?? null,
+    cancellationMessage: row.cancellation_message ?? '',
+    timeZone: row.time_zone ?? null,
+    organizerName: row.organizer_name ?? '',
+    publicContactMethod: row.public_contact_method ?? null,
+    publicContactValue: row.public_contact_value ?? '',
     autoAddPairs: row.auto_add_pairs ?? true,
     rosterSeededAt: row.roster_seeded_at ?? null,
     rosterLockedAt: row.roster_locked_at ?? null,
@@ -256,6 +297,10 @@ function mapTemplate(row: SignupTemplateRow): SignupTemplate {
     startsTime: row.starts_time?.slice(0, 5) ?? '',
     durationMinutes: row.duration_minutes,
     autoAddPairs: row.auto_add_pairs ?? true,
+    timeZone: row.time_zone ?? null,
+    organizerName: row.organizer_name ?? '',
+    publicContactMethod: row.public_contact_method ?? null,
+    publicContactValue: row.public_contact_value ?? '',
   };
 }
 
@@ -326,6 +371,10 @@ export async function saveSignupTemplate(input: SaveSignupTemplateInput): Promis
         starts_time: input.startsTime || null,
         duration_minutes: input.durationMinutes,
         auto_add_pairs: input.autoAddPairs,
+        time_zone: input.timeZone ?? null,
+        organizer_name: input.organizerName?.trim() || null,
+        public_contact_method: input.publicContactMethod ?? null,
+        public_contact_value: input.publicContactValue?.trim() || null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'owner_user_id,name' },
@@ -352,7 +401,7 @@ export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEve
     throw new Error('A new sign-up must start at revision 0.');
   }
   const signupEventId = input.signupEventId ?? null;
-  const { data, error } = await client.rpc('organizer_save_signup_event', {
+  const { data, error } = await client.rpc('organizer_save_signup_event_v2', {
     p_source_event_id: input.sourceEventId,
     p_account_slug: accountSlug,
     p_title: input.title.trim(),
@@ -366,6 +415,10 @@ export async function saveSignupEvent(input: SaveSignupInput): Promise<SignupEve
     p_auto_add_pairs: input.autoAddPairs,
     p_signup_event_id: signupEventId,
     p_is_open: input.isOpen ?? null,
+    p_time_zone: input.timeZone ?? null,
+    p_organizer_name: input.organizerName?.trim() || null,
+    p_public_contact_method: input.publicContactMethod ?? null,
+    p_public_contact_value: input.publicContactValue?.trim() || null,
   });
   if (error) throw new Error(error.message);
   return mapSignupMutation(data);
@@ -386,6 +439,23 @@ export async function setSignupOpen(
     p_source_event_id: sourceEventId,
     p_is_open: isOpen,
     p_base_revision: baseRevision,
+  });
+  if (error) throw new Error(error.message);
+  return mapSignupMutation(data);
+}
+
+export async function cancelSignupEvent(
+  id: string,
+  sourceEventId: string,
+  baseRevision: number,
+  message = '',
+): Promise<SignupEventMutationResult> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('organizer_cancel_signup_event', {
+    p_signup_event_id: id,
+    p_source_event_id: sourceEventId,
+    p_base_revision: baseRevision,
+    p_message: message.trim() || null,
   });
   if (error) throw new Error(error.message);
   return mapSignupMutation(data);
@@ -495,6 +565,26 @@ export async function updateOrganizerRegistration(
     p_allow_locked: expected.allowLocked ?? false,
   });
   if (error) throw new Error(error.message);
+}
+
+export async function getSignupPromotionNotices(signupEventId: string): Promise<SignupPromotionNotice[]> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('organizer_get_promotion_notices', {
+    p_signup_event_id: signupEventId,
+  });
+  if (error) throw new Error(error.message);
+  return Array.isArray(data) ? data as SignupPromotionNotice[] : [];
+}
+
+export async function acknowledgeSignupPromotion(noticeId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc('organizer_acknowledge_promotion', { p_notice_id: noticeId });
+  if (error) throw new Error(error.message);
+}
+
+export function promotionMessage(notice: SignupPromotionNotice, signup: SignupEvent): string {
+  const team = notice.teamName || `${notice.playerOne} & ${notice.playerTwo}`;
+  return `🎾 ${signup.title}\n\nGood news — ${team} now has a confirmed place.\n${signup.venue ? `📍 ${signup.venue}\n` : ''}Please reply to the organiser if you can no longer attend.\n\n${buildSignupUrl(signup.eventSlug, signup.accountSlug)}`;
 }
 
 export async function addOrganizerSignupPair(
@@ -647,13 +737,25 @@ export async function deleteOrganizerRegistrationIfStatus(
 
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
   const client = requirePublicSupabase();
-  const args = accountSlug
-    ? { p_account_slug: accountSlug, p_event_slug: publicSlug }
-    : { p_share_slug: publicSlug };
-  const { data, error } = await client.rpc('get_public_signup', args);
+  const { data, error } = await client.rpc('get_public_signup_v2', {
+    p_account_slug: accountSlug || null,
+    p_event_slug: publicSlug,
+  });
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
   return data as PublicSignup;
+}
+
+function registrationRequestFingerprint(parts: string[]): string {
+  const value = JSON.stringify(parts);
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `${value.length}:${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 export async function registerPublicTeam(input: {
@@ -663,17 +765,25 @@ export async function registerPublicTeam(input: {
   playerOne: string;
   playerTwo: string;
   contact: string;
+  requestId?: string;
 }): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number }> {
   const client = requirePublicSupabase();
-  const slugArgs = input.accountSlug
-    ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
-    : { p_share_slug: input.publicSlug };
-  const { data, error } = await client.rpc('register_public_team', {
-    ...slugArgs,
+  const requestId = input.requestId ?? crypto.randomUUID();
+  const fingerprint = registrationRequestFingerprint([
+    input.teamName.trim().toLocaleLowerCase(),
+    input.playerOne.trim().toLocaleLowerCase(),
+    input.playerTwo.trim().toLocaleLowerCase(),
+    input.contact.trim().toLocaleLowerCase(),
+  ]);
+  const { data, error } = await client.rpc('register_public_team_v2', {
+    p_account_slug: input.accountSlug || null,
+    p_event_slug: input.publicSlug,
     p_team_name: input.teamName.trim(),
     p_player_one: input.playerOne.trim(),
     p_player_two: input.playerTwo.trim(),
     p_contact: input.contact.trim(),
+    p_request_id: requestId,
+    p_payload_fingerprint: fingerprint,
   });
   if (error) throw new Error(error.message);
   return data as {
@@ -689,16 +799,23 @@ export async function joinPublicSingle(input: {
   registrationId: string;
   playerName: string;
   contact: string;
+  requestId?: string;
 }): Promise<{ registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number }> {
   const client = requirePublicSupabase();
-  const slugArgs = input.accountSlug
-    ? { p_account_slug: input.accountSlug, p_event_slug: input.publicSlug }
-    : { p_share_slug: input.publicSlug };
-  const { data, error } = await client.rpc('join_public_single', {
-    ...slugArgs,
+  const requestId = input.requestId ?? crypto.randomUUID();
+  const fingerprint = registrationRequestFingerprint([
+    input.registrationId,
+    input.playerName.trim().toLocaleLowerCase(),
+    input.contact.trim().toLocaleLowerCase(),
+  ]);
+  const { data, error } = await client.rpc('join_public_single_v2', {
+    p_account_slug: input.accountSlug || null,
+    p_event_slug: input.publicSlug,
     p_registration_id: input.registrationId,
     p_player_two: input.playerName.trim(),
     p_contact: input.contact.trim(),
+    p_request_id: requestId,
+    p_payload_fingerprint: fingerprint,
   });
   if (error) throw new Error(error.message);
   return data as {

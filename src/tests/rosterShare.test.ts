@@ -77,6 +77,13 @@ const registrations: SignupRegistration[] = [
 ];
 
 describe('plain-text roster sharing', () => {
+  it('uses the venue timezone when sharing from a different timezone', () => {
+    const text = buildRosterShareText({ event, teams: [], signup: {
+      ...signup, startsAt: '2026-09-07T23:00:00Z', endsAt: '2026-09-08T01:00:00Z', timeZone: 'America/New_York',
+    } });
+    expect(text).toContain('Monday 7 September');
+    expect(text).toContain('7:00 pm–9:00 pm (America/New_York)');
+  });
   it('formats ordered teams, solos, waiting pairs and the live link without private contacts', () => {
     const text = buildRosterShareText({
       event,

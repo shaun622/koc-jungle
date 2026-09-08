@@ -20,6 +20,8 @@ export interface EventCatalogMetadata {
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
+  startsAt: string | null;
+  signupState: 'unpublished' | 'open' | 'closed' | 'cancelled';
 }
 
 export interface EventRepository {
@@ -174,5 +176,11 @@ export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetad
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     archivedAt: record.archivedAt,
+    startsAt: record.state.settings.publishedStartsAt ?? null,
+    signupState: record.state.settings.publishedCancelledAt
+      ? 'cancelled'
+      : record.state.settings.publishedSignupId
+        ? record.state.settings.publishedSignupOpen ? 'open' : 'closed'
+        : 'unpublished',
   };
 }

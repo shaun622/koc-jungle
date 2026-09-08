@@ -19,6 +19,7 @@ import { DisplayScreen } from '@/routes/DisplayScreen';
 import { HelpScreen } from '@/routes/HelpScreen';
 import { HomeScreen } from '@/routes/HomeScreen';
 import { PublicSignupScreen } from '@/routes/PublicSignupScreen';
+import { PasswordRecoveryScreen } from '@/routes/PasswordRecoveryScreen';
 import { NotFound } from '@/routes/NotFound';
 import { TopNav } from '@/components/TopNav';
 import { MobileTabBar } from '@/components/MobileTabBar';
@@ -141,7 +142,7 @@ function OperatorCloudSyncGate() {
 
 function CloudSyncGate() {
   const location = useLocation();
-  if (isPublicSignupPath(location.pathname)) return null;
+  if (isPublicSignupPath(location.pathname) || location.pathname === '/auth/recovery') return null;
   return <OperatorCloudSyncGate />;
 }
 
@@ -151,7 +152,7 @@ function StorageBroadcastGate() {
   // may open or display another competition without replacing the event this
   // operator tab is editing.
   const pinnedEventId = eventIdFromPath(location.pathname);
-  useStorageBroadcast(!isPublicSignupPath(location.pathname), pinnedEventId);
+  useStorageBroadcast(!isPublicSignupPath(location.pathname) && location.pathname !== '/auth/recovery', pinnedEventId);
   return null;
 }
 
@@ -195,6 +196,7 @@ export function App() {
       <Routes>
         <Route path="/signup/:accountSlug/:slug" element={<PublicSignupScreen />} />
         <Route path="/signup/:slug" element={<PublicSignupScreen />} />
+        <Route path="/auth/recovery" element={<PasswordRecoveryScreen />} />
         <Route path="/home" element={<HomeScreen />} />
         <Route path="/help" element={<HelpScreen />} />
         <Route path="/events/:eventId" element={<EventSelectionGate />}>

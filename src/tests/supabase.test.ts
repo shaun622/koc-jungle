@@ -19,7 +19,7 @@ describe('Supabase client separation', () => {
 
     await import('@/lib/supabase');
 
-    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenCalledTimes(3);
     expect(createClient.mock.calls[0][2]).toMatchObject({
       db: { timeout: 12_000 },
     });
@@ -29,5 +29,14 @@ describe('Supabase client separation', () => {
     };
     expect(publicOptions).toMatchObject({ db: { timeout: 12_000 } });
     await expect(publicOptions.accessToken()).resolves.toBe('public-anon-key');
+
+    expect(createClient.mock.calls[2][2]).toMatchObject({
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      db: { timeout: 12_000 },
+    });
   });
 });

@@ -59,6 +59,9 @@ export interface Match {
   tieBreakWinnerId?: ID;
   status: MatchStatus;
   pointValueAtTime: number;
+  /** Explicitly records that an operator entered/confirmed a qualifier result.
+   * Legacy non-zero scores remain inferable; untouched timed 0-0 does not. */
+  resultEntered?: boolean;
   /**
    * Which wave of the round this match plays in (0-based). When a round has
    * more matches than courts, the extra matches run in later waves on the
@@ -129,6 +132,10 @@ export interface EventSettings {
    * sign-up. It prevents a signed-out reload from starting play while an
    * otherwise-empty public registration page is still open. */
   publishedSignupId?: string;
+  publishedStartsAt?: string | null;
+  publishedEndsAt?: string | null;
+  publishedSignupOpen?: boolean;
+  publishedCancelledAt?: string | null;
 }
 
 export interface PendingAssignment {

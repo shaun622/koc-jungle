@@ -7,6 +7,7 @@
  */
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { EventState } from '@/types/domain';
 import { useEventCatalogStore } from './eventCatalog';
@@ -61,6 +62,42 @@ interface Session {
   pendingById: Map<string, Promise<void>>;
   meta: SyncMeta;
   bootstrap: Promise<void>;
+  lastError: string | null;
+}
+
+export type CloudSyncPhase = 'local' | 'syncing' | 'pending' | 'synced' | 'error';
+interface CloudSyncStatusState {
+  phase: CloudSyncPhase;
+  syncedAt: number | null;
+  pendingEventIds: string[];
+  error: string | null;
+}
+export const useCloudSyncStatus = create<CloudSyncStatusState>(() => ({
+  phase: 'local', syncedAt: null, pendingEventIds: [], error: null,
+}));
+
+function publishStatus(session: Session | null, phase?: CloudSyncPhase, error?: string | null) {
+  if (!session || active !== session) {
+    useCloudSyncStatus.setState({ phase: 'local', pendingEventIds: [], error: null });
+    return;
+  }
+  const pendingEventIds = Array.from(new Set([
+    ...Object.keys(session.meta.dirtyById),
+    ...Object.entries(session.meta.tombstonesById).filter(([, marker]) => marker.pending).map(([id]) => id),
+  ])).sort();
+  const nextPhase = phase ?? (session.lastError ? 'error' : pendingEventIds.length ? 'pending' : 'synced');
+  useCloudSyncStatus.setState((current) => ({
+    phase: nextPhase,
+    pendingEventIds,
+    error: error === undefined ? session.lastError : error,
+    syncedAt: nextPhase === 'synced' ? Date.now() : current.syncedAt,
+  }));
+}
+
+export interface CloudSyncFlushResult {
+  ok: boolean;
+  pendingEventIds: string[];
+  error?: string;
 }
 
 interface CloudEventRow {
@@ -106,8 +143,10 @@ export function startCloudSync(userId: string): Stop {
     pendingById: new Map(),
     meta: readSyncMeta(userId),
     bootstrap: Promise.resolve(),
+    lastError: null,
   };
   active = session;
+  publishStatus(session, 'syncing', null);
 
   adoptLocalMutationLedger(session);
   writeLastUserId(userId);
@@ -185,12 +224,15 @@ export function startCloudSync(userId: string): Stop {
 
   session.bootstrap = bootstrapSession(session)
     .catch((error) => {
+      session.lastError = errorMessage(error);
       console.warn('[cloudSync] initial catalog sync failed:', errorMessage(error));
     })
     .then(() => resumePendingSessionMutations(session))
     .catch((error) => {
+      session.lastError = errorMessage(error);
       console.warn('[cloudSync] pending mutation recovery failed:', errorMessage(error));
-    });
+    })
+    .finally(() => publishStatus(session));
 
   return () => {
     if (active === session) stopCloudSync();
@@ -201,6 +243,7 @@ export function stopCloudSync(): void {
   if (!active) return;
   const session = active;
   active = null;
+  publishStatus(null);
   void session.channel?.unsubscribe();
   session.unsubStore();
   cancelAllPendingPushes(session);
@@ -243,7 +286,7 @@ export async function deleteCloudEvent(eventId: string): Promise<void> {
 }
 
 /** Best-effort bounded save of every dirty event before sign-out/SW reload. */
-export async function flushCloudSync(): Promise<void> {
+export async function flushCloudSync(): Promise<CloudSyncFlushResult> {
   const session = active;
   if (session) cancelAllPendingPushes(session);
   const work = (async () => {
@@ -275,8 +318,17 @@ export async function flushCloudSync(): Promise<void> {
   try {
     await waitWithTimeout(work, FLUSH_TIMEOUT_MS);
   } catch (error) {
+    if (session) session.lastError = errorMessage(error);
     console.warn('[cloudSync] flush failed:', errorMessage(error));
   }
+  if (!session) return { ok: true, pendingEventIds: [] };
+  publishStatus(session);
+  const state = useCloudSyncStatus.getState();
+  return {
+    ok: state.pendingEventIds.length === 0 && state.phase !== 'error',
+    pendingEventIds: state.pendingEventIds,
+    ...(state.error ? { error: state.error } : {}),
+  };
 }
 
 /** Explicit alias used by service-worker/update integrations. */
@@ -567,6 +619,8 @@ function recordDirty(session: Session, event: EventState, changedAt = Date.now()
   ledger.dirtyById[event.id] = marker;
   delete ledger.tombstonesById[event.id];
   writeLocalMutationLedger(session.userId, ledger);
+  session.lastError = null;
+  publishStatus(session, 'pending', null);
   schedulePush(session, event);
 }
 
@@ -582,6 +636,7 @@ function schedulePush(session: Session, event: EventState): void {
 function queuePush(session: Session, event: EventState): Promise<void> {
   const snapshot = cloneEvent(event);
   const snapshotFingerprint = eventFingerprint(snapshot);
+  publishStatus(session, 'syncing');
   return enqueueRemote(session, event.id, async () => {
     if (!supabase || session.meta.tombstonesById[event.id]) return;
     const updatedAt = new Date().toISOString();
@@ -605,6 +660,7 @@ function queuePush(session: Session, event: EventState): Promise<void> {
     }
     session.meta.remoteUpdatedAtById[event.id] = parseTimestamp(updatedAt);
     writeSyncMeta(session.userId, session.meta);
+    session.lastError = null;
   });
 }
 
@@ -671,6 +727,8 @@ function enqueueRemote(
   const previous = remoteQueues.get(key) ?? Promise.resolve();
   const raw = previous.catch(() => undefined).then(operation);
   const observed = raw.catch((error) => {
+    session.lastError = errorMessage(error);
+    publishStatus(session, 'error', session.lastError);
     console.warn(`[cloudSync] ${eventId} operation failed:`, errorMessage(error));
   });
   remoteQueues.set(key, observed);
@@ -678,6 +736,7 @@ function enqueueRemote(
   void observed.finally(() => {
     if (remoteQueues.get(key) === observed) remoteQueues.delete(key);
     if (session.pendingById.get(eventId) === observed) session.pendingById.delete(eventId);
+    publishStatus(session);
   });
   return observed;
 }

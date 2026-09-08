@@ -93,6 +93,7 @@ export function buildQualifierRound(
       scoreB: 0,
       status: 'in-progress',
       pointValueAtTime: court.pointValue,
+      resultEntered: false,
     });
   }
   return { matches, shuffleSeed: seed, totalPausedMs: 0, durationMs };

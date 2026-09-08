@@ -1021,7 +1021,7 @@ export const useEventStore = create<EventStore>()(
         const event = get().event;
         if (!event?.qualifier) return;
         const matches = event.qualifier.matches.map((m) =>
-          m.id === matchId ? { ...m, scoreA, scoreB } : m,
+          m.id === matchId ? { ...m, scoreA, scoreB, resultEntered: true } : m,
         );
         set({ event: { ...event, qualifier: { ...event.qualifier, matches } } });
       },
@@ -1034,6 +1034,10 @@ export const useEventStore = create<EventStore>()(
           target: event.settings.qualifierTarget ?? 16,
         };
         for (const m of event.qualifier.matches) {
+          if (rule.unit === 'time' && !m.resultEntered && m.scoreA === 0 && m.scoreB === 0) {
+            set({ lastError: 'Enter or confirm every timed qualifier result, including an intentional 0–0.' });
+            return;
+          }
           const issue = validateQualifierScore(m.scoreA, m.scoreB, rule);
           if (issue) {
             set({ lastError: issue.message });

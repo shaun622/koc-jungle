@@ -11,6 +11,7 @@ import type {
 const signupMocks = vi.hoisted(() => ({
   deleteOrganizerRegistrationIfStatus: vi.fn(),
   getOrganizerRegistrations: vi.fn(),
+  getSignupPromotionNotices: vi.fn(),
   getOwnedSignup: vi.fn(),
   getSignupAccountSlug: vi.fn(),
   getSignupTemplates: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/hooks/useAuth', () => ({
     cloudEnabled: true,
     signInWithEmail: vi.fn(),
     signUpWithEmail: vi.fn(),
+    requestPasswordReset: vi.fn(),
     signOut: vi.fn(),
     deleteAccount: vi.fn(),
   }),
@@ -159,6 +161,7 @@ describe('organiser registration deletion', () => {
     signupMocks.getSignupAccountSlug.mockResolvedValue('shaun');
     signupMocks.getSignupTemplates.mockResolvedValue([]);
     signupMocks.getOrganizerRegistrations.mockResolvedValue(registrations);
+    signupMocks.getSignupPromotionNotices.mockResolvedValue([]);
     signupMocks.deleteOrganizerRegistrationIfStatus.mockResolvedValue(undefined);
     signupMocks.seedOrganizerSignupRoster.mockResolvedValue({ seeded: true });
     signupMocks.updateOrganizerRegistration.mockResolvedValue(undefined);

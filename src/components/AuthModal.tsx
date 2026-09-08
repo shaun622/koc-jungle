@@ -28,14 +28,15 @@ function subscriptionLabel(pro: boolean, trialDays: number, nativeBilling: boole
   return 'No active subscription';
 }
 
-export function AuthModal({ onClose }: { onClose: () => void }) {
+export function AuthModal({ onClose, initialError }: { onClose: () => void; initialError?: string | null }) {
   const auth = useAuth();
   const pro = useEntitlementsStore((s) => s.pro);
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [mode, setMode] = useState<'sign-in' | 'sign-up' | 'forgot'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(initialError ?? null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!auth.cloudEnabled) {
@@ -126,10 +127,12 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             <button
               className="btn"
               onClick={async () => {
+                setErr(null);
                 setBusy(true);
-                await auth.signOut();
+                const result = await auth.signOut();
                 setBusy(false);
-                onClose();
+                if (result.error) setErr(`Could not sign out safely: ${result.error} Retry when you are online.`);
+                else onClose();
               }}
               disabled={busy}
             >
@@ -167,6 +170,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
 
   async function submitEmail() {
     setErr(null);
+    setNotice(null);
     setBusy(true);
     const fn = mode === 'sign-in' ? auth.signInWithEmail : auth.signUpWithEmail;
     const res = await fn(email.trim(), password);
@@ -185,6 +189,16 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function requestReset() {
+    setErr(null);
+    setNotice(null);
+    setBusy(true);
+    const res = await auth.requestPasswordReset(email.trim());
+    setBusy(false);
+    if (res.error) setErr(res.error);
+    else setNotice('If an account exists for that email, a reset link is on its way.');
+  }
+
   return (
     <Portal>
     <div
@@ -193,17 +207,19 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     >
       <div className="modal auth-modal">
         <h2 className="auth-title">
-          {mode === 'sign-in' ? 'SIGN IN' : 'CREATE ACCOUNT'}
+          {mode === 'sign-in' ? 'SIGN IN' : mode === 'sign-up' ? 'CREATE ACCOUNT' : 'RESET PASSWORD'}
         </h2>
         <p className="auth-sub">
-          Sync events across every device you sign in on. Local-only stays the
-          default. No account needed.
+          {mode === 'forgot'
+            ? 'Enter your organiser email. We will send a secure password-reset link.'
+            : 'Sync events across every device you sign in on. Local-only stays the default. No account needed.'}
         </p>
 
         <div className="auth-form">
           <div className="setup-field">
-            <label>Email</label>
+            <label htmlFor="auth-email">Email</label>
             <input
+              id="auth-email"
               className="setup-input auth-input"
               type="email"
               autoComplete="email"
@@ -212,9 +228,10 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               placeholder="you@example.com"
             />
           </div>
-          <div className="setup-field">
-            <label>Password</label>
+          {mode !== 'forgot' && <div className="setup-field">
+            <label htmlFor="auth-password">Password</label>
             <input
+              id="auth-password"
               className="setup-input auth-input"
               type="password"
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
@@ -222,10 +239,11 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={mode === 'sign-up' ? 'At least 6 characters' : ''}
             />
-          </div>
+          </div>}
         </div>
 
         {err && <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 8 }}>{err}</div>}
+        {notice && <div className="signup-message" role="status">{notice}</div>}
 
         <div className="modal-actions">
           <button className="btn" onClick={onClose}>
@@ -233,28 +251,40 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             className="btn primary"
-            onClick={submitEmail}
-            disabled={busy || !email || !password}
+            onClick={mode === 'forgot' ? requestReset : submitEmail}
+            disabled={busy || !email || (mode !== 'forgot' && !password)}
           >
             {busy
-              ? mode === 'sign-in'
+              ? mode === 'forgot'
+                ? 'Sending…'
+                : mode === 'sign-in'
                 ? 'Signing in…'
                 : 'Creating account…'
-              : mode === 'sign-in'
+              : mode === 'forgot'
+                ? 'Send reset link'
+                : mode === 'sign-in'
                 ? 'Sign in'
                 : 'Create account'}
           </button>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <div style={{ textAlign: 'center', marginTop: 8, display: 'grid', gap: 6 }}>
+          {mode === 'sign-in' && (
+            <button className="btn ghost sm" onClick={() => { setMode('forgot'); setErr(null); setNotice(null); }}>
+              Forgot password?
+            </button>
+          )}
           <button
             className="btn ghost sm"
             onClick={() => {
               setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in');
               setErr(null);
+              setNotice(null);
             }}
           >
-            {mode === 'sign-in'
+            {mode === 'forgot'
+              ? 'Back to sign in'
+              : mode === 'sign-in'
               ? 'Don\'t have an account? Create one'
               : 'Already have an account? Sign in'}
           </button>

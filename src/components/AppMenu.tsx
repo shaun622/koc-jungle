@@ -27,9 +27,11 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Portal } from './Portal';
 import { eventRoute } from '@/lib/eventRoutes';
 import type { EventState } from '@/types/domain';
+import { useCloudSyncStatus } from '@/store/cloudSync';
 
 export function AppMenu({ event }: { event: EventState | null }) {
   const [open, setOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,6 +41,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
   const finishEventNow = useEventStore((s) => s.finishEventNow);
 
   const auth = useAuth();
+  const syncStatus = useCloudSyncStatus();
   const themePref = useThemeStore((s) => s.preference);
   const cycleTheme = useThemeStore((s) => s.cyclePreference);
 
@@ -140,8 +143,13 @@ export function AppMenu({ event }: { event: EventState | null }) {
                 <span className="app-menu-item-label">
                   {auth.user ? 'Account settings' : 'Sign in to sync'}
                 </span>
-                <span className={'app-menu-item-meta ' + (auth.user ? 'sync-on' : '')}>
-                  {auth.user ? '☁ Synced' : ''}
+                <span className={'app-menu-item-meta ' + (auth.user && syncStatus.phase === 'synced' ? 'sync-on' : '')}>
+                  {auth.user
+                    ? syncStatus.phase === 'syncing' ? '☁ Syncing…'
+                      : syncStatus.phase === 'pending' ? '☁ Waiting to sync'
+                        : syncStatus.phase === 'error' ? '☁ Sync failed'
+                          : syncStatus.phase === 'synced' ? '☁ Synced' : 'Saved on device'
+                    : ''}
                 </span>
               </button>
             )}
@@ -178,7 +186,11 @@ export function AppMenu({ event }: { event: EventState | null }) {
                 className="app-menu-item"
                 onClick={async () => {
                   close();
-                  await auth.signOut();
+                  const result = await auth.signOut();
+                  if (result.error) {
+                    setSignOutError(`Could not sign out safely: ${result.error}`);
+                    setAuthOpen(true);
+                  }
                 }}
               >
                 <Icons.Account className="icon" />
@@ -212,7 +224,7 @@ export function AppMenu({ event }: { event: EventState | null }) {
         onCancel={() => setConfirmFinish(false)}
       />
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {authOpen && <AuthModal initialError={signOutError} onClose={() => { setAuthOpen(false); setSignOutError(null); }} />}
       {clubOpen && <ClubBrandingModal onClose={() => setClubOpen(false)} />}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>

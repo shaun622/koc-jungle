@@ -11,6 +11,8 @@ import './index.css';
 const publicSignupHash = publicSignupHashFromPath(window.location.pathname, window.location.search);
 if (publicSignupHash) {
   window.history.replaceState(null, '', `/${publicSignupHash}`);
+} else if (window.location.pathname === '/auth/recovery') {
+  window.history.replaceState(null, '', `/#/auth/recovery${window.location.search}`);
 }
 
 // Fire-and-forget; no-op on web, configures RevenueCat on native.

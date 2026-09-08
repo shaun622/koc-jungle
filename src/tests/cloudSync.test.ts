@@ -476,7 +476,7 @@ describe('event-scoped cloud sync', () => {
 
     const flush = flushCloudSync();
     await vi.advanceTimersByTimeAsync(4_100);
-    await expect(flush).resolves.toBeUndefined();
+    await expect(flush).resolves.toMatchObject({ ok: false });
   });
 
   it('applies a clean active remote state without echoing it as a local upsert', async () => {

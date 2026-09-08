@@ -54,6 +54,21 @@ export const publicSupabase: SupabaseClient | null =
       })
     : null;
 
+/** Password recovery must never adopt a recovery session into the organiser's
+ * persisted sync client, especially on a shared scoring device. */
+export const recoverySupabase: SupabaseClient | null =
+  url && anonKey
+    ? createClient(url, anonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+          flowType: 'implicit',
+        },
+        db: { timeout: 12_000 },
+      })
+    : null;
+
 export function isCloudConfigured(): boolean {
   return supabase !== null;
 }

@@ -197,9 +197,72 @@ describe('public sign-up loading', () => {
 
     renderSignup();
 
-    expect(await screen.findByText('EVENT STARTED')).toBeInTheDocument();
-    expect(screen.getByText('Registration closed')).toBeInTheDocument();
-    expect(screen.getByText('This event has started, so registrations are closed.')).toBeInTheDocument();
+    expect(await screen.findByText('EVENT ENDED')).toBeInTheDocument();
+    expect(screen.getByText('Event ended')).toBeInTheDocument();
+    expect(screen.getByText('This event has finished.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Register our pair' })).not.toBeInTheDocument();
+  });
+
+  it('preserves the roster but blocks registration when the organiser cancels', async () => {
+    signupMocks.getPublicSignup.mockResolvedValue({
+      ...publicSignup,
+      event: {
+        ...publicSignup.event,
+        cancelledAt: '2099-08-30T10:00:00.000Z',
+        cancellationMessage: 'Court maintenance. We will contact registered players.',
+        isOpen: false,
+      },
+      registrations: [{
+        id: 'confirmed-pair', signupEventId: 'signup-1', teamName: 'Smashers',
+        playerOne: 'Alex', playerTwo: 'Kriss', status: 'confirmed' as const,
+        position: 1, createdAt: '2099-08-29T00:00:00.000Z',
+      }],
+    });
+
+    renderSignup();
+
+    expect(await screen.findByText('EVENT CANCELLED')).toBeInTheDocument();
+    expect(screen.getByText('Court maintenance. We will contact registered players.')).toBeInTheDocument();
+    expect(screen.getByText('Smashers')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Register our pair' })).not.toBeInTheDocument();
+  });
+
+  it('highlights and focuses the first missing field without polling it away', async () => {
+    vi.useFakeTimers();
+    signupMocks.getPublicSignup.mockResolvedValue(publicSignup);
+    renderSignup();
+    await act(async () => Promise.resolve());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register our pair' }));
+    const playerOne = screen.getByLabelText(/^Player one/);
+    expect(playerOne).toHaveAttribute('aria-invalid', 'true');
+    expect(playerOne).toHaveFocus();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+    expect(playerOne).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('updates a successful receipt from the authoritative live roster', async () => {
+    const registration = {
+      id: 'registration-1', signupEventId: 'signup-1', teamName: 'Smashers',
+      playerOne: 'Alex', playerTwo: 'Kriss', status: 'waitlisted' as const,
+      position: 2, createdAt: '2099-08-29T00:00:00.000Z',
+    };
+    signupMocks.getPublicSignup
+      .mockResolvedValueOnce(publicSignup)
+      .mockResolvedValue({ ...publicSignup, registrations: [registration] });
+    signupMocks.registerPublicTeam.mockResolvedValue({ registrationId: registration.id, status: 'waitlisted', position: 2 });
+    renderSignup();
+    expect(await screen.findByRole('heading', { name: 'Silver King of the Court' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Pair name/), { target: { value: 'Smashers' } });
+    fireEvent.change(screen.getByLabelText(/^Player one/), { target: { value: 'Alex' } });
+    fireEvent.change(screen.getByLabelText(/^Player two/), { target: { value: 'Kriss' } });
+    fireEvent.change(screen.getByLabelText(/^WhatsApp number or email/), { target: { value: '+62123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Register our pair' }));
+
+    expect(await screen.findByRole('heading', { name: 'You’re on the waiting list' })).toBeInTheDocument();
+    expect(screen.getByText(/position 2/)).toBeInTheDocument();
+    expect(signupMocks.registerPublicTeam).toHaveBeenCalledWith(expect.objectContaining({ requestId: expect.any(String) }));
   });
 });

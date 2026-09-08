@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
@@ -9,17 +9,7 @@ import {
   type SignupRegistration,
 } from '@/lib/signups';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return 'Time to be confirmed';
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+import { formatEventDateTime } from '@/lib/eventTime';
 
 function registrationLabel(registration: SignupRegistration): string {
   if (!registration.playerTwo.trim()) return registration.playerOne;
@@ -67,11 +57,18 @@ export function PublicSignupScreen() {
   const [data, setData] = useState<PublicSignup | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [result, setResult] = useState<{
+    registrationId: string;
     status: 'confirmed' | 'waitlisted' | 'looking';
     position: number;
     kind: 'solo' | 'pair' | 'joined';
+    refreshVersionAtSubmit: number;
+    missing?: boolean;
   } | null>(null);
   const [signupMode, setSignupMode] = useState<'pair' | 'solo'>('pair');
   const [teamName, setTeamName] = useState('');
@@ -83,16 +80,24 @@ export function PublicSignupScreen() {
   const [joinName, setJoinName] = useState('');
   const [joinContact, setJoinContact] = useState('');
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const playerOneRef = useRef<HTMLInputElement>(null);
+  const playerTwoRef = useRef<HTMLInputElement>(null);
+  const contactRef = useRef<HTMLInputElement>(null);
+  const joinNameRef = useRef<HTMLInputElement>(null);
+  const joinContactRef = useRef<HTMLInputElement>(null);
+  const registerRequestId = useRef<string | null>(null);
+  const joinRequestId = useRef<string | null>(null);
 
   const routeKey = `${accountSlug}/${slug}`;
   const currentRouteKey = useRef(routeKey);
+  const hasData = useRef(false);
   currentRouteKey.current = routeKey;
   const refreshInFlight = useRef<{ key: string; promise: Promise<void> } | null>(null);
 
   const refresh = useCallback((): Promise<void> => {
     const requestKey = `${accountSlug}/${slug}`;
     if (!slug) {
-      setError('This sign-up link is incomplete.');
+      setLoadError('This sign-up link is incomplete.');
       setLoading(false);
       return Promise.resolve();
     }
@@ -105,10 +110,15 @@ export function PublicSignupScreen() {
         const next = await getPublicSignup(slug, accountSlug || undefined);
         if (currentRouteKey.current !== requestKey) return;
         setData(next);
-        setError(null);
+        hasData.current = true;
+        setLoadError(null);
+        setRefreshError(null);
+        setRefreshVersion((version) => version + 1);
       } catch (err) {
         if (currentRouteKey.current !== requestKey) return;
-        setError(publicLoadError(err));
+        const message = publicLoadError(err);
+        if (hasData.current) setRefreshError(message);
+        else setLoadError(message);
       } finally {
         if (currentRouteKey.current === requestKey) setLoading(false);
       }
@@ -131,7 +141,9 @@ export function PublicSignupScreen() {
     let cancelled = false;
     let timer: number | null = null;
     setData(null);
-    setError(null);
+    hasData.current = false;
+    setLoadError(null);
+    setRefreshError(null);
     setLoading(true);
 
     const poll = async () => {
@@ -163,16 +175,46 @@ export function PublicSignupScreen() {
     return () => window.clearInterval(timer);
   }, [data?.event.startsAt]);
 
+  useEffect(() => {
+    if (!result || refreshVersion <= result.refreshVersionAtSubmit) return;
+    const current = data?.registrations.find((registration) => registration.id === result.registrationId);
+    if (current) {
+      if (current.status !== result.status || current.position !== result.position || result.missing) {
+        setResult({ ...result, status: current.status as typeof result.status, position: current.position, missing: false });
+      }
+    } else if (!result.missing) {
+      setResult({ ...result, missing: true });
+    }
+  }, [data?.registrations, refreshVersion, result]);
+
+  const contactHref = useMemo(() => {
+    if (!data?.event.publicContactMethod || !data.event.publicContactValue) return null;
+    return data.event.publicContactMethod === 'email'
+      ? `mailto:${data.event.publicContactValue}`
+      : `https://wa.me/${data.event.publicContactValue.replace(/\D/g, '')}`;
+  }, [data?.event.publicContactMethod, data?.event.publicContactValue]);
+
+  function showValidation(errors: Record<string, string>, refs: Record<string, RefObject<HTMLInputElement>>) {
+    setFieldErrors(errors);
+    const first = Object.keys(errors)[0];
+    setFormError(errors[first] ?? null);
+    refs[first]?.current?.focus();
+  }
+
   async function register() {
     if (!data || website) return;
-    if (!playerOne.trim() || !contact.trim() || (signupMode === 'pair' && !playerTwo.trim())) {
-      setError(signupMode === 'pair'
-        ? 'Enter both player names and a WhatsApp number or email.'
-        : 'Enter your name and a WhatsApp number or email.');
+    const errors: Record<string, string> = {};
+    if (!playerOne.trim()) errors.playerOne = signupMode === 'pair' ? 'Enter player one.' : 'Enter your name.';
+    if (signupMode === 'pair' && !playerTwo.trim()) errors.playerTwo = 'Enter player two.';
+    if (!contact.trim()) errors.contact = 'Enter a WhatsApp number or email.';
+    if (Object.keys(errors).length) {
+      showValidation(errors, { playerOne: playerOneRef, playerTwo: playerTwoRef, contact: contactRef });
       return;
     }
     setSubmitting(true);
-    setError(null);
+    setFormError(null);
+    setFieldErrors({});
+    registerRequestId.current ??= crypto.randomUUID();
     try {
       const registered = await registerPublicTeam({
         accountSlug: accountSlug || undefined,
@@ -181,15 +223,17 @@ export function PublicSignupScreen() {
         playerOne,
         playerTwo: signupMode === 'pair' ? playerTwo : '',
         contact,
+        requestId: registerRequestId.current,
       });
-      setResult({ status: registered.status, position: registered.position, kind: signupMode });
+      setResult({ ...registered, kind: signupMode, refreshVersionAtSubmit: refreshVersion });
+      registerRequestId.current = null;
       setTeamName('');
       setPlayerOne('');
       setPlayerTwo('');
       setContact('');
       await refreshAfterMutation();
     } catch (err) {
-      setError((err as Error).message);
+      setFormError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -200,19 +244,27 @@ export function PublicSignupScreen() {
     setJoinName('');
     setJoinContact('');
     setResult(null);
-    setError(null);
+    setFormError(null);
+    setFieldErrors({});
+    joinRequestId.current = null;
     window.setTimeout(() => {
       document.querySelector('.signup-public-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 0);
   }
 
   async function joinPlayer() {
-    if (!joinTarget || !joinName.trim() || !joinContact.trim()) {
-      setError('Enter your name and a WhatsApp number or email.');
+    if (!joinTarget) return;
+    const errors: Record<string, string> = {};
+    if (!joinName.trim()) errors.joinName = 'Enter your name.';
+    if (!joinContact.trim()) errors.joinContact = 'Enter a WhatsApp number or email.';
+    if (Object.keys(errors).length) {
+      showValidation(errors, { joinName: joinNameRef, joinContact: joinContactRef });
       return;
     }
     setSubmitting(true);
-    setError(null);
+    setFormError(null);
+    setFieldErrors({});
+    joinRequestId.current ??= crypto.randomUUID();
     try {
       const joined = await joinPublicSingle({
         accountSlug: accountSlug || undefined,
@@ -220,14 +272,16 @@ export function PublicSignupScreen() {
         registrationId: joinTarget.id,
         playerName: joinName,
         contact: joinContact,
+        requestId: joinRequestId.current,
       });
       setJoinTarget(null);
       setJoinName('');
       setJoinContact('');
-      setResult({ status: joined.status, position: joined.position, kind: 'joined' });
+      setResult({ ...joined, kind: 'joined', refreshVersionAtSubmit: refreshVersion });
+      joinRequestId.current = null;
       await refreshAfterMutation();
     } catch (err) {
-      setError((err as Error).message);
+      setFormError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -240,12 +294,12 @@ export function PublicSignupScreen() {
         <div className="signup-public-card signup-public-error">
           <BrandLogo />
           <h1>Sign-up unavailable</h1>
-          <p>{error ?? 'This link could not be found.'}</p>
+          <p>{loadError ?? 'This link could not be found.'}</p>
           <button
             className="btn primary"
             type="button"
             onClick={() => {
-              setError(null);
+              setLoadError(null);
               setLoading(true);
               void refresh();
             }}
@@ -265,7 +319,9 @@ export function PublicSignupScreen() {
     pairSpacesLeft: spaces,
   } = buildSignupRosterView(data.registrations, data.event.capacityTeams);
   const countdown = getCountdownParts(data.event.startsAt, clockNow);
-  const registrationsOpen = data.event.isOpen && !countdown?.started;
+  const eventEnded = Boolean(data.event.endsAt && Date.parse(data.event.endsAt) <= clockNow);
+  const eventCancelled = Boolean(data.event.cancelledAt);
+  const registrationsOpen = data.event.isOpen && !countdown?.started && !eventCancelled;
 
   function rosterRow(
     registration: SignupRegistration,
@@ -304,13 +360,16 @@ export function PublicSignupScreen() {
       </header>
 
       <section className="signup-public-hero">
-        <div className="signup-public-eyebrow">LIVE EVENT SIGN-UP</div>
+        <div className="signup-public-eyebrow">
+          {eventCancelled ? 'EVENT CANCELLED' : eventEnded ? 'EVENT ENDED' : countdown?.started ? 'EVENT IN PROGRESS' : 'LIVE EVENT SIGN-UP'}
+        </div>
         <h1>{data.event.title}</h1>
         <div className="signup-public-meta">
-          <span>{formatDateTime(data.event.startsAt)}</span>
+          <span>{formatEventDateTime(data.event.startsAt, data.event.timeZone)}</span>
+          {data.event.endsAt && <span>Ends {formatEventDateTime(data.event.endsAt, data.event.timeZone)}</span>}
           {data.event.venue && <span>{data.event.venue}</span>}
         </div>
-        {countdown && (
+        {countdown && !eventEnded && !eventCancelled && (
           <div
             className={'signup-public-countdown ' + (countdown.started ? 'started' : '')}
             aria-label={countdown.started ? 'Event started' : 'Countdown to event start'}
@@ -335,12 +394,16 @@ export function PublicSignupScreen() {
         )}
         <div className={'signup-public-availability ' + (!registrationsOpen ? 'closed' : spaces > 0 ? 'open' : 'waiting')}>
           <strong>{!registrationsOpen
-            ? 'Registration closed'
+            ? eventCancelled ? 'Event cancelled' : eventEnded ? 'Event ended' : 'Registration closed'
             : spaces > 0
               ? `${spaces} team space${spaces === 1 ? '' : 's'} left`
               : 'Confirmed teams full'}</strong>
           <span>{!registrationsOpen
-            ? countdown?.started
+            ? eventCancelled
+              ? data.event.cancellationMessage || 'This event has been cancelled by the organiser.'
+              : eventEnded
+                ? 'This event has finished.'
+                : countdown?.started
               ? 'This event has already started.'
               : 'Registrations have been closed by the organiser.'
             : spaces > 0
@@ -403,11 +466,13 @@ export function PublicSignupScreen() {
               <div className="signup-public-form">
                 <label>
                   <span>Your name</span>
-                  <input value={joinName} onChange={(e) => setJoinName(e.target.value)} autoComplete="name" />
+                  <input ref={joinNameRef} value={joinName} onChange={(e) => { joinRequestId.current = null; setJoinName(e.target.value); setFieldErrors((current) => ({ ...current, joinName: '' })); }} autoComplete="name" aria-invalid={Boolean(fieldErrors.joinName)} aria-describedby={fieldErrors.joinName ? 'join-name-error' : undefined} />
+                  {fieldErrors.joinName && <small id="join-name-error" className="signup-field-error">{fieldErrors.joinName}</small>}
                 </label>
                 <label>
                   <span>Your WhatsApp number or email</span>
-                  <input value={joinContact} onChange={(e) => setJoinContact(e.target.value)} autoComplete="email" placeholder="Kept private" />
+                  <input ref={joinContactRef} value={joinContact} onChange={(e) => { joinRequestId.current = null; setJoinContact(e.target.value); setFieldErrors((current) => ({ ...current, joinContact: '' })); }} autoComplete="email" placeholder="Kept private" aria-invalid={Boolean(fieldErrors.joinContact)} aria-describedby={fieldErrors.joinContact ? 'join-contact-error' : undefined} />
+                  {fieldErrors.joinContact && <small id="join-contact-error" className="signup-field-error">{fieldErrors.joinContact}</small>}
                 </label>
                 <button className="btn primary full lg" type="button" disabled={submitting} onClick={joinPlayer}>
                   {submitting ? 'Joining…' : `Join ${joinTarget.playerOne}`}
@@ -419,19 +484,24 @@ export function PublicSignupScreen() {
           ) : result ? (
             <div className={'signup-public-result ' + result.status}>
               <span>{result.kind === 'solo' || result.status === 'confirmed' ? '✓' : result.position}</span>
-              <h2>{result.kind === 'solo'
+              <h2>{result.missing
+                ? 'No longer on the live list'
+                : result.kind === 'solo'
                 ? 'You’re looking for a partner!'
                 : result.status === 'confirmed'
                   ? 'You’re confirmed!'
                   : 'You’re on the waiting list'}</h2>
               <p>
-                {result.kind === 'solo'
+                {result.missing
+                  ? 'The organiser may have changed or removed this registration. Contact them to confirm what happened.'
+                  : result.kind === 'solo'
                   ? 'Another player can join you from the live partner list. A team place is counted only after you form a pair.'
                   : result.status === 'confirmed'
                     ? 'Your pair is now on the live confirmed list.'
                   : `You are waiting-list position ${result.position}. The list updates automatically when places change.`}
               </p>
-              <p className="signup-public-private">Need to change or cancel it? Message the organiser. Only the organiser can edit the live list.</p>
+              <p className="signup-public-private">Need to change or cancel it? Only the organiser can edit the live list.</p>
+              {contactHref && <a className="btn full" href={contactHref} target="_blank" rel="noreferrer">Contact organiser</a>}
               <button className="btn full" type="button" onClick={() => setResult(null)}>Add another sign-up</button>
             </div>
           ) : (
@@ -448,39 +518,46 @@ export function PublicSignupScreen() {
               </div>
               {!registrationsOpen ? (
                 <div className="signup-public-closed">
-                  {countdown?.started
+                  {eventCancelled
+                    ? 'Registrations are closed for this cancelled event.'
+                    : eventEnded
+                      ? 'Registrations closed when this event started.'
+                      : countdown?.started
                     ? 'This event has started, so registrations are closed.'
                     : 'Registrations are currently closed by the organiser.'}
                 </div>
               ) : (
                 <div className="signup-public-form">
                   <div className="signup-public-mode" role="group" aria-label="Sign-up type">
-                    <button className={signupMode === 'pair' ? 'active' : ''} type="button" onClick={() => setSignupMode('pair')}>
+                    <button className={signupMode === 'pair' ? 'active' : ''} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('pair'); }}>
                       Sign up as a pair
                     </button>
-                    <button className={signupMode === 'solo' ? 'active' : ''} type="button" onClick={() => setSignupMode('solo')}>
+                    <button className={signupMode === 'solo' ? 'active' : ''} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('solo'); }}>
                       Sign up solo
                     </button>
                   </div>
                   {signupMode === 'pair' && (
                     <label>
                       <span>Pair name <small>optional</small></span>
-                      <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Smashers" />
+                      <input value={teamName} onChange={(e) => { registerRequestId.current = null; setTeamName(e.target.value); }} placeholder="The Smashers" />
                     </label>
                   )}
                   <label>
                     <span>{signupMode === 'pair' ? 'Player one' : 'Your name'}</span>
-                    <input value={playerOne} onChange={(e) => setPlayerOne(e.target.value)} autoComplete="name" />
+                    <input ref={playerOneRef} value={playerOne} onChange={(e) => { registerRequestId.current = null; setPlayerOne(e.target.value); setFieldErrors((current) => ({ ...current, playerOne: '' })); }} autoComplete="name" aria-invalid={Boolean(fieldErrors.playerOne)} aria-describedby={fieldErrors.playerOne ? 'player-one-error' : undefined} />
+                    {fieldErrors.playerOne && <small id="player-one-error" className="signup-field-error">{fieldErrors.playerOne}</small>}
                   </label>
                   {signupMode === 'pair' && (
                     <label>
                       <span>Player two</span>
-                      <input value={playerTwo} onChange={(e) => setPlayerTwo(e.target.value)} autoComplete="name" />
+                      <input ref={playerTwoRef} value={playerTwo} onChange={(e) => { registerRequestId.current = null; setPlayerTwo(e.target.value); setFieldErrors((current) => ({ ...current, playerTwo: '' })); }} autoComplete="name" aria-invalid={Boolean(fieldErrors.playerTwo)} aria-describedby={fieldErrors.playerTwo ? 'player-two-error' : undefined} />
+                      {fieldErrors.playerTwo && <small id="player-two-error" className="signup-field-error">{fieldErrors.playerTwo}</small>}
                     </label>
                   )}
                   <label>
                     <span>WhatsApp number or email</span>
-                    <input value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" placeholder="Kept private" />
+                    <input ref={contactRef} value={contact} onChange={(e) => { registerRequestId.current = null; setContact(e.target.value); setFieldErrors((current) => ({ ...current, contact: '' })); }} autoComplete="email" placeholder="Kept private" aria-invalid={Boolean(fieldErrors.contact)} aria-describedby={fieldErrors.contact ? 'contact-error' : undefined} />
+                    {fieldErrors.contact && <small id="contact-error" className="signup-field-error">{fieldErrors.contact}</small>}
                   </label>
                   <label className="signup-honeypot" aria-hidden>
                     Website
@@ -490,14 +567,16 @@ export function PublicSignupScreen() {
                     {submitting ? 'Registering…' : signupMode === 'pair' ? 'Register our pair' : 'Register me'}
                   </button>
                   <p className="signup-public-private">
-                    Pairs have priority over solo players. Contact details are visible only to the organiser. To change or cancel a registration, message the organiser.
+                    Player names appear on the public list. Contact details are visible only to the organiser. See our <a href="/privacy/" target="_blank" rel="noreferrer">privacy policy</a>.
                   </p>
+                  {contactHref && <a className="signup-public-contact" href={contactHref} target="_blank" rel="noreferrer">Contact organiser</a>}
                 </div>
               )}
             </>
           )}
 
-          {error && <div className="signup-message error">{error}</div>}
+          {formError && <div className="signup-message error" role="alert">{formError}</div>}
+          {refreshError && <div className="signup-message error" role="status">Live-list refresh failed. Your form is safe; we’ll retry automatically.</div>}
         </section>
       </div>
 

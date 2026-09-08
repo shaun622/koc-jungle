@@ -5839,6 +5839,9 @@ button {
   font-size: 16px;
 }
 .signup-public-form input:focus { border-color: #568b49; box-shadow: 0 0 0 2px rgba(158, 255, 61, .05); }
+.signup-public-form input[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 15%, transparent); }
+.signup-field-error { display: block; margin-top: 5px; color: var(--red); font-size: 12px; }
+.signup-public-contact { display: inline-flex; color: color-mix(in srgb, var(--green) 75%, white); font-weight: 700; }
 .signup-public-private { margin: 0; color: #7894a2; font-size: 11px; line-height: 1.45; text-align: center; }
 .signup-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .signup-public-result { padding: 18px 8px; text-align: center; }

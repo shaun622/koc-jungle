@@ -47,7 +47,7 @@ function statusSummary(status: EventStatus): string {
 
 function formatName(format: TournamentFormatId): string {
   switch (format) {
-    case 'americano': return 'Americano';
+    case 'americano': return 'Team Americano';
     case 'round-robin': return 'Round Robin';
     case 'bracket': return 'Tournament';
     case 'mexicano': return 'Mexicano';
@@ -64,6 +64,14 @@ function lastUpdated(timestamp: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Updated ${hours}h ago`;
   return `Updated ${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(timestamp)}`;
+}
+
+function eventCardMeta(event: EventCatalogMetadata): string {
+  if (event.startsAt) {
+    return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+      .format(new Date(event.startsAt));
+  }
+  return lastUpdated(event.updatedAt);
 }
 
 function cardActionLabel(status: EventStatus, archived: boolean): string {
@@ -229,11 +237,11 @@ export function HomeScreen() {
               onShowRules={() => setRulesForFormat('koc')}
             />
             <ModeCard
-              name="Americano"
+              name="Team Americano"
               blurb="Automatic rotations, balanced court time and a live points table."
               icon={<Icons.Rotate className="icon" />}
               locked={isFormatLocked('americano')}
-              onPick={() => tryCreate('Americano', 'americano', 'Americano')}
+              onPick={() => tryCreate('Team Americano', 'americano', 'Team Americano')}
               onShowRules={() => setRulesForFormat('americano')}
             />
             <ModeCard
@@ -304,7 +312,7 @@ export function HomeScreen() {
         open={!!deleteTarget}
         title="Delete this competition?"
         message={deleteTarget
-          ? `“${deleteTarget.name}” will be permanently deleted from this device${auth.user ? ' and your synced devices' : ''}. This cannot be undone. Its public sign-up page and registrations stay open separately.`
+          ? `“${deleteTarget.name}” will be permanently deleted from this device${auth.user ? ' and your synced devices' : ''}. This cannot be undone. ${auth.user ? 'When deletion syncs, its public sign-up will be cancelled. The link and registration history will remain available.' : 'Sign in first if you also need to cancel its public sign-up.'}`
           : ''}
         confirmLabel="Delete competition"
         destructive
@@ -360,7 +368,7 @@ function EventGroup({
               <strong>{event.name}</strong>
               <span className="event-card-status">{statusSummary(event.status)}</span>
               <span className="event-card-meta">
-                {event.venue ? `${event.venue} · ` : ''}{lastUpdated(event.updatedAt)}
+                {event.venue ? `${event.venue} · ` : ''}{eventCardMeta(event)} · Sign-up {event.signupState}
               </span>
             </button>
             <div className="event-card-actions">

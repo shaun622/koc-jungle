@@ -23,7 +23,8 @@ export function useAuth(): AuthState & {
     email: string,
     password: string,
   ) => Promise<{ error?: string; needsConfirmation?: boolean }>;
-  signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ error?: string }>;
+  signOut: () => Promise<{ error?: string }>;
   deleteAccount: () => Promise<{ error?: string }>;
 } {
   const [user, setUser] = useState<User | null>(null);
@@ -69,13 +70,23 @@ export function useAuth(): AuthState & {
       return { needsConfirmation: !data.session };
     },
 
+    async requestPasswordReset(email) {
+      if (!supabase) return { error: 'Cloud sync not configured.' };
+      const redirectTo = typeof window === 'undefined'
+        ? undefined
+        : `${window.location.origin}/auth/recovery`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      return error ? { error: error.message } : {};
+    },
+
     async signOut() {
-      if (!supabase) return;
-      try {
-        await flushCloudSync();
-      } finally {
-        await supabase.auth.signOut();
+      if (!supabase) return {};
+      const flushed = await flushCloudSync();
+      if (!flushed.ok) {
+        return { error: flushed.error || `${flushed.pendingEventIds.length} event change(s) are still waiting to sync.` };
       }
+      const { error } = await supabase.auth.signOut();
+      return error ? { error: error.message } : {};
     },
 
     async deleteAccount() {

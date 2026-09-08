@@ -169,7 +169,7 @@ describe('locked organiser signup mutations', () => {
 
     const result = await saveSignupEvent(saveInput);
 
-    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_save_signup_event', {
+    expect(signupsSupabaseMocks.rpc).toHaveBeenCalledWith('organizer_save_signup_event_v2', {
       p_source_event_id: 'event-1',
       p_account_slug: 'shaun',
       p_title: 'Monday Night KoC',
@@ -183,6 +183,10 @@ describe('locked organiser signup mutations', () => {
       p_auto_add_pairs: true,
       p_signup_event_id: 'signup-1',
       p_is_open: null,
+      p_time_zone: null,
+      p_organizer_name: null,
+      p_public_contact_method: null,
+      p_public_contact_value: null,
     });
     expect(result).toMatchObject({
       applied: true,

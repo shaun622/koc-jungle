@@ -6,6 +6,7 @@ import {
   teamLabelShort,
   teamMatchHistory,
   teamNameFor,
+  teamPointsBreakdown,
 } from '@/store/selectors';
 import { Icons } from '@/components/Icons';
 import { RankMovement } from '@/components/RankMovement';
@@ -196,7 +197,7 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
   if (!event) return null;
   const history = teamMatchHistory(event, teamId);
   const teamName = teamNameFor(event, teamId);
-  const total = history.reduce((sum, h) => sum + h.pointsEarned, 0);
+  const points = teamPointsBreakdown(event, teamId);
   const wins = history.filter((h) => h.won).length;
   const losses = history.filter((h) => !h.won && !h.tied).length;
 
@@ -211,7 +212,7 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
           <div>
             <h2 style={{ marginBottom: 4 }}>{teamName}</h2>
             <div style={{ fontSize: 14, color: 'var(--text-2)', letterSpacing: '0.04em' }}>
-              {wins} wins · {losses} losses · {total} points
+              {wins} wins · {losses} losses · {points.effective} points
             </div>
           </div>
           <button
@@ -247,6 +248,11 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
                 </span>
               </div>
             ))}
+          </div>
+        )}
+        {points.adjustment !== 0 && (
+          <div className="signup-message">
+            Match points {points.earned} · Organiser adjustment {points.adjustment > 0 ? '+' : ''}{points.adjustment} · Total {points.effective}
           </div>
         )}
       </div>

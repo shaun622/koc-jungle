@@ -44,7 +44,7 @@ const koc: FormatRuleGuide = {
 
 const americano: FormatRuleGuide = {
   id: 'americano',
-  name: 'Americano',
+  name: 'Team Americano (fixed pairs)',
   tagline: 'One pool, rotating opponents. Maximum variety in the rounds you set.',
   bestFor:
     'Open nights with a fixed time window where you want to mix it up and face as many different opponents as possible. Set the round count to fit the time you have.',

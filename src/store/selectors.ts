@@ -91,6 +91,13 @@ export function teamMatchHistory(
   return out;
 }
 
+export function teamPointsBreakdown(event: EventState, teamId: string) {
+  const earned = teamMatchHistory(event, teamId).reduce((sum, row) => sum + row.pointsEarned, 0);
+  const team = event.teams.find((candidate) => candidate.id === teamId);
+  const effective = team?.pointsOverride ?? earned;
+  return { earned, adjustment: effective - earned, effective };
+}
+
 /**
  * Per-team rank delta between the current standings and the standings
  * *before* the most recent completed round.
