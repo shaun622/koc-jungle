@@ -22,6 +22,9 @@ export interface EventCatalogMetadata {
   archivedAt: number | null;
   startsAt: string | null;
   signupState: 'unpublished' | 'open' | 'closed' | 'cancelled';
+  /** Derived display-only values; never persisted as a second roster. */
+  teamCount?: number;
+  teamCapacity?: number;
 }
 
 export interface EventRepository {
@@ -177,6 +180,8 @@ export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetad
     updatedAt: record.updatedAt,
     archivedAt: record.archivedAt,
     startsAt: record.state.settings.publishedStartsAt ?? null,
+    teamCount: record.state.teams.filter((team) => team.active).length,
+    teamCapacity: record.state.courts.length * 2,
     signupState: record.state.settings.publishedCancelledAt
       ? 'cancelled'
       : record.state.settings.publishedSignupId

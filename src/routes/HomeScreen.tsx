@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { useEventCatalogStore } from '@/store/eventCatalog';
@@ -11,117 +11,97 @@ import {
   templateToEventState,
   type Template,
 } from '@/store/templates';
-import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
+import { isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
 import { useAuth } from '@/hooks/useAuth';
 import { isIAPAvailable } from '@/lib/iap';
 import { eventRouteForStatus } from '@/lib/eventRoutes';
-import { useThemeStore } from '@/store/theme';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
 import { AuthModal } from '@/components/AuthModal';
 import { PaywallModal } from '@/components/PaywallModal';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { IpadHint } from '@/components/IpadHint';
 import { Icons } from '@/components/Icons';
 import type { EventState, EventStatus, TournamentFormatId } from '@/types/domain';
 
-const RUNNING_STATUSES = new Set<EventStatus>([
-  'qualifier',
-  'seeding',
-  'round-in-progress',
-  'between-rounds',
-]);
-const DRAFT_STATUSES = new Set<EventStatus>(['setup']);
+import { ArrowRight, CalendarDays, MapPin, Users, Search, MoreHorizontal, Link as LinkIcon } from 'lucide-react';
+import { getOwnedSignup, copySignupLink } from '@/lib/signups';
+import { DesignDialog } from '@/components/DesignDialog';
 
-function statusSummary(status: EventStatus): string {
-  switch (status) {
-    case 'setup': return 'Setup in progress';
-    case 'qualifier': return 'Qualifier round';
-    case 'seeding': return 'Seeding teams';
-    case 'round-in-progress': return 'Live now';
-    case 'between-rounds': return 'Between rounds';
-    case 'complete': return 'Complete · podium ready';
-  }
+
+const RUNNING_STATUSES = new Set<EventStatus>(['qualifier', 'seeding', 'round-in-progress', 'between-rounds']);
+
+export type LibraryFilter = 'upcoming' | 'drafts' | 'past' | 'hidden';
+export function libraryFilterFor(event: EventCatalogMetadata): LibraryFilter {
+  if (event.archivedAt !== null) return 'hidden';
+  if (event.status === 'complete' || event.signupState === 'cancelled') return 'past';
+  // A dated setup remains available until the organiser actually finishes it.
+  return RUNNING_STATUSES.has(event.status) || event.startsAt ? 'upcoming' : 'drafts';
 }
-
+export function featuredLibraryEvent(events: EventCatalogMetadata[]): EventCatalogMetadata | undefined {
+  const available = events.filter(e => libraryFilterFor(e) === 'upcoming');
+  return available.find(e => RUNNING_STATUSES.has(e.status))
+    ?? available.filter(e => e.startsAt && Date.parse(e.startsAt) > Date.now())
+      .sort((a,b) => Date.parse(a.startsAt!) - Date.parse(b.startsAt!))[0]
+    ?? available[0];
+}
 function formatName(format: TournamentFormatId): string {
-  switch (format) {
-    case 'americano': return 'Team Americano';
-    case 'round-robin': return 'Round Robin';
-    case 'bracket': return 'Tournament';
-    case 'mexicano': return 'Mexicano';
-    case 'koc':
-    default: return 'King of the Court';
-  }
+  return ({koc:'King of the Court', americano:'Team Americano', 'round-robin':'Round Robin', bracket:'Tournament', mexicano:'Mexicano'})[format];
 }
-
-function lastUpdated(timestamp: number): string {
-  const elapsed = Math.max(0, Date.now() - timestamp);
-  const minutes = Math.floor(elapsed / 60_000);
-  if (minutes < 1) return 'Updated just now';
-  if (minutes < 60) return `Updated ${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Updated ${hours}h ago`;
-  return `Updated ${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(timestamp)}`;
+function statusSummary(event: EventCatalogMetadata): string {
+  if (event.signupState === 'cancelled') return 'Sign-up cancelled';
+  if (RUNNING_STATUSES.has(event.status)) return 'In progress';
+  if (event.status === 'complete') return 'Completed';
+  if (event.signupState === 'open' && (!event.startsAt || Date.parse(event.startsAt) > Date.now())) return 'Sign-ups open';
+  if (event.signupState === 'unpublished') return 'Unpublished';
+  return 'Sign-ups closed';
 }
-
-function eventCardMeta(event: EventCatalogMetadata): string {
-  if (event.startsAt) {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
-      .format(new Date(event.startsAt));
-  }
-  return lastUpdated(event.updatedAt);
-}
-
-function cardActionLabel(status: EventStatus, archived: boolean): string {
+function cardActionLabel(status: EventStatus, archived = false): string {
   if (archived) return 'Restore & open';
-  switch (status) {
-    case 'setup': return 'Continue setup';
-    case 'qualifier': return 'Open qualifier';
-    case 'seeding': return 'Open seeding';
-    case 'round-in-progress': return 'Resume scoring';
-    case 'between-rounds': return 'Continue event';
-    case 'complete': return 'View results';
-  }
+  return status === 'complete' ? 'View results' : RUNNING_STATUSES.has(status) ? 'Resume event' : 'Open event';
+}
+function dateLabel(event: EventCatalogMetadata): string {
+  if (!event.startsAt || !Number.isFinite(Date.parse(event.startsAt))) return 'Date not set';
+  return new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(new Date(event.startsAt));
 }
 
 export function HomeScreen() {
-  const activeEvent = useEventStore((s) => s.event);
-  const createEvent = useEventStore((s) => s.createEvent);
-  const loadEvent = useEventStore((s) => s.loadEvent);
-  const selectEvent = useEventStore((s) => s.selectEventById);
-  const archiveEvent = useEventStore((s) => s.archiveLocalEvent);
-  const deleteLocalEvent = useEventStore((s) => s.deleteLocalEvent);
-  const events = useEventCatalogStore((s) => s.events);
-  const activeEventId = useEventCatalogStore((s) => s.activeEventId);
-  const catalogError = useEventCatalogStore((s) => s.lastError);
+  const createEvent = useEventStore(s => s.createEvent);
+  const loadEvent = useEventStore(s => s.loadEvent);
+  const selectEvent = useEventStore(s => s.selectEventById);
+  const archiveEvent = useEventStore(s => s.archiveLocalEvent);
+  const deleteLocalEvent = useEventStore(s => s.deleteLocalEvent);
+  const events = useEventCatalogStore(s => s.events);
+  const catalogError = useEventCatalogStore(s => s.lastError);
+  const hydrated = useEventCatalogStore(s => s.hydrated);
   const navigate = useNavigate();
-
   const auth = useAuth();
-  const pro = useEntitlementsStore((s) => s.pro);
+  const pro = useEntitlementsStore(s => s.pro);
   const nativeBilling = isIAPAvailable();
-  const themePref = useThemeStore((s) => s.preference);
-  const cycleTheme = useThemeStore((s) => s.cyclePreference);
-
-  const [templates, setTemplates] = useState<Template[]>(() => listTemplates());
-  const refreshTemplates = () => setTemplates(listTemplates());
-  const [authOpen, setAuthOpen] = useState(false);
-  const [paywall, setPaywall] = useState<{ reason: string } | null>(null);
-  const [rulesForFormat, setRulesForFormat] = useState<TournamentFormatId | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<EventCatalogMetadata | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
-
-  const grouped = useMemo(() => {
-    const current = events.filter((item) => item.archivedAt === null);
-    return {
-      live: current.filter((item) => RUNNING_STATUSES.has(item.status)),
-      drafts: current.filter((item) => DRAFT_STATUSES.has(item.status)),
-      completed: current.filter((item) => item.status === 'complete'),
-      archived: events.filter((item) => item.archivedAt !== null),
-    };
-  }, [events]);
+  const [templates,setTemplates] = useState<Template[]>(() => listTemplates());
+  const [authOpen,setAuthOpen] = useState(false);
+  const [paywall,setPaywall] = useState<{reason:string}|null>(null);
+  const [rulesForFormat,setRulesForFormat] = useState<TournamentFormatId|null>(null);
+  const [deleteTarget,setDeleteTarget] = useState<EventCatalogMetadata|null>(null);
+  const [deletingId,setDeletingId] = useState<string|null>(null);
+  const [createOpen,setCreateOpen] = useState(false);
+  const [templatesOpen,setTemplatesOpen] = useState(false);
+  const [filter,setFilter] = useState<LibraryFilter>('upcoming');
+  const [query,setQuery] = useState('');
+  const [copying,setCopying] = useState<string|null>(null);
+  const [message,setMessage] = useState('');
+  const libraryRef = useRef<HTMLElement>(null);
+  // Refresh presentation labels when a scheduled event crosses its start time.
+  const [,setMinute] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => setMinute(n => n + 1),60_000); return () => clearInterval(timer); },[]);
+  const counts = useMemo(() => events.reduce((result,event) => {
+    result[libraryFilterFor(event)]++; return result;
+  },{upcoming:0,drafts:0,past:0,hidden:0}),[events]);
+  const shown = events.filter(e => libraryFilterFor(e) === filter && (e.name + ' ' + e.venue).toLowerCase().includes(query.toLowerCase()));
+  const featured = featuredLibraryEvent(events);
+  const fullName = typeof auth.user?.user_metadata?.full_name === 'string' ? auth.user.user_metadata.full_name : auth.user?.email?.split('@')[0];
+  const firstName = fullName?.split(' ')[0];
+  const initials = (firstName || 'Menu').slice(0,2).toUpperCase();
 
   function openSelected(next: EventState | null) {
     if (next) navigate(eventRouteForStatus(next));
@@ -151,6 +131,7 @@ export function HomeScreen() {
       setPaywall({ reason: `${displayName} needs Pro.` });
       return;
     }
+    setCreateOpen(false);
     createEvent(name, format);
     openSelected(useEventStore.getState().event);
   }
@@ -160,151 +141,59 @@ export function HomeScreen() {
     openSelected(useEventStore.getState().event);
   }
 
-  const hasEvents = events.length > 0;
+
+  async function copyLink(event: EventCatalogMetadata) {
+    if (!auth.user) { setAuthOpen(true); return; }
+    setCopying(event.id); setMessage('');
+    try {
+      const signup = await getOwnedSignup(auth.user.id,event.id);
+      if (!signup) { setMessage('Publish a sign-up page from this event’s setup first.'); return; }
+      await copySignupLink(signup);
+      setMessage('Sign-up link copied.');
+    } catch { setMessage('Could not copy the sign-up link. Check your connection and try again.'); }
+    finally { setCopying(null); }
+  }
 
   return (
-    <div className="home">
-      <header className="home-top">
-        <button className="home-top-brand home-brand-button" onClick={() => navigate('/home')}>
-          <div className="brand-mark"><BrandLogo /></div>
-          <span>PADEL TOURNAMENT MAKER</span>
-        </button>
-        <div className="home-top-actions">
-          <button
-            className="btn ghost sm theme-toggle"
-            onClick={cycleTheme}
-            title={themePref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            aria-label="Toggle theme"
-          >
-            {themePref === 'dark' ? <Icons.Sun className="icon" /> : <Icons.Moon className="icon" />}
-          </button>
-          <AppMenu event={activeEvent} />
-        </div>
+    <div className="home event-design event-home">
+      <header className="ed-header">
+        <button className="ed-brand" onClick={() => navigate('/home')} aria-label="Padel Tournament Maker home"><BrandLogo /><span>PADEL<small>TOURNAMENT MAKER</small></span></button>
+        <nav className="ed-nav" aria-label="Main navigation">
+          <button className="active" onClick={() => libraryRef.current?.scrollIntoView({behavior:'smooth'})}>Events</button>
+          <button onClick={() => { setTemplates(listTemplates()); setTemplatesOpen(true); }}>Templates</button>
+          <button onClick={() => navigate('/help')}>Help & guides</button>
+        </nav>
+        <AppMenu event={null} onCreate={() => setCreateOpen(true)} trigger={<><span className="ed-avatar">{initials}</span><span className="ed-account-name">{firstName || 'Menu'}</span><span aria-hidden>⌄</span></>} />
       </header>
-
-      <div className={'home-body ' + (hasEvents ? 'home-body--library' : '')}>
-        <IpadHint />
-        <div className="home-hero home-hero--compact">
-          <div className="brand-mark home-hero-logo"><BrandLogo /></div>
-          <h1>{hasEvents ? 'Your events' : 'Padel Tournament Maker'}</h1>
-          <p className="home-hero-sub">
-            {hasEvents
-              ? 'Create several competitions, then open the one you want to run.'
-              : 'Run every court from one iPad, then mirror the live scoreboard to the TV.'}
-          </p>
-        </div>
-
+      <div className="ed-body">
+        <div className="ed-heading"><div><p>{firstName ? `Good to see you, ${firstName}.` : 'Your club. Your court.'}</p><h1>Events</h1><p>Organise padel. Build your community.</p></div><button className="btn primary" onClick={() => setCreateOpen(true)}><Icons.Plus className="icon" />Create event</button></div>
         {catalogError && <div className="signup-message error" role="alert">{catalogError}</div>}
-
-        {hasEvents && (
-          <section className="event-library" aria-label="Event library">
-            {grouped.live.length > 0 && (
-              <EventGroup title="In progress" events={grouped.live} activeEventId={activeEventId} onOpen={openEvent} onArchive={setArchived} onDelete={setDeleteTarget} />
-            )}
-            {grouped.drafts.length > 0 && (
-              <EventGroup title="Setup" events={grouped.drafts} activeEventId={activeEventId} onOpen={openEvent} onArchive={setArchived} onDelete={setDeleteTarget} />
-            )}
-            {grouped.completed.length > 0 && (
-              <EventGroup title="Completed" events={grouped.completed} activeEventId={activeEventId} onOpen={openEvent} onArchive={setArchived} onDelete={setDeleteTarget} />
-            )}
-            {grouped.archived.length > 0 && (
-              <div className="event-library-archived">
-                <button className="btn ghost sm" onClick={() => setShowArchived((value) => !value)}>
-                  {showArchived ? 'Hide' : 'Show'} hidden on this device ({grouped.archived.length})
-                </button>
-                {showArchived && (
-                  <EventGroup title="Hidden on this device" events={grouped.archived} activeEventId={activeEventId} onOpen={openEvent} onArchive={(id) => setArchived(id, false)} onDelete={setDeleteTarget} archived />
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        <section className="home-section new-event-section">
-          <div className="home-section-title">
-            <span>{hasEvents ? 'Create another event' : 'Choose a format'}</span>
-            <span className="pro-chip">
-              {!nativeBilling ? 'PRO INCLUDED' : pro ? 'PRO ACTIVE' : '7-DAY FREE TRIAL'}
-            </span>
-          </div>
-          <div className="home-modes">
-            <ModeCard
-              name="King of the Court"
-              blurb="Winners climb, losers drop, and the King defends Centre Court."
-              icon={<Icons.Crown className="icon" />}
-              locked={isFormatLocked('koc')}
-              onPick={() => tryCreate('Padel Night', 'koc', 'King of the Court')}
-              onShowRules={() => setRulesForFormat('koc')}
-            />
-            <ModeCard
-              name="Team Americano"
-              blurb="Automatic rotations, balanced court time and a live points table."
-              icon={<Icons.Rotate className="icon" />}
-              locked={isFormatLocked('americano')}
-              onPick={() => tryCreate('Team Americano', 'americano', 'Team Americano')}
-              onShowRules={() => setRulesForFormat('americano')}
-            />
-            <ModeCard
-              name="Tournament"
-              blurb="Build a complete draw and finish on a TV-ready podium."
-              icon={<Icons.Trophy className="icon" />}
-              locked={false}
-              disabled
-              status="COMING SOON"
-            />
-          </div>
-        </section>
-
-        <div className="home-actions">
-          <button className="btn" onClick={() => loadAsNew(buildDemoEvent())}>Load KoC demo</button>
-          <button className={'btn ' + (pro ? '' : 'paywall-cta')} onClick={() => setPaywall({ reason: pro ? '' : 'Unlock the full toolkit.' })}>
-            {!nativeBilling ? '👑 Pro included' : pro ? '👑 Manage Pro' : '👑 Get Pro'}
-          </button>
-          {auth.cloudEnabled && (
-            <button
-              className="btn"
-              onClick={() => {
-                if (!auth.user && isFeatureLocked()) {
-                  setPaywall({ reason: 'Cloud sync needs Pro.' });
-                  return;
-                }
-                setAuthOpen(true);
-              }}
-            >
-              {auth.user ? `Signed in: ${(auth.user.email ?? '').split('@')[0]}` : 'Sign in / Sync'}
-            </button>
-          )}
-        </div>
-
-        {templates.length > 0 && (
-          <section className="home-section">
-            <div className="home-section-title">Saved templates</div>
-            <div className="landing-templates-list">
-              {templates.map((template) => (
-                <div key={template.id} className="landing-template-row">
-                  <button className="btn ghost" style={{ flex: 1, justifyContent: 'flex-start' }} onClick={() => loadAsNew(templateToEventState(template))}>
-                    <span style={{ fontWeight: 700 }}>{template.name}</span>
-                    <span style={{ color: 'var(--text-2)', marginLeft: 8, fontSize: 14 }}>
-                      {template.teams.length} teams · {template.courts.length} courts
-                    </span>
-                  </button>
-                  <button className="op-score-btn" onClick={() => { deleteTemplate(template.id); refreshTemplates(); }} aria-label={`Delete ${template.name} template`}>
-                    <Icons.Trash className="icon" />
-                  </button>
-                </div>
-              ))}
+        {message && <p className="ed-notice" role="status">{message}</p>}
+        {featured && <article className="ed-feature">
+          <div className="ed-feature-main"><p className="ed-feature-label">{RUNNING_STATUSES.has(featured.status) ? 'Event in progress' : 'Next event'}</p>
+            <div className="ed-feature-grid"><div className="ed-date-tile" aria-hidden>{featured.startsAt && Number.isFinite(Date.parse(featured.startsAt)) ? <><span>{new Date(featured.startsAt).toLocaleDateString(undefined,{weekday:'short'})}</span><strong>{new Date(featured.startsAt).getDate()}</strong><span>{new Date(featured.startsAt).toLocaleDateString(undefined,{month:'short'})}</span></> : <CalendarDays size={40}/>}</div>
+              <div className="ed-feature-details"><h2>{featured.name}</h2><div className="ed-feature-meta"><span><CalendarDays />{dateLabel(featured)}</span>{featured.venue && <span><MapPin />{featured.venue}</span>}<span><Users />{featured.teamCount ?? 0} / {featured.teamCapacity ?? 0} teams</span></div><Capacity event={featured}/></div>
+              <div className="ed-feature-actions"><button className="btn primary" onClick={() => void openEvent(featured.id)}><ArrowRight />{cardActionLabel(featured.status)}</button>{featured.signupState !== 'unpublished' && <button className="btn" disabled={copying !== null} onClick={() => void copyLink(featured)}><LinkIcon />{copying === featured.id ? 'Copying…' : 'Copy sign-up link'}</button>}</div>
             </div>
-          </section>
-        )}
-
-        <div className="landing-legal">
-          <button type="button" className="landing-legal-link" onClick={() => navigate('/help')}>Format guide</button>
-          <span aria-hidden>·</span><a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
-          <span aria-hidden>·</span><a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
-          <span aria-hidden>·</span><a href="mailto:info@padelkoc.com">Contact</a>
-        </div>
+          </div><div className="ed-court-photo" role="img" aria-label="Padel court" />
+        </article>}
+        <section ref={libraryRef} className="ed-library" aria-label="Event library">
+          <div className="ed-toolbar"><div className="ed-tabs" role="tablist" aria-label="Event status">{([['upcoming','Upcoming'],['drafts','Drafts'],['past','Past'],['hidden','Hidden']] as const).map(([id,label]) => <button key={id} type="button" role="tab" aria-selected={filter === id} onClick={() => setFilter(id)}>{label}<span>{counts[id]}</span></button>)}</div><label className="ed-search"><Search /><input aria-label="Search events" placeholder="Search events…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>
+          <div className="ed-table-head" aria-hidden><span>Event</span><span>Date & time</span><span>Venue</span><span>Teams</span><span>Status</span><span>Actions</span></div>
+          <div className="ed-event-list">{shown.map(event => <article className="ed-event-row" key={event.id}>
+            <div className="ed-event-name"><div className="ed-event-icon" aria-hidden><Icons.Crown className="icon"/></div><div><h2>{event.name}</h2><span>{formatName(event.format)}</span></div></div>
+            <div className="ed-event-date">{dateLabel(event)}</div><div className="ed-event-venue"><MapPin/>{event.venue || 'Venue not set'}</div><div className="ed-event-capacity"><span>{event.teamCount ?? 0} / {event.teamCapacity ?? 0}</span><Capacity event={event}/></div><span className={'ed-status ' + (RUNNING_STATUSES.has(event.status) ? 'live' : libraryFilterFor(event))}>{statusSummary(event)}</span>
+            <div className="ed-row-actions"><button className="btn" onClick={() => void openEvent(event.id)}>{filter === 'hidden' ? 'Restore & open' : event.status === 'complete' ? 'Results' : 'View'}</button><details className="ed-row-menu" onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.open = false; }}><summary aria-label={`Options for ${event.name}`}><MoreHorizontal /></summary><div><button onClick={() => void openEvent(event.id)}>{cardActionLabel(event.status,filter === 'hidden')}</button>{event.signupState !== 'unpublished' && <button disabled={copying !== null} onClick={() => void copyLink(event)}>Copy sign-up link</button>}<button onClick={() => void setArchived(event.id,filter !== 'hidden')}>{filter === 'hidden' ? 'Restore' : 'Hide on this device'}</button><button className="ed-danger" onClick={() => setDeleteTarget(event)}>Delete competition</button></div></details></div>
+          </article>)}</div>
+          {shown.length === 0 && <div className="ed-empty"><h2>{!hydrated ? 'Loading your events…' : query ? 'No matching events' : events.length === 0 ? 'Your next great game starts here.' : `No ${filter} events`}</h2><p>{query ? 'Try a different name or venue.' : events.length === 0 ? 'Create a competition, share your sign-up link, and run it from your iPad.' : 'Choose another tab to see your other competitions.'}</p>{events.length === 0 && hydrated && <button className="btn primary" onClick={() => setCreateOpen(true)}>Create your first event</button>}</div>}
+        </section>
+        <footer className="ed-footer"><button onClick={() => navigate('/help')}>Help & guides</button><a href="/privacy/" target="_blank" rel="noreferrer">Privacy</a><a href="/terms/" target="_blank" rel="noreferrer">Terms</a><span>Score on iPad. Follow on TV.</span></footer>
       </div>
-
+      {createOpen && <DesignDialog title="Create an event" onClose={() => setCreateOpen(false)}><p>Choose how you want to play.</p><div className="ed-formats">
+        <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} locked={isFormatLocked('koc')} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
+        <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} locked={isFormatLocked('americano')} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
+      </div><div className="ed-dialog-actions"><button className="btn" onClick={() => {setCreateOpen(false);loadAsNew(buildDemoEvent());}}>Try a KoC demo</button><button className="btn" onClick={() => {setCreateOpen(false);setPaywall({reason:pro ? '' : 'Unlock the full toolkit.'});}}>{!nativeBilling ? 'Pro included' : pro ? 'Manage Pro' : 'Get Pro'}</button></div></DesignDialog>}
+      {templatesOpen && <DesignDialog title="Saved templates" onClose={() => setTemplatesOpen(false)}><p>Reuse your court settings and event details.</p>{templates.length === 0 && <p>No templates yet. Save one from an event’s setup to use it here.</p>}{templates.map(template => <div className="ed-template" key={template.id}><button className="btn" onClick={() => {setTemplatesOpen(false);loadAsNew(templateToEventState(template));}}><strong>{template.name}</strong><span>{template.teams.length} teams · {template.courts.length} courts</span></button><button className="btn" aria-label={`Delete ${template.name} template`} onClick={() => {deleteTemplate(template.id);setTemplates(listTemplates());}}><Icons.Trash className="icon"/></button></div>)}</DesignDialog>}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {paywall && <PaywallModal reason={paywall.reason} onClose={() => setPaywall(null)} />}
       {rulesForFormat && <FormatRulesModal formatId={rulesForFormat} onClose={() => setRulesForFormat(null)} />}
@@ -336,59 +225,10 @@ export function HomeScreen() {
     </div>
   );
 }
-
-function EventGroup({
-  title,
-  events,
-  activeEventId,
-  onOpen,
-  onArchive,
-  onDelete,
-  archived = false,
-}: {
-  title: string;
-  events: EventCatalogMetadata[];
-  activeEventId: string | null;
-  onOpen: (id: string) => void | Promise<void>;
-  onArchive: (id: string) => void | Promise<void>;
-  onDelete: (event: EventCatalogMetadata) => void;
-  archived?: boolean;
-}) {
-  return (
-    <div className="event-group">
-      <div className="event-group-title">{title}<span>{events.length}</span></div>
-      <div className="event-card-grid">
-        {events.map((event) => (
-          <article className={'event-card ' + (RUNNING_STATUSES.has(event.status) ? 'event-card--live' : '')} key={event.id}>
-            <button className="event-card-main" onClick={() => void onOpen(event.id)}>
-              <span className="event-card-format">
-                {formatName(event.format)}
-                {activeEventId === event.id && <span className="event-card-current">Current</span>}
-              </span>
-              <strong>{event.name}</strong>
-              <span className="event-card-status">{statusSummary(event.status)}</span>
-              <span className="event-card-meta">
-                {event.venue ? `${event.venue} · ` : ''}{eventCardMeta(event)} · Sign-up {event.signupState}
-              </span>
-            </button>
-            <div className="event-card-actions">
-              <button className="btn primary sm" onClick={() => void onOpen(event.id)}>
-                {cardActionLabel(event.status, archived)}
-              </button>
-              <button className="btn ghost sm" onClick={() => void onArchive(event.id)}>
-                {archived ? 'Restore' : 'Hide'}
-              </button>
-              <button className="btn ghost sm event-delete" onClick={() => onDelete(event)} aria-label={`Delete ${event.name}`} title="Delete competition">
-                <Icons.Trash className="icon" />
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </div>
-  );
+function Capacity({event}:{event:EventCatalogMetadata}) {
+  const count=event.teamCount ?? 0, capacity=event.teamCapacity ?? 0;
+  return <div className="ed-fill" aria-label={`${count} of ${capacity} team places filled`}><div><span style={{width:`${capacity > 0 ? Math.min(100,count/capacity*100) : 0}%`}}/></div><span>{capacity > 0 ? `${Math.round(count/capacity*100)}% full` : 'Courts not set'}</span></div>;
 }
-
 function ModeCard({
   name,
   blurb,

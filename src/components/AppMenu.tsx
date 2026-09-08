@@ -14,7 +14,7 @@
  * Rendered by TopNav (operator routes) and DisplayScreen (live canvas).
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,7 +29,7 @@ import { eventRoute } from '@/lib/eventRoutes';
 import type { EventState } from '@/types/domain';
 import { useCloudSyncStatus } from '@/store/cloudSync';
 
-export function AppMenu({ event }: { event: EventState | null }) {
+export function AppMenu({ event, trigger, onCreate }: { event: EventState | null; trigger?: ReactNode; onCreate?: () => void }) {
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
@@ -59,12 +59,12 @@ export function AppMenu({ event }: { event: EventState | null }) {
         aria-label="Menu"
         title="Menu"
       >
-        <Icons.Gear className="icon" />
+        {trigger ?? <Icons.Gear className="icon" />}
       </button>
 
       {open && (
         <Portal>
-        <div className="app-menu-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
+        <div className={'app-menu-backdrop' + (trigger ? ' event-design ed-home-menu' : '')} onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="app-menu-panel" role="dialog" aria-label="Menu">
             <div className="app-menu-head">
               <span className="app-menu-title">MENU</span>
@@ -174,7 +174,8 @@ export function AppMenu({ event }: { event: EventState | null }) {
               className="app-menu-item"
               onClick={() => {
                 close();
-                navigate('/home');
+                if (onCreate) onCreate();
+                else navigate('/home');
               }}
             >
               <Icons.Plus className="icon" />

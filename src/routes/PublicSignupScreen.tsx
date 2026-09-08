@@ -70,6 +70,7 @@ export function PublicSignupScreen() {
     refreshVersionAtSubmit: number;
     missing?: boolean;
   } | null>(null);
+  const [showAllTeams, setShowAllTeams] = useState(false);
   const [signupMode, setSignupMode] = useState<'pair' | 'solo'>('pair');
   const [teamName, setTeamName] = useState('');
   const [playerOne, setPlayerOne] = useState('');
@@ -287,10 +288,10 @@ export function PublicSignupScreen() {
     }
   }
 
-  if (loading) return <div className="signup-public-loading">Loading event…</div>;
+  if (loading) return <div className="signup-public-loading event-design">Loading event…</div>;
   if (!data) {
     return (
-      <main className="signup-public">
+      <main className="signup-public event-design">
         <div className="signup-public-card signup-public-error">
           <BrandLogo />
           <h1>Sign-up unavailable</h1>
@@ -353,17 +354,20 @@ export function PublicSignupScreen() {
   }
 
   return (
-    <main className="signup-public">
+    <main className="signup-public event-design">
       <header className="signup-public-header">
         <span className="signup-public-logo"><BrandLogo /></span>
-        <span>PADEL TOURNAMENT MAKER</span>
+        <span className="ed-wordmark">PADEL<small>TOURNAMENT MAKER</small></span>
+        {contactHref && <a className="ed-public-contact" href={contactHref} target="_blank" rel="noreferrer">Contact organiser ↗</a>}
       </header>
 
       <section className="signup-public-hero">
+        <div className="ed-signup-hero-content">
         <div className="signup-public-eyebrow">
           {eventCancelled ? 'EVENT CANCELLED' : eventEnded ? 'EVENT ENDED' : countdown?.started ? 'EVENT IN PROGRESS' : 'LIVE EVENT SIGN-UP'}
         </div>
         <h1>{data.event.title}</h1>
+        {data.event.organizerName && <p className="ed-hosted">Hosted by {data.event.organizerName}</p>}
         <div className="signup-public-meta">
           <span>{formatEventDateTime(data.event.startsAt, data.event.timeZone)}</span>
           {data.event.endsAt && <span>Ends {formatEventDateTime(data.event.endsAt, data.event.timeZone)}</span>}
@@ -377,7 +381,7 @@ export function PublicSignupScreen() {
             <span className="signup-public-countdown-label">
               {countdown.started ? 'EVENT STARTED' : 'EVENT STARTS IN'}
             </span>
-            <div className="signup-public-countdown-units" aria-live="polite">
+            <div className="signup-public-countdown-units" role="timer">
               {([
                 ['Days', countdown.days],
                 ['Hours', countdown.hours],
@@ -410,6 +414,11 @@ export function PublicSignupScreen() {
               ? 'Register a pair, or join the partner list solo.'
               : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
         </div>
+        </div>
+        <div className="ed-court-photo" role="img" aria-label="Padel court" />
+      </section>
+
+      {(data.event.details || data.event.prizes) && <section className="ed-public-details" aria-label="Event details">
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}
         {data.event.prizes && (
           <div className="signup-public-prizes">
@@ -417,23 +426,26 @@ export function PublicSignupScreen() {
             <p>{data.event.prizes}</p>
           </div>
         )}
-      </section>
+      </section>}
 
       <div className="signup-public-grid">
-        <section className="signup-public-card">
+        <section className="signup-public-card ed-roster-card">
           <div className="signup-public-section-head">
             <div>
-              <span>LIVE LIST</span>
-              <h2>Teams</h2>
+              <span>THE LINE-UP</span>
+              <h2>Who's playing</h2>
             </div>
             <strong>{confirmedPairCount}/{data.event.capacityTeams}</strong>
           </div>
+          <div className="ed-roster-fill" aria-label={`${confirmedPairCount} of ${data.event.capacityTeams} teams confirmed`}><span style={{width: `${data.event.capacityTeams > 0 ? Math.min(100, confirmedPairCount / data.event.capacityTeams * 100) : 0}%`}} /></div>
           <p className="signup-public-priority-note">Pairs have priority. Solo players can be joined by another player here.</p>
 
           <div className="signup-public-list">
-            {confirmedPairs.map((registration, index) => rosterRow(registration, index + 1, 'confirmed'))}
+            {(showAllTeams ? confirmedPairs : confirmedPairs.slice(0, 6)).map((registration, index) => rosterRow(registration, index + 1, 'confirmed'))}
             {confirmedPairs.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
           </div>
+
+          {confirmedPairs.length > 6 && <button className="ed-show-teams" type="button" aria-expanded={showAllTeams} onClick={() => setShowAllTeams(value => !value)}>{showAllTeams ? 'Show fewer teams' : `Show all ${confirmedPairs.length} teams`}</button>}
 
           <div className="signup-public-waiting-head">
             <span>LOOKING FOR A PARTNER</span>
@@ -512,7 +524,7 @@ export function PublicSignupScreen() {
                   <h2>{signupMode === 'solo'
                     ? 'Find a partner'
                     : spaces > 0
-                      ? 'Register to play'
+                      ? 'Save your spot.'
                       : 'Join the waiting list'}</h2>
                 </div>
               </div>
@@ -529,10 +541,10 @@ export function PublicSignupScreen() {
               ) : (
                 <div className="signup-public-form">
                   <div className="signup-public-mode" role="group" aria-label="Sign-up type">
-                    <button className={signupMode === 'pair' ? 'active' : ''} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('pair'); }}>
+                    <button className={signupMode === 'pair' ? 'active' : ''} aria-pressed={signupMode === 'pair'} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('pair'); }}>
                       Sign up as a pair
                     </button>
-                    <button className={signupMode === 'solo' ? 'active' : ''} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('solo'); }}>
+                    <button className={signupMode === 'solo' ? 'active' : ''} aria-pressed={signupMode === 'solo'} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('solo'); }}>
                       Sign up solo
                     </button>
                   </div>
