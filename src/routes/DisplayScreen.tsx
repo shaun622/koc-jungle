@@ -4,7 +4,6 @@ import { useEventStore } from '@/store/eventStore';
 import {
   currentRound,
   leaderboard,
-  rankMovements,
   teamLabelShort,
   teamNameFor,
   teamPlayersLabel,
@@ -16,6 +15,9 @@ import { unresolvedTies, decideWinnerLoser } from '@/logic/rotation';
 import { Icons } from '@/components/Icons';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
+import { ThemeSwitch } from '@/components/ThemeSwitch';
+import { TvStandings } from '@/components/TvStandings';
+import { EventNightTimer, RoundProgress } from '@/components/EventNightTimer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NightlyStatsModal } from '@/components/NightlyStatsModal';
 import { RotateHint } from '@/components/RotateHint';
@@ -24,8 +26,6 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { EditPointsModal } from '@/components/EditPointsModal';
 import { AdjustCourtsModal } from '@/components/AdjustCourtsModal';
 import { TeamAvatars } from '@/components/Avatar';
-import { RankMovement } from '@/components/RankMovement';
-import { GamesLine } from '@/components/GamesLine';
 import { useBuzzer } from '@/hooks/useBuzzer';
 import { MobileDisplay } from '@/components/MobileDisplay';
 import { TvCompleteView } from '@/components/TvCompleteView';
@@ -156,8 +156,10 @@ export function DisplayScreen() {
 
   return (
     <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
+      {isMobile && <div className="mobile-theme-bar"><ThemeSwitch /></div>}
       {showFixedMenu && (
         <div className="display-menu-fixed">
+          <ThemeSwitch />
           <AppMenu event={event} />
         </div>
       )}
@@ -173,6 +175,7 @@ export function DisplayScreen() {
               height: 1080,
               transform: `scale(${scale})`,
               transformOrigin: 'top center',
+              ['--display-scale' as string]: scale,
             }}
           >
             {showCompleteCanvas ? (
@@ -367,7 +370,7 @@ export function DisplayScreen() {
             Full standings
           </button>
           {shareError && (
-            <span style={{ color: 'var(--red)', fontSize: 14, alignSelf: 'center' }}>
+            <span style={{ color: 'var(--red)', fontSize: 16, alignSelf: 'center' }}>
               {shareError}
             </span>
           )}
@@ -738,10 +741,6 @@ function TvLiveCanvas({
   onNominateTieWinner: (matchId: string, winnerId: string) => void;
 }) {
   const timerView = useTimer(round);
-  const lb = useMemo(() => leaderboard(event), [event]);
-  const movements = useMemo(() => rankMovements(event), [event]);
-  const top5 = lb.slice(0, 5);
-  const rest = lb.slice(5, 14);
 
   const sortedCourtsDesc = event.courts.slice().sort((a, b) => b.position - a.position);
   const centre = sortedCourtsDesc[0];
@@ -800,26 +799,9 @@ function TvLiveCanvas({
       ? decideWinnerLoser(centreMatch, event.settings.tieRule)
       : null;
 
-  let timerCls = '';
-  if (!timerView.hasStarted) timerCls = '';
-  else if (timerView.remainingMs <= 60_000) timerCls = 'danger';
-  else if (timerView.remainingMs <= event.settings.warningAtMs) timerCls = 'warn';
-
   const totalRounds = event.settings.roundsTotal;
   const roundIndex = round?.index ?? 0;
   const completed = event.rounds.filter((r) => r.completedAt).length;
-  const progress = round
-    ? Math.min(
-        100,
-        ((round.durationMs - Math.max(0, timerView.remainingMs)) / round.durationMs) * 100,
-      )
-    : 0;
-
-  const king = lb[0];
-  const kingLabel = king
-    ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
-    : 'TBD';
-
   // King-of-the-Court chrome (crown, "King's Court", climb/drop, King stat)
   // only makes sense for KoC. Other formats show a neutral label.
   const isKoc = event.format === 'koc';
@@ -859,53 +841,7 @@ function TvLiveCanvas({
       </div>
 
       <div className="tv-body">
-        <div className="tv-lb">
-          <div className="tv-lb-header">
-            <div className="tv-lb-title">Standings</div>
-            <div className="tv-lb-subtitle">
-              {completed > 0 ? `After Round ${completed}` : 'Pre-round'}
-            </div>
-          </div>
-          <div className="tv-lb-list">
-            {top5.map((row, idx) => {
-              const isKing = idx === 0 && row.total > 0;
-              return (
-                <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
-                  <span className="rank">{idx + 1}</span>
-                  <div className="team-name">
-                    {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
-                    {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
-                    <div className="tv-lb-name-col">
-                      <span>{teamNameFor(event, row.teamId)}</span>
-                      <GamesLine row={row} className="tv-lb-games" />
-                    </div>
-                  </div>
-                  <span className="wl">
-                    {row.wins}W-{row.losses}L
-                  </span>
-                  <span className="pts">{row.total}</span>
-                </div>
-              );
-            })}
-            {rest.length > 0 && <div style={{ height: 8 }} />}
-            {rest.map((row, idx) => (
-              <div key={row.teamId} className="tv-lb-row">
-                <span className="rank">{idx + 6}</span>
-                <div className="team-name">
-                  {isKoc && <RankMovement movement={movements.get(row.teamId)} />}
-                  <div className="tv-lb-name-col">
-                    <span>{teamNameFor(event, row.teamId)}</span>
-                    <GamesLine row={row} className="tv-lb-games" />
-                  </div>
-                </div>
-                <span className="wl">
-                  {row.wins}W-{row.losses}L
-                </span>
-                <span className="pts">{row.total}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <TvStandings event={event} subtitle={completed > 0 ? `After Round ${completed}` : 'Pre-round'} />
 
         <div className="tv-main">
           <div className="tv-centre">
@@ -989,44 +925,9 @@ function TvLiveCanvas({
               ))}
             </div>
 
-            <div className="tv-timer-block">
-              <div className="tv-timer-label">Time Remaining</div>
-              <div className={'tv-timer-value size-xl ' + timerCls}>
-                {round ? formatMs(timerView.remainingMs) : '·'}
-              </div>
-              <div className="tv-timer-progress">
-                <div className="tv-timer-progress-bar" style={{ width: `${progress}%` }} />
-              </div>
-              <div className="tv-timer-round">
-                Round <strong>{roundIndex}</strong> of <strong>{totalRounds}</strong>
-              </div>
-              <div className="tv-timer-bottom">
-                <div className="tv-timer-stat">
-                  <span className="tv-timer-stat-label">Next up</span>
-                  <span className="tv-timer-stat-value">
-                    R{Math.min(totalRounds, roundIndex + 1)}
-                  </span>
-                </div>
-                <div className="tv-timer-stat">
-                  <span className="tv-timer-stat-label">Round</span>
-                  <span className="tv-timer-stat-value">
-                    {Math.round(
-                      (round?.durationMs ?? event.settings.defaultRoundDurationMs) / 60000,
-                    )}
-                    m
-                  </span>
-                </div>
-                <div className="tv-timer-stat">
-                  <span className="tv-timer-stat-label">{isKoc ? 'King' : 'Leader'}</span>
-                  <span
-                    className="tv-timer-stat-value"
-                    style={{ color: 'var(--gold)' }}
-                  >
-                    {kingLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <EventNightTimer timer={timerView} roundIndex={roundIndex} totalRounds={totalRounds}
+              durationMs={round?.durationMs ?? event.settings.defaultRoundDurationMs}
+              warningAtMs={event.settings.warningAtMs} hasRound={Boolean(round)} />
 
             <div className="tv-courts-col">
               {rightCol.map((c) => (
@@ -1326,9 +1227,6 @@ function TvBetweenCanvas({
   event: NonNullable<ReturnType<typeof useEventStore.getState>['event']>;
 }) {
   const lb = useMemo(() => leaderboard(event), [event]);
-  const rankMoves = useMemo(() => rankMovements(event), [event]);
-  const top5 = lb.slice(0, 5);
-  const rest = lb.slice(5, 14);
 
   const lastRound = event.rounds.at(-1);
   const lastRoundIndex = lastRound?.index ?? 0;
@@ -1432,51 +1330,7 @@ function TvBetweenCanvas({
       </div>
 
       <div className="tv-body">
-        <div className="tv-lb">
-          <div className="tv-lb-header">
-            <div className="tv-lb-title">Standings</div>
-            <div className="tv-lb-subtitle">After Round {lastRoundIndex}</div>
-          </div>
-          <div className="tv-lb-list">
-            {top5.map((row, idx) => {
-              const isKing = idx === 0 && row.total > 0;
-              return (
-                <div key={row.teamId} className={'tv-lb-row ' + (isKing ? 'king' : '')}>
-                  <span className="rank">{idx + 1}</span>
-                  <div className="team-name">
-                    {isKoc && isKing && <Icons.Crown className="tv-lb-crown" />}
-                    {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
-                    <div className="tv-lb-name-col">
-                      <span>{teamNameFor(event, row.teamId)}</span>
-                      <GamesLine row={row} className="tv-lb-games" />
-                    </div>
-                  </div>
-                  <span className="wl">
-                    {row.wins}W-{row.losses}L
-                  </span>
-                  <span className="pts">{row.total}</span>
-                </div>
-              );
-            })}
-            {rest.length > 0 && <div style={{ height: 8 }} />}
-            {rest.map((row, idx) => (
-              <div key={row.teamId} className="tv-lb-row">
-                <span className="rank">{idx + 6}</span>
-                <div className="team-name">
-                  {isKoc && <RankMovement movement={rankMoves.get(row.teamId)} />}
-                  <div className="tv-lb-name-col">
-                    <span>{teamNameFor(event, row.teamId)}</span>
-                    <GamesLine row={row} className="tv-lb-games" />
-                  </div>
-                </div>
-                <span className="wl">
-                  {row.wins}W-{row.losses}L
-                </span>
-                <span className="pts">{row.total}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <TvStandings event={event} subtitle={`After Round ${lastRoundIndex}`} />
 
         <div className="tv-main">
           <div className="tv-centre">
@@ -1536,6 +1390,7 @@ function TvBetweenCanvas({
             </div>
 
             <div className="tv-timer-block tv-timer-block--between">
+              <RoundProgress current={nextRoundIndex} total={totalRounds} />
               <div className="tv-timer-label">Next Round</div>
               <div className="tv-timer-value size-xl" style={{ color: 'var(--amber)' }}>
                 R{nextRoundIndex}

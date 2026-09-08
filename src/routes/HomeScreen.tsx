@@ -17,6 +17,7 @@ import { isIAPAvailable } from '@/lib/iap';
 import { eventRouteForStatus } from '@/lib/eventRoutes';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
+import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { AuthModal } from '@/components/AuthModal';
 import { PaywallModal } from '@/components/PaywallModal';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
@@ -163,6 +164,7 @@ export function HomeScreen() {
           <button onClick={() => { setTemplates(listTemplates()); setTemplatesOpen(true); }}>Templates</button>
           <button onClick={() => navigate('/help')}>Help & guides</button>
         </nav>
+        <ThemeSwitch />
         <AppMenu event={null} onCreate={() => setCreateOpen(true)} trigger={<><span className="ed-avatar">{initials}</span><span className="ed-account-name">{firstName || 'Menu'}</span><span aria-hidden>⌄</span></>} />
       </header>
       <div className="ed-body">

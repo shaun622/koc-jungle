@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
+import { ThemeSwitch } from '@/components/ThemeSwitch';
 import {
   getPublicSignup,
   joinPublicSingle,
@@ -359,6 +360,7 @@ export function PublicSignupScreen() {
         <span className="signup-public-logo"><BrandLogo /></span>
         <span className="ed-wordmark">PADEL<small>TOURNAMENT MAKER</small></span>
         {contactHref && <a className="ed-public-contact" href={contactHref} target="_blank" rel="noreferrer">Contact organiser ↗</a>}
+        <ThemeSwitch />
       </header>
 
       <section className="signup-public-hero">

@@ -5,6 +5,7 @@ import { initIAP } from '@/lib/iap';
 import { publicSignupHashFromPath } from '@/lib/signups';
 import './index.css';
 import './styles/event-design.css';
+import './styles/app-design.css';
 
 // Shared links use a real path so installed PWAs and mobile browsers navigate
 // reliably. Convert it before HashRouter mounts; old #/signup links continue

@@ -48,7 +48,7 @@ export function AuthModal({ onClose, initialError }: { onClose: () => void; init
       >
         <div className="modal auth-modal">
           <h2 className="auth-title">SYNC ACROSS DEVICES</h2>
-          <p style={{ color: 'var(--text-2)', fontSize: 15, lineHeight: 1.55 }}>
+          <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
             Cloud sync isn't configured for this build. Your events are
             saved locally on this device and stay safe, but they won't
             sync to your phone or tablet.
@@ -87,12 +87,12 @@ export function AuthModal({ onClose, initialError }: { onClose: () => void; init
             </div>
           </div>
 
-          <p style={{ color: 'var(--text-2)', fontSize: 15, lineHeight: 1.55, marginTop: 8 }}>
+          <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55, marginTop: 8 }}>
             Your events sync automatically across every device you sign in on.
           </p>
 
           {err && (
-            <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 8 }}>{err}</div>
+            <div style={{ color: 'var(--red)', fontSize: 16, marginTop: 8 }}>{err}</div>
           )}
 
           {isIAPAvailable() && (
@@ -242,7 +242,7 @@ export function AuthModal({ onClose, initialError }: { onClose: () => void; init
           </div>}
         </div>
 
-        {err && <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 8 }}>{err}</div>}
+        {err && <div style={{ color: 'var(--red)', fontSize: 16, marginTop: 8 }}>{err}</div>}
         {notice && <div className="signup-message" role="status">{notice}</div>}
 
         <div className="modal-actions">

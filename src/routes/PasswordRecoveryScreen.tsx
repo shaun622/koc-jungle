@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
+import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { recoverySupabase } from '@/lib/supabase';
 
 export function PasswordRecoveryScreen() {
@@ -65,6 +66,7 @@ export function PasswordRecoveryScreen() {
 
   return (
     <main className="signup-public">
+      <ThemeSwitch className="recovery-theme" />
       <section className="signup-public-card signup-public-error auth-modal">
         <BrandLogo />
         <h1>Reset organiser password</h1>

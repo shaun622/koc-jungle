@@ -134,7 +134,7 @@ button {
   background: var(--bg-3);
   color: var(--text-0);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   padding: 10px 14px;
   border-radius: 8px;
@@ -183,11 +183,11 @@ button {
 }
 .btn.lg {
   padding: 14px 20px;
-  font-size: 15px;
+  font-size: 16px;
 }
 .btn.sm {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 16px;
 }
 .btn.full {
   width: 100%;
@@ -202,7 +202,7 @@ button {
   padding: 6px 10px;
   color: var(--text-0);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
 }
 .input:focus,
 .setup-input:focus,
@@ -217,7 +217,7 @@ button {
   border-radius: 4px;
   padding: 2px 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-1);
 }
 
@@ -252,7 +252,7 @@ button {
   font-family: var(--font-display);
   font-weight: 800;
   letter-spacing: 0.02em;
-  font-size: 14px;
+  font-size: 16px;
   white-space: nowrap;
   /* It's a button (navigates home) — strip the default chrome. */
   background: none;
@@ -306,7 +306,7 @@ button {
   flex-wrap: nowrap;
 }
 .op-top-meta {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
@@ -322,7 +322,7 @@ button {
   color: var(--text-2);
   border: 1px solid transparent;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -457,7 +457,7 @@ button {
 }
 .app-menu-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.18em;
   color: var(--text-2);
 }
@@ -472,7 +472,7 @@ button {
   background: transparent;
   color: var(--text-0);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.12s ease;
@@ -491,7 +491,7 @@ button {
 }
 .app-menu-item-meta {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   color: var(--text-2);
 }
@@ -509,7 +509,7 @@ button {
   display: flex;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   color: var(--text-2);
 }
@@ -548,7 +548,7 @@ button {
   border: 0;
   color: var(--text-2);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
@@ -603,13 +603,13 @@ button {
 .op-timer-round {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   color: var(--text-1);
 }
 .op-timer-status {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--lime);
@@ -664,12 +664,12 @@ button {
 }
 .op-timer-controls .btn {
   padding: 10px;
-  font-size: 12px;
+  font-size: 16px;
 }
 .op-timer-play {
   grid-column: 1 / -1;
   padding: 14px !important;
-  font-size: 14px !important;
+  font-size: 16px !important;
   background: var(--lime) !important;
   color: var(--bg-0) !important;
   font-weight: 700 !important;
@@ -701,12 +701,12 @@ button {
 .op-mini-lb-title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .op-mini-lb-meta {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
@@ -723,7 +723,7 @@ button {
   align-items: center;
   padding: 5px 6px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 16px;
   gap: 8px;
 }
 .op-mini-lb-row.king {
@@ -731,7 +731,7 @@ button {
 }
 .op-mini-lb-row .r {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .op-mini-lb-row.king .r {
@@ -739,14 +739,14 @@ button {
 }
 .op-mini-lb-row .n {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .op-mini-lb-row .p {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--lime);
 }
@@ -790,7 +790,7 @@ button {
   gap: 8px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.02em;
 }
 .op-court.centre .op-court-title {
@@ -798,7 +798,7 @@ button {
 }
 .op-court-pts-chip {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   background: var(--bg-3);
   padding: 3px 8px;
   border-radius: 99px;
@@ -838,11 +838,11 @@ button {
 .op-team-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.1;
 }
 .op-team-players {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -899,7 +899,7 @@ button {
 }
 .op-team-tie-pick button {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   background: var(--bg-3);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -927,7 +927,7 @@ button {
   flex-wrap: wrap;
 }
 .op-end-summary {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   flex: 1;
   min-width: 240px;
@@ -1017,7 +1017,7 @@ button {
   justify-content: space-between;
 }
 .setup-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   margin-bottom: 16px;
 }
@@ -1057,7 +1057,7 @@ button {
 .setup-team-drag:disabled { opacity: .3; cursor: default; }
 .setup-team-num {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   font-weight: 700;
 }
@@ -1066,7 +1066,7 @@ button {
   display: block;
   margin: 0 0 5px 4px;
   color: var(--text-0);
-  font-size: 13px;
+  font-size: 16px;
 }
 .setup-team-pair {
   display: grid;
@@ -1102,20 +1102,20 @@ button {
 .edit-team-modal { max-width: 520px; }
 .edit-team-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .edit-team-heading h2 { margin: 0; }
-.edit-team-heading p { margin: 5px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.edit-team-heading p { margin: 5px 0 0; color: var(--text-2); font-size: 16px; line-height: 1.45; }
 .edit-team-fields { display: grid; gap: 11px; margin-top: 18px; }
 .edit-team-fields label > span {
   display: block;
   margin-bottom: 5px;
   color: var(--text-1);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
 }
 .edit-team-fields label small { color: var(--text-2); font-weight: 500; }
 .roster-share-modal { max-width: 620px; }
 .roster-share-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .roster-share-heading h2 { margin: 0; }
-.roster-share-heading p { margin: 5px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.roster-share-heading p { margin: 5px 0 0; color: var(--text-2); font-size: 16px; line-height: 1.45; }
 .roster-share-preview {
   max-height: min(52vh, 520px);
   margin: 18px 0 0;
@@ -1126,7 +1126,7 @@ button {
   color: var(--text-0);
   background: var(--bg);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1173,7 +1173,7 @@ button {
 .setup-court-pos {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-1);
 }
 .setup-court-row.centre .setup-court-pos {
@@ -1181,7 +1181,7 @@ button {
 }
 .setup-court-pts-input {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   width: 100%;
   text-align: center;
 }
@@ -1197,7 +1197,7 @@ button {
   color: var(--text-1);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.4;
   margin-bottom: 10px;
 }
@@ -1221,7 +1221,7 @@ button {
 }
 .setup-field label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1289,13 +1289,13 @@ button {
   letter-spacing: 0.02em;
 }
 .qual-sub {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
 }
 .qual-meta {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1318,7 +1318,7 @@ button {
 }
 .qual-match-head {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1338,7 +1338,7 @@ button {
 .qual-row .name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
 }
 .qual-row input {
   background: var(--bg-2);
@@ -1357,7 +1357,7 @@ button {
 }
 .qual-sum {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   text-align: right;
   letter-spacing: 0.06em;
@@ -1380,7 +1380,7 @@ button {
   flex-wrap: wrap;
 }
 .qual-bottom-info {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-1);
   flex: 1;
   min-width: 240px;
@@ -1446,14 +1446,14 @@ button {
   border-bottom-color: color-mix(in oklch, var(--gold) 30%, transparent);
 }
 .seed-pair-court-name {
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
 }
 .seed-pair-court-pts {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -1472,13 +1472,13 @@ button {
   border: 1px solid transparent;
   border-radius: 8px;
   user-select: none;
-  font-size: 13px;
+  font-size: 16px;
 }
 .seed-row .seed-team-name {
-  font-size: 14px;
+  font-size: 16px;
 }
 .seed-row .seed-qscore {
-  font-size: 12px;
+  font-size: 16px;
 }
 .seed-row.dragging {
   opacity: 0.6;
@@ -1541,7 +1541,7 @@ button {
   color: var(--lime);
   border-radius: 999px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
@@ -1562,7 +1562,7 @@ button {
 }
 .randomise-subtitle {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -1591,13 +1591,13 @@ button {
 }
 .randomise-reel-rank {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
 }
 .randomise-reel-name {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-0);
   white-space: nowrap;
   overflow: hidden;
@@ -1633,7 +1633,7 @@ button {
 }
 .randomise-reel-badge {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   padding: 3px 9px;
   border-radius: 999px;
@@ -1668,10 +1668,10 @@ button {
 }
 .randomise-stepper-label > span:first-child {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 .randomise-stepper-hint {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   line-height: 1.3;
 }
@@ -1691,7 +1691,7 @@ button {
 .randomise-status {
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   letter-spacing: 0.18em;
   color: var(--amber);
   text-transform: uppercase;
@@ -1726,12 +1726,12 @@ button {
 }
 .seed-rank {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .seed-court-chip {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   padding: 3px 8px;
   border-radius: 99px;
   background: var(--bg-3);
@@ -1748,7 +1748,7 @@ button {
 .seed-team-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1757,13 +1757,13 @@ button {
 .seed-team-name .players {
   color: var(--text-2);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 400;
   margin-left: 6px;
 }
 .seed-qscore {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   letter-spacing: 0.04em;
 }
@@ -1825,7 +1825,7 @@ button {
 .between-card-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.02em;
   display: flex;
   align-items: center;
@@ -1847,16 +1847,16 @@ button {
 .between-team-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
 }
 .between-team-from {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
 }
 .between-arrow {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1910,7 +1910,7 @@ button {
 .lbfull-header {
   background: var(--bg-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1922,7 +1922,7 @@ button {
 }
 .lbfull-row {
   border-bottom: 1px solid var(--line-soft);
-  font-size: 14px;
+  font-size: 16px;
 }
 .lbfull-row:last-child {
   border-bottom: 0;
@@ -1978,7 +1978,7 @@ button {
   background: var(--bg-2);
   border-radius: 8px;
   border-left: 3px solid var(--line);
-  font-size: 13px;
+  font-size: 16px;
 }
 .team-history-row.won {
   border-left-color: var(--lime);
@@ -1993,20 +1993,20 @@ button {
 .team-history-row .round-tag {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-1);
 }
 .team-history-row .court-tag {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 .team-history-row .court-pts {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2028,7 +2028,7 @@ button {
   color: var(--amber);
 }
 .team-history-row .opponent {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -2038,7 +2038,7 @@ button {
   font-family: var(--font-display);
   font-weight: 800;
   color: var(--lime);
-  font-size: 14px;
+  font-size: 16px;
   min-width: 28px;
   text-align: right;
 }
@@ -2067,7 +2067,7 @@ button {
 .lbfull-name .players {
   color: var(--text-2);
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
@@ -2075,7 +2075,7 @@ button {
 }
 .lbfull-stat {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-1);
   text-align: right;
 }
@@ -2173,7 +2173,7 @@ button {
 }
 .mobile-display-meta {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2226,7 +2226,7 @@ button {
 .mobile-court-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2241,7 +2241,7 @@ button {
 }
 .mobile-court-pts {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--lime);
@@ -2249,7 +2249,7 @@ button {
 .mobile-court-empty {
   text-align: center;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 16px;
   padding: 8px 0;
 }
 
@@ -2261,7 +2261,7 @@ button {
 }
 .mobile-court-team-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2321,7 +2321,7 @@ button {
 }
 .mobile-court-tie-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--amber);
@@ -2332,7 +2332,7 @@ button {
   color: var(--amber);
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -2347,7 +2347,7 @@ button {
   align-items: center;
   gap: 4px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   font-weight: 700;
   padding: 3px 8px;
@@ -2385,7 +2385,7 @@ button {
   border-radius: 10px;
   padding: 10px 14px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
@@ -2421,14 +2421,14 @@ button {
 }
 .mobile-resting-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
   margin-right: 2px;
 }
 .mobile-resting-team {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-1);
   background: var(--bg-2, var(--bg-1));
@@ -2446,7 +2446,7 @@ button {
   display: flex;
   justify-content: space-between;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2461,14 +2461,14 @@ button {
   background: var(--bg-1);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .mobile-standings-row.king {
   border-color: color-mix(in oklch, var(--gold) 55%, transparent);
 }
 .mobile-standings-row .rank {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .mobile-standings-row .name {
@@ -2488,7 +2488,7 @@ button {
 }
 .mobile-standings-row .wl {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .mobile-standings-row .pts {
@@ -2541,7 +2541,7 @@ button {
   align-items: center;
   gap: 6px;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2556,7 +2556,7 @@ button {
 }
 .mobile-podium-row .info .meta {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.1em;
 }
@@ -2578,7 +2578,7 @@ button {
 }
 .mobile-podium-rest-head {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2594,7 +2594,7 @@ button {
 }
 .mobile-stats-head {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2608,7 +2608,7 @@ button {
 }
 .mobile-stat-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2620,7 +2620,7 @@ button {
   color: var(--text-0);
 }
 .mobile-stat-detail {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
 }
@@ -2674,7 +2674,7 @@ button {
 }
 .display-toolbar-timer .btn {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: 16px;
   min-width: 0;
 }
 .display-toolbar-timer .display-play {
@@ -2682,7 +2682,7 @@ button {
   color: var(--bg-0);
   border-color: var(--lime);
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .display-toolbar-timer .display-play.paused {
   background: var(--amber);
@@ -2693,7 +2693,7 @@ button {
 }
 .display-toolbar-summary {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   color: var(--text-2);
   text-align: center;
@@ -2740,7 +2740,7 @@ button {
   border: 0;
   color: var(--text-0);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   text-align: left;
   padding: 10px 12px;
   border-radius: 8px;
@@ -2864,7 +2864,7 @@ button {
 }
 .display-next-duration-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -2875,7 +2875,7 @@ button {
   border-radius: 6px;
   color: var(--text-0);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   text-align: center;
   padding: 8px 6px;
@@ -2898,7 +2898,7 @@ button {
   border: 1px solid color-mix(in oklch, var(--amber) 50%, transparent);
   border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   color: var(--amber);
   flex-wrap: wrap;
@@ -2919,7 +2919,7 @@ button {
   border: 1px solid var(--line);
   color: var(--text-0);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 16px;
   padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
@@ -2976,7 +2976,7 @@ button {
   letter-spacing: 0.01em;
 }
 .tv-header-event-meta {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2989,7 +2989,7 @@ button {
   align-items: center;
   gap: 16px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3055,7 +3055,7 @@ button {
   text-transform: uppercase;
 }
 .tv-lb-subtitle {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
@@ -3075,7 +3075,7 @@ button {
   align-items: center;
   padding: 4px 8px 4px 4px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   position: relative;
 }
 .tv-lb-row.king {
@@ -3084,7 +3084,7 @@ button {
 }
 .tv-lb-row .rank {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-2);
   font-weight: 600;
 }
@@ -3093,7 +3093,7 @@ button {
 }
 .tv-lb-row .team-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.01em;
   display: flex;
   align-items: center;
@@ -3107,7 +3107,7 @@ button {
 }
 .tv-lb-row .wl {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   text-align: right;
   letter-spacing: 0.04em;
@@ -3140,7 +3140,7 @@ button {
 }
 .tv-lb-games {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.02em;
   color: var(--text-1);
   white-space: nowrap;
@@ -3160,7 +3160,7 @@ button {
 }
 .mobile-standings-games {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 16px;
   letter-spacing: 0.02em;
   color: var(--text-1);
   white-space: nowrap;
@@ -3168,7 +3168,7 @@ button {
 
 /* Adjust-courts modal — drag a team chip onto another to swap their courts. */
 .adjust-courts-hint {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   margin: 4px 0 14px;
   line-height: 1.5;
@@ -3197,11 +3197,11 @@ button {
 .adjust-court-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
 }
 .adjust-court-pts {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .adjust-chip {
@@ -3225,7 +3225,7 @@ button {
 }
 .adjust-chip-name {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -3241,7 +3241,7 @@ button {
 /* Tiny up/down arrow next to a team in the standings — shows the rank
    change since the most recent completed round. Subtle on purpose. */
 .rank-movement {
-  font-size: 9px;
+  font-size: 16px;
   line-height: 1;
   margin-right: 4px;
   flex-shrink: 0;
@@ -3285,7 +3285,7 @@ button {
   gap: 8px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gold);
@@ -3299,7 +3299,7 @@ button {
 }
 .tv-centre-pts {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--gold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3316,7 +3316,7 @@ button {
 }
 .tv-centre-team-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3332,7 +3332,7 @@ button {
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   margin-top: 2px;
 }
@@ -3450,7 +3450,7 @@ button {
 }
 .tv-court-pts {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3480,7 +3480,7 @@ button {
 }
 .tv-court-team-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3495,7 +3495,7 @@ button {
   text-overflow: ellipsis;
 }
 .tv-court-team-players {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
   white-space: nowrap;
@@ -3541,7 +3541,7 @@ button {
 }
 .tv-timer-label {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -3630,7 +3630,7 @@ button {
 }
 .tv-timer-stat-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -3675,7 +3675,7 @@ button {
 }
 .tv-complete-eyebrow {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -3700,7 +3700,7 @@ button {
 .tv-complete-footnote {
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -3736,7 +3736,7 @@ button {
 }
 .tv-podium-team .place-tag {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -3787,7 +3787,7 @@ button {
   color: var(--gold);
 }
 .tv-podium-team .team-points .pts-wins {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .tv-podium-crown {
@@ -3853,7 +3853,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-1);
 }
 .player-chip-avatar {
@@ -3864,7 +3864,7 @@ button {
   display: grid;
   place-items: center;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 16px;
   color: var(--text-1);
   flex-shrink: 0;
   border: 1px solid var(--line);
@@ -3872,7 +3872,7 @@ button {
 .player-chip-avatar.lg {
   width: 28px;
   height: 28px;
-  font-size: 11px;
+  font-size: 16px;
 }
 
 /* ==========================================================================
@@ -3959,7 +3959,7 @@ button {
 }
 .nightly-stat-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -3972,7 +3972,7 @@ button {
   line-height: 1.1;
 }
 .nightly-stat-detail {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-1);
   line-height: 1.3;
 }
@@ -4090,7 +4090,7 @@ button {
 }
 .share-card-podium-team .team-points {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-1);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -4146,7 +4146,7 @@ button {
 }
 .share-card-rest-title {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.2em;
   color: var(--text-2);
   text-align: center;
@@ -4192,7 +4192,7 @@ button {
 .share-card-footer {
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.2em;
   color: var(--text-2);
   margin-top: auto;
@@ -4236,7 +4236,7 @@ button {
   gap: 24px;
   padding: 16px 24px;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -4269,7 +4269,7 @@ button {
   border-radius: 12px;
   max-width: 360px;
   box-shadow: var(--shadow-glow);
-  font-size: 13px;
+  font-size: 16px;
 }
 .pwa-toast--update {
   border-color: color-mix(in oklch, var(--lime) 40%, transparent);
@@ -4287,12 +4287,12 @@ button {
 .pwa-toast-body strong {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-0);
 }
 .pwa-toast-body span {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 16px;
 }
 
 /* Error banner */
@@ -4310,7 +4310,7 @@ button {
   align-items: center;
   gap: 8px;
   z-index: 60;
-  font-size: 13px;
+  font-size: 16px;
   box-shadow: 0 12px 32px -12px oklch(0% 0 0 / 0.8);
 }
 
@@ -4363,7 +4363,7 @@ button {
 }
 .modal p {
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
   white-space: pre-wrap;
 }
@@ -4397,7 +4397,7 @@ button {
 }
 .edit-points-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4450,7 +4450,7 @@ button {
   gap: 8px;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   color: var(--text-1);
 }
@@ -4492,7 +4492,7 @@ button {
   margin: 0;
   max-width: 44ch;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .home-hero-proof {
@@ -4511,7 +4511,7 @@ button {
   border-radius: 999px;
   background: color-mix(in oklch, var(--bg-2) 84%, transparent);
   color: var(--text-1);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 700;
 }
 .home-hero-proof .icon {
@@ -4532,7 +4532,7 @@ button {
 }
 .home-resume-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--lime-deep);
@@ -4544,7 +4544,7 @@ button {
   margin-top: 2px;
 }
 .home-resume-status {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
 }
@@ -4560,7 +4560,7 @@ button {
 }
 .home-section-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -4606,7 +4606,7 @@ button {
   display: flex;
   justify-content: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 16px;
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4623,7 +4623,7 @@ button {
 .settings-legal {
   display: flex;
   gap: 8px;
-  font-size: 12px;
+  font-size: 16px;
   font-family: var(--font-mono);
   color: var(--text-2);
   letter-spacing: 0.04em;
@@ -4637,7 +4637,7 @@ button {
 }
 .landing-tagline {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold);
@@ -4646,7 +4646,7 @@ button {
 .landing-card p {
   margin: 0;
   color: var(--text-1);
-  font-size: 14px;
+  font-size: 16px;
 }
 .landing-card .actions {
   display: flex;
@@ -4666,7 +4666,7 @@ button {
 }
 .landing-modes-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -4725,7 +4725,7 @@ button {
   right: 10px;
   padding: 4px 10px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   border: 1px solid var(--line);
@@ -4764,7 +4764,7 @@ button {
 .landing-mode-blurb {
   grid-column: 2;
   grid-row: 2;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   line-height: 1.45;
 }
@@ -4776,7 +4776,7 @@ button {
   background: color-mix(in oklch, var(--gold) 15%, transparent);
   color: var(--gold);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   vertical-align: middle;
 }
@@ -4830,7 +4830,7 @@ button {
   border-radius: 8px;
   background: var(--bg-2);
   color: var(--text-1);
-  font-size: 12px;
+  font-size: 16px;
   text-transform: capitalize;
   cursor: pointer;
   transition:
@@ -4907,7 +4907,7 @@ button {
 }
 .help-sub {
   color: var(--text-2);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   max-width: 56ch;
 }
@@ -4945,7 +4945,7 @@ button {
 }
 .help-card-tagline {
   margin: -8px 0 0;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   color: var(--text-1);
   font-style: italic;
@@ -4973,7 +4973,7 @@ button {
 }
 .help-card-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -5002,7 +5002,7 @@ button {
 }
 .format-rules-tagline {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   color: var(--text-1);
   font-style: italic;
@@ -5020,7 +5020,7 @@ button {
 }
 .format-rules-section-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -5108,7 +5108,7 @@ button {
   border-radius: 999px;
   color: var(--text-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   text-align: center;
 }
 
@@ -5163,7 +5163,7 @@ button {
   gap: 8px;
   color: var(--lime-deep);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -5174,7 +5174,7 @@ button {
   border: 1px solid color-mix(in oklch, var(--lime) 42%, var(--line));
   border-radius: 999px;
   color: var(--text-1);
-  font-size: 9px;
+  font-size: 16px;
   letter-spacing: 0.08em;
 }
 
@@ -5191,14 +5191,14 @@ button {
 
 .event-card-status {
   color: var(--text-1);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .event-card-meta {
   margin-top: auto;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.4;
 }
 
@@ -5313,12 +5313,12 @@ button {
 .signup-admin-toggle-icon .icon { width: 19px; height: 19px; }
 .signup-admin-toggle strong,
 .signup-admin-toggle small { display: block; }
-.signup-admin-toggle strong { font-size: 15px; }
-.signup-admin-toggle small { color: var(--text-2); margin-top: 2px; font-size: 13px; line-height: 1.4; }
+.signup-admin-toggle strong { font-size: 16px; }
+.signup-admin-toggle small { color: var(--text-2); margin-top: 2px; font-size: 16px; line-height: 1.4; }
 .signup-admin-toggle-meta {
   color: var(--green);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: .12em;
 }
 .signup-admin-body {
@@ -5328,7 +5328,7 @@ button {
 .signup-admin-empty {
   padding: 10px;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .signup-admin-empty p { margin: 0 0 12px; }
@@ -5346,8 +5346,8 @@ button {
   gap: 12px;
   margin-bottom: 9px;
 }
-.signup-template-heading strong { font-size: 14px; }
-.signup-template-heading small { color: var(--text-2); font-size: 11px; line-height: 1.4; text-align: right; }
+.signup-template-heading strong { font-size: 16px; }
+.signup-template-heading small { color: var(--text-2); font-size: 16px; line-height: 1.4; text-align: right; }
 .signup-template-controls {
   display: grid;
   grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) auto auto;
@@ -5362,7 +5362,7 @@ button {
 .signup-admin-form .setup-help {
   margin-top: 2px;
   color: var(--text-2);
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.45;
 }
 .signup-date-time-field {
@@ -5380,7 +5380,7 @@ button {
   display: block;
   margin-top: 6px;
   color: color-mix(in srgb, var(--red) 82%, white);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -5402,7 +5402,7 @@ button {
 }
 .signup-date-time-control label > span {
   color: var(--text-2);
-  font-size: 10px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -5423,7 +5423,7 @@ button {
 }
 .signup-duration-row > span {
   color: var(--text-2);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 700;
 }
 .signup-duration-row > div {
@@ -5435,7 +5435,7 @@ button {
 .signup-duration-row .btn {
   min-height: 32px;
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: 16px;
 }
 .signup-import-mode {
   display: grid;
@@ -5470,12 +5470,12 @@ button {
   display: block;
 }
 .signup-import-mode strong {
-  font-size: 13px;
+  font-size: 16px;
 }
 .signup-import-mode small {
   margin-top: 3px;
   color: var(--text-2);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -5516,7 +5516,7 @@ button {
   color: var(--cyan);
   background: var(--bg);
   border: 1px solid var(--line-soft);
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.35;
   text-overflow: ellipsis;
 }
@@ -5536,7 +5536,7 @@ button {
 .signup-admin-summary strong,
 .signup-admin-summary span { display: block; }
 .signup-admin-summary strong { color: var(--green); font-size: 16px; }
-.signup-admin-summary span { margin-top: 3px; color: var(--text-2); font-size: 11px; line-height: 1.35; }
+.signup-admin-summary span { margin-top: 3px; color: var(--text-2); font-size: 16px; line-height: 1.35; }
 .signup-admin-roster {
   margin: 10px 0;
   border: 1px solid var(--line-soft);
@@ -5551,8 +5551,8 @@ button {
   gap: 12px;
   padding: 0 2px;
 }
-.signup-admin-pending-heading strong { font-size: 13px; }
-.signup-admin-pending-heading span { color: var(--text-2); font-size: 11px; text-align: right; }
+.signup-admin-pending-heading strong { font-size: 16px; }
+.signup-admin-pending-heading span { color: var(--text-2); font-size: 16px; text-align: right; }
 .signup-admin-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) minmax(100px, .7fr) auto;
@@ -5564,8 +5564,8 @@ button {
 .signup-admin-row:last-child { border-bottom: 0; }
 .signup-admin-row strong,
 .signup-admin-row small { display: block; }
-.signup-admin-row strong { font-size: 13px; }
-.signup-admin-row small { margin-top: 2px; color: var(--text-2); font-size: 11px; }
+.signup-admin-row strong { font-size: 16px; }
+.signup-admin-row small { margin-top: 2px; color: var(--text-2); font-size: 16px; }
 .signup-position {
   width: 27px;
   height: 27px;
@@ -5575,11 +5575,11 @@ button {
   color: color-mix(in srgb, var(--green) 76%, white);
   background: color-mix(in srgb, var(--green) 7%, var(--bg));
   border: 1px solid color-mix(in srgb, var(--green) 40%, var(--line));
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 800;
 }
 .signup-position.waitlisted { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, var(--bg)); }
-.signup-contact { color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+.signup-contact { color: var(--text-2); font-size: 16px; overflow-wrap: anywhere; text-align: right; }
 .signup-admin-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .signup-admin-delete { width: 36px; height: 36px; }
 .signup-auto-status {
@@ -5591,15 +5591,15 @@ button {
   border-radius: 9px;
   background: color-mix(in srgb, var(--green) 5%, var(--bg));
 }
-.signup-auto-status strong { color: color-mix(in srgb, var(--green) 64%, white); font-size: 13px; }
-.signup-auto-status span { color: var(--text-2); font-size: 12px; line-height: 1.4; }
+.signup-auto-status strong { color: color-mix(in srgb, var(--green) 64%, white); font-size: 16px; }
+.signup-auto-status span { color: var(--text-2); font-size: 16px; line-height: 1.4; }
 .signup-auto-status.paused { border-color: color-mix(in srgb, var(--amber) 28%, var(--line)); background: color-mix(in srgb, var(--amber) 5%, var(--bg)); }
 .signup-auto-status.paused strong { color: var(--amber); }
 .signup-message {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.45;
 }
 .signup-message.success { color: color-mix(in srgb, var(--green) 72%, white); background: color-mix(in srgb, var(--green) 5%, var(--bg)); border: 1px solid color-mix(in srgb, var(--green) 24%, var(--line)); }
@@ -5621,7 +5621,7 @@ button {
   align-items: center;
   gap: 10px;
   color: #d9e4e9;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: .045em;
 }
@@ -5642,7 +5642,7 @@ button {
 .signup-public-waiting-head > span {
   color: #9eff3d;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: .18em;
   text-transform: uppercase;
 }
@@ -5660,7 +5660,7 @@ button {
   color: #bfd0d8;
   background: #0d2939;
   border: 1px solid #1c4054;
-  font-size: 13px;
+  font-size: 16px;
 }
 .signup-public-countdown {
   display: grid;
@@ -5676,7 +5676,7 @@ button {
 .signup-public-countdown-label {
   color: #bdf28a;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: .16em;
 }
@@ -5702,7 +5702,7 @@ button {
 }
 .signup-public-countdown-unit small {
   color: #8fa8b5;
-  font-size: 10px;
+  font-size: 16px;
   text-transform: uppercase;
   letter-spacing: .08em;
 }
@@ -5720,7 +5720,7 @@ button {
 .signup-public-availability strong,
 .signup-public-availability span { display: block; }
 .signup-public-availability strong { font-size: 16px; }
-.signup-public-availability span { margin-top: 2px; color: #bdd0d9; font-size: 13px; }
+.signup-public-availability span { margin-top: 2px; color: #bdd0d9; font-size: 16px; }
 .signup-public-availability.open { border-color: #245064; background: rgba(9, 35, 49, .78); }
 .signup-public-availability.open strong { color: #edf4f6; }
 .signup-public-availability.waiting { border-color: rgba(255, 183, 46, .45); background: rgba(255, 183, 46, .08); }
@@ -5729,9 +5729,9 @@ button {
 .signup-public-availability.closed strong { color: #ffb72e; }
 .signup-public-copy,
 .signup-public-prizes p { white-space: pre-line; color: #c3d1d8; line-height: 1.6; }
-.signup-public-copy { max-width: 760px; margin: 18px 0 0; font-size: 15px; }
+.signup-public-copy { max-width: 760px; margin: 18px 0 0; font-size: 16px; }
 .signup-public-prizes { margin-top: 18px; padding-top: 16px; border-top: 1px solid #173548; }
-.signup-public-prizes p { margin: 6px 0 0; font-size: 14px; }
+.signup-public-prizes p { margin: 6px 0 0; font-size: 16px; }
 .signup-public-grid {
   max-width: 1120px;
   margin: 0 auto;
@@ -5753,7 +5753,7 @@ button {
 .signup-public-priority-note {
   margin: -5px 0 14px;
   color: #8fa8b5;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.5;
 }
 .signup-public-list { border: 1px solid #143448; border-radius: 12px; overflow: hidden; }
@@ -5769,8 +5769,8 @@ button {
 .signup-public-team:last-child { border-bottom: 0; }
 .signup-public-team strong,
 .signup-public-team small { display: block; }
-.signup-public-team strong { font-size: 14px; }
-.signup-public-team small { margin-top: 2px; color: #8fa8b5; font-size: 12px; }
+.signup-public-team strong { font-size: 16px; }
+.signup-public-team small { margin-top: 2px; color: #8fa8b5; font-size: 16px; }
 .signup-public-position {
   width: 29px;
   height: 29px;
@@ -5780,18 +5780,18 @@ button {
   color: #bdf28a;
   background: #0b2635;
   border: 1px solid #39634a;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
 }
 .signup-public-position.waiting { color: #ffb72e; background: rgba(255, 183, 46, .12); }
-.signup-public-status { padding: 4px 7px; border-radius: 999px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .12em; }
+.signup-public-status { padding: 4px 7px; border-radius: 999px; font-family: var(--font-mono); font-size: 16px; letter-spacing: .12em; }
 .signup-public-status.confirmed { color: #b7e98a; background: transparent; border: 1px solid rgba(158, 255, 61, .2); }
 .signup-public-status.waiting { color: #ffb72e; background: rgba(255, 183, 46, .09); }
 .signup-public-row-actions { display: grid; justify-items: end; gap: 6px; }
 .signup-public-join { min-height: 32px; padding: 5px 12px; color: #dfffc1; background: #102d25; border-color: #3e6d43; }
 .signup-public-waiting-head { display: flex; justify-content: space-between; margin: 19px 2px 8px; }
 .signup-public-waiting-head strong { color: #ffb72e; }
-.signup-public-empty { padding: 16px; color: #7894a2; font-size: 13px; font-style: italic; }
+.signup-public-empty { padding: 16px; color: #7894a2; font-size: 16px; font-style: italic; }
 .signup-public-form { display: grid; gap: 12px; }
 .signup-public-form .btn.primary {
   color: #081008;
@@ -5816,7 +5816,7 @@ button {
   color: #8fa8b5;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -5825,7 +5825,7 @@ button {
   border-color: rgba(158, 255, 61, .48);
   background: rgba(158, 255, 61, .08);
 }
-.signup-public-form label > span { display: block; margin-bottom: 5px; color: #9db1bc; font-size: 12px; font-weight: 700; }
+.signup-public-form label > span { display: block; margin-bottom: 5px; color: #9db1bc; font-size: 16px; font-weight: 700; }
 .signup-public-form label small { color: #65818f; font-weight: 500; }
 .signup-public-form input {
   width: 100%;
@@ -5840,9 +5840,9 @@ button {
 }
 .signup-public-form input:focus { border-color: #568b49; box-shadow: 0 0 0 2px rgba(158, 255, 61, .05); }
 .signup-public-form input[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 15%, transparent); }
-.signup-field-error { display: block; margin-top: 5px; color: var(--red); font-size: 12px; }
+.signup-field-error { display: block; margin-top: 5px; color: var(--red); font-size: 16px; }
 .signup-public-contact { display: inline-flex; color: color-mix(in srgb, var(--green) 75%, white); font-weight: 700; }
-.signup-public-private { margin: 0; color: #7894a2; font-size: 11px; line-height: 1.45; text-align: center; }
+.signup-public-private { margin: 0; color: #7894a2; font-size: 16px; line-height: 1.45; text-align: center; }
 .signup-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .signup-public-result { padding: 18px 8px; text-align: center; }
 .signup-public-result > span { width: 54px; height: 54px; margin: 0 auto 13px; display: grid; place-items: center; border-radius: 50%; font-size: 23px; font-weight: 900; }
@@ -5852,10 +5852,10 @@ button {
 .signup-public-result h2 { margin: 0; font-size: 25px; }
 .signup-public-result p { margin: 8px auto 18px; max-width: 360px; color: #9db1bc; line-height: 1.55; }
 .signup-public-cancel { margin-top: 16px; padding-top: 13px; border-top: 1px solid #173548; text-align: center; }
-.signup-public-cancel p { color: #9db1bc; font-size: 13px; }
-.signup-public-text-button { border: 0; color: #8aa1ad; background: transparent; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.signup-public-cancel p { color: #9db1bc; font-size: 16px; }
+.signup-public-text-button { border: 0; color: #8aa1ad; background: transparent; font-size: 16px; text-decoration: underline; cursor: pointer; }
 .signup-public-closed { padding: 18px; border-radius: 10px; color: #ffb72e; background: rgba(255, 183, 46, .08); text-align: center; line-height: 1.5; }
-.signup-public-footer { max-width: 1120px; margin: 24px auto 0; color: #5e7c8b; font-size: 11px; text-align: center; }
+.signup-public-footer { max-width: 1120px; margin: 24px auto 0; color: #5e7c8b; font-size: 16px; text-align: center; }
 .signup-public-loading { min-height: 100dvh; display: grid; place-items: center; color: #9eff3d; background: #020d15; }
 .signup-public-error { max-width: 520px; margin: 15vh auto; text-align: center; }
 .signup-public-error > div { width: 62px; height: 62px; margin: auto; }
@@ -5899,7 +5899,7 @@ button {
   .signup-public-countdown { padding: 12px; }
   .signup-public-countdown-units { gap: 5px; }
   .signup-public-countdown-unit { padding: 8px 3px; }
-  .signup-public-countdown-unit small { font-size: 8px; letter-spacing: .04em; }
+  .signup-public-countdown-unit small { font-size: 16px; letter-spacing: .04em; }
 }
 
 /* Rotate-to-mirror hint (one-time, phone portrait, round 1) */
@@ -5950,7 +5950,7 @@ button {
 }
 .rotate-hint-body {
   margin: 0 0 6px;
-  font-size: 13.5px;
+  font-size: 16px;
   line-height: 1.55;
   color: var(--text-2);
 }
@@ -5982,7 +5982,7 @@ button {
 }
 .ipad-hint-text {
   flex: 1;
-  font-size: 13.5px;
+  font-size: 16px;
   line-height: 1.5;
   color: var(--text-2);
 }
@@ -6024,7 +6024,7 @@ button {
 }
 .nightly-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--lime-deep);
@@ -6036,7 +6036,7 @@ button {
   margin-top: 2px;
 }
 .nightly-detail {
-  font-size: 12.5px;
+  font-size: 16px;
   color: var(--text-2);
   margin-top: 2px;
 }
@@ -6070,7 +6070,7 @@ button {
 }
 .club-logo-empty {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -6092,7 +6092,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .paywall-features li {
   display: flex;
@@ -6109,7 +6109,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 16px;
   font-family: var(--font-mono);
   color: var(--text-2);
   letter-spacing: 0.16em;
@@ -6138,12 +6138,12 @@ button {
 }
 .paywall-plan-price {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 16px;
   font-family: var(--font-mono);
 }
 .paywall-plan-badge {
   display: inline-block;
-  font-size: 10px;
+  font-size: 16px;
   font-family: var(--font-mono);
   letter-spacing: 0.1em;
   padding: 2px 6px;
@@ -6159,7 +6159,7 @@ button {
 }
 .pro-chip {
   display: inline-block;
-  font-size: 9px;
+  font-size: 16px;
   font-family: var(--font-mono);
   letter-spacing: 0.16em;
   padding: 2px 6px;
@@ -6170,7 +6170,7 @@ button {
 }
 .lock-chip {
   display: inline-block;
-  font-size: 10px;
+  font-size: 16px;
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
   margin-left: 8px;
@@ -6201,7 +6201,7 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 14px;
+  font-size: 16px;
   align-items: baseline;
 }
 .account-row-label {
@@ -6226,7 +6226,7 @@ button {
 }
 .auth-sub {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.5;
   margin: 0;
 }
@@ -6239,7 +6239,7 @@ button {
 .auth-input {
   width: 100%;
   box-sizing: border-box;
-  font-size: 14px;
+  font-size: 16px;
   padding: 10px 12px;
 }
 .auth-apple {
@@ -6254,7 +6254,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 16px;
   font-family: var(--font-mono);
   color: var(--text-2);
   letter-spacing: 0.16em;
@@ -6276,7 +6276,7 @@ button {
 .setup-format-badge {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 3px 8px;
@@ -6301,7 +6301,7 @@ button {
 }
 .landing-templates-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -6365,11 +6365,11 @@ button {
 }
 .settings-row-label > span:first-child {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-0);
 }
 .settings-row-hint {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   line-height: 1.3;
 }
@@ -6439,10 +6439,10 @@ button {
   box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.35) inset;
 }
 .avatar--xs {
-  font-size: 10px;
+  font-size: 16px;
 }
 .avatar--sm {
-  font-size: 13px;
+  font-size: 16px;
 }
 .avatar--md {
   font-size: 22px;
@@ -6537,7 +6537,7 @@ button {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 14px;
   text-align: center;
@@ -6578,7 +6578,7 @@ button {
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 /* ==========================================================================
@@ -6629,7 +6629,7 @@ button {
 }
 .podium-head-eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -6645,7 +6645,7 @@ button {
 }
 .podium-head-sub {
   margin: 6px 0 0 0;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-1);
 }
 @keyframes podium-head-in {
@@ -6696,7 +6696,7 @@ button {
 }
 .podium-team .place-tag {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 16px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -6722,12 +6722,12 @@ button {
   color: var(--gold);
 }
 .podium-team .team-players {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
 }
 .podium-team .team-points {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-1);
   letter-spacing: 0.1em;
   margin-top: 4px;
@@ -6840,7 +6840,7 @@ button {
 }
 .podium-rest-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -6860,7 +6860,7 @@ button {
   gap: 16px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 14px;
+  font-size: 16px;
   opacity: 0;
   animation: podium-fade-late 0.5s ease-out forwards;
 }
@@ -6870,16 +6870,16 @@ button {
 .podium-rest-row .rank {
   font-family: var(--font-mono);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 16px;
 }
 .podium-rest-row .name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 15px;
+  font-size: 16px;
 }
 .podium-rest-row .wl {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-2);
   letter-spacing: 0.04em;
 }
@@ -6925,7 +6925,7 @@ button {
   border: 1px solid var(--line);
   color: var(--text-1);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   padding: 8px 14px;
@@ -6967,24 +6967,24 @@ button {
 }
 .op.presentation .op-timer-controls .btn {
   padding: 8px;
-  font-size: 12px;
+  font-size: 16px;
   opacity: 0.7;
   min-width: 0;
 }
 .op.presentation .op-timer-play {
   padding: 12px !important;
-  font-size: 13px !important;
+  font-size: 16px !important;
   opacity: 1;
 }
 .op.presentation .op-mini-lb-row {
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .op.presentation .op-mini-lb-row .n {
-  font-size: 13px;
+  font-size: 16px;
 }
 .op.presentation .op-mini-lb-row .p {
-  font-size: 14px;
+  font-size: 16px;
 }
 .op.presentation .op-court {
   padding: 18px;
@@ -6993,7 +6993,7 @@ button {
   font-size: 24px;
 }
 .op.presentation .op-team-players {
-  font-size: 12px;
+  font-size: 16px;
 }
 .op.presentation .op-score {
   font-size: 60px;
@@ -7002,14 +7002,14 @@ button {
   width: 26px;
   height: 26px;
   opacity: 0.5;
-  font-size: 14px;
+  font-size: 16px;
 }
 .op.presentation .op-score-btn:hover,
 .op.presentation .op-score-btn:focus-visible {
   opacity: 1;
 }
 .op.presentation .op-court-pts-chip {
-  font-size: 11px;
+  font-size: 16px;
 }
 .op.presentation .op-end-bar {
   padding: 10px 16px;
@@ -7018,12 +7018,12 @@ button {
   display: none;
 }
 .op.presentation .op-end-bar .btn {
-  font-size: 13px;
+  font-size: 16px;
   padding: 10px 14px;
 }
 .op.presentation .op-end-bar .btn.lg.primary {
   padding: 12px 20px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .op.presentation .between-card {
   padding: 16px 18px;
@@ -7157,12 +7157,12 @@ button {
     padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
   .op-top-meta {
-    font-size: 11px;
+    font-size: 16px;
     max-width: 220px;
   }
   .op-top-right .btn.sm {
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: 16px;
   }
 
   /* Setup: stack columns, allow scroll */
@@ -7328,7 +7328,7 @@ button {
   }
   .qual-timer-row .op-timer-controls .btn {
     padding: 9px 4px;
-    font-size: 12px;
+    font-size: 16px;
     min-width: 0;
   }
   .qual-timer-row .op-timer-play {
@@ -7445,11 +7445,11 @@ button {
     gap: 2px;
   }
   .podium-team .place-tag {
-    font-size: 9px;
+    font-size: 16px;
     letter-spacing: 0.08em;
   }
   .podium-team .team-name {
-    font-size: 13px;
+    font-size: 16px;
     width: 100%;
   }
   .podium-team--first .team-name {
@@ -7459,10 +7459,10 @@ button {
     display: none;
   }
   .podium-team .team-points {
-    font-size: 10px;
+    font-size: 16px;
   }
   .podium-team .team-points span {
-    font-size: 14px;
+    font-size: 16px;
   }
   .podium-block {
     border-radius: 12px 12px 0 0;
@@ -7573,13 +7573,13 @@ button {
     gap: 8px;
   }
   .qual-title {
-    font-size: 15px;
+    font-size: 16px;
   }
   .qual-sub {
     display: none;
   }
   .qual-meta {
-    font-size: 11px;
+    font-size: 16px;
   }
   .qual-timer-row > .op-timer {
     max-width: 100%;
@@ -7595,13 +7595,13 @@ button {
   }
   .qual-timer-row .op-timer-controls .btn {
     padding: 6px 4px;
-    font-size: 11px;
+    font-size: 16px;
     min-width: 0;
   }
   .qual-timer-row .op-timer-play {
     grid-column: auto !important;
     padding: 8px 4px !important;
-    font-size: 12px !important;
+    font-size: 16px !important;
   }
   .qual-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7613,13 +7613,13 @@ button {
     gap: 4px;
   }
   .qual-match-head {
-    font-size: 11px;
+    font-size: 16px;
   }
   .qual-row {
     gap: 6px;
   }
   .qual-row .name {
-    font-size: 12px;
+    font-size: 16px;
   }
   .qual-row input {
     width: 44px;
@@ -7627,7 +7627,7 @@ button {
     font-size: 16px;
   }
   .qual-sum {
-    font-size: 10px;
+    font-size: 16px;
   }
   .qual-bottom {
     padding: 10px 14px;
@@ -7636,7 +7636,7 @@ button {
     gap: 8px;
   }
   .qual-bottom-info {
-    font-size: 11px;
+    font-size: 16px;
     min-width: 0;
   }
 
@@ -7662,7 +7662,7 @@ button {
     grid-column: auto;
   }
   .seed-pair-header {
-    font-size: 11px;
+    font-size: 16px;
   }
   .seed-row {
     grid-template-columns: 28px minmax(0, 1fr) auto auto;
@@ -7670,7 +7670,7 @@ button {
     column-gap: 8px;
   }
   .seed-row .seed-team-name {
-    font-size: 13px;
+    font-size: 16px;
     gap: 6px;
   }
   .seed-row .players {
@@ -7680,11 +7680,11 @@ button {
     grid-column: auto;
     grid-row: auto;
     text-align: right;
-    font-size: 12px;
+    font-size: 16px;
   }
   .seed-randomise-chip {
     padding: 2px 6px;
-    font-size: 10px;
+    font-size: 16px;
   }
   .seed-randomise-chip > span:last-child {
     display: none;
@@ -7728,10 +7728,10 @@ button {
     gap: 6px;
   }
   .podium-team .place-tag {
-    font-size: 9px;
+    font-size: 16px;
   }
   .podium-team .team-name {
-    font-size: 14px;
+    font-size: 16px;
   }
   .podium-team--first .team-name {
     font-size: 17px;
@@ -7740,7 +7740,7 @@ button {
     display: none;
   }
   .podium-team .team-points span {
-    font-size: 13px;
+    font-size: 16px;
   }
   .podium-block--first {
     height: 110px;
@@ -7817,7 +7817,7 @@ button {
     grid-column: 1;
     grid-row: 1;
     justify-content: flex-start;
-    font-size: 11px;
+    font-size: 16px;
   }
   .display-toolbar--between .display-toolbar-menu {
     grid-column: 2;
@@ -7878,39 +7878,39 @@ button {
   }
   .display-toolbar-timer .btn {
     padding: 4px 8px;
-    font-size: 10px;
+    font-size: 16px;
     min-width: 0;
   }
   .display-toolbar-timer .display-play {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: 16px;
   }
   .display-toolbar-timer .icon {
     width: 12px;
     height: 12px;
   }
   .display-toolbar-summary {
-    font-size: 10px;
+    font-size: 16px;
     letter-spacing: 0.04em;
   }
   .display-end-round {
     padding: 6px 12px !important;
-    font-size: 11px !important;
+    font-size: 16px !important;
   }
   .display-toolbar-menu .btn {
     padding: 4px 10px;
-    font-size: 14px;
+    font-size: 16px;
   }
   .display-toolbar--between .display-next-duration-label {
-    font-size: 9px;
+    font-size: 16px;
   }
   .display-toolbar--between .display-next-duration-input {
     padding: 4px 6px;
-    font-size: 11px;
+    font-size: 16px;
   }
   .display-toolbar--complete .btn {
     padding: 6px 10px;
-    font-size: 11px;
+    font-size: 16px;
   }
   /* Full standings is redundant on phone landscape — the screen is for
      mirroring/AirPlay, not navigation. Hiding it also lets the remaining
@@ -7936,10 +7936,10 @@ button {
 
 /* Shared controls and navigation */
 .btn {
-  font-size: 14px;
+  font-size: 16px;
 }
 .btn.sm {
-  font-size: 13px;
+  font-size: 16px;
 }
 .input,
 .setup-input,
@@ -7951,42 +7951,42 @@ button {
 .app-menu-title,
 .app-menu-item-meta,
 .app-menu-foot {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.45;
 }
 .modal p,
 .adjust-courts-hint,
 .edit-points-list p {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .pwa-toast,
 .pwa-toast-body strong,
 .pwa-toast-body span,
 .banner-error {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
 /* Home and onboarding */
 .home-top-brand {
-  font-size: 14px;
+  font-size: 16px;
 }
 .home-hero-sub {
   font-size: 16px;
   line-height: 1.6;
 }
 .home-hero-proof span {
-  font-size: 13px;
+  font-size: 16px;
 }
 .ipad-hint-text,
 .rotate-hint-body {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .home-resume-status,
 .landing-mode-blurb {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .home-resume-label,
@@ -7995,16 +7995,16 @@ button {
 .landing-tagline,
 .landing-mode-info,
 .landing-templates-title {
-  font-size: 11px;
+  font-size: 16px;
 }
 .coming-soon-chip,
 .pro-chip,
 .lock-chip {
-  font-size: 10px;
+  font-size: 16px;
 }
 .landing-legal,
 .settings-legal {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -8013,14 +8013,14 @@ button {
 .setup-mid-event-banner,
 .qual-sub,
 .qual-bottom-info {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .setup-field label,
 .setup-format-badge,
 .qual-match-head,
 .seed-pair-court-pts {
-  font-size: 11px;
+  font-size: 16px;
 }
 .setup-team-num,
 .qual-meta,
@@ -8028,7 +8028,7 @@ button {
 .seed-randomise-chip,
 .seed-qscore,
 .between-team-from {
-  font-size: 12px;
+  font-size: 16px;
 }
 .seed-row,
 .seed-team-name .players,
@@ -8037,17 +8037,17 @@ button {
 .team-history-row .court-tag,
 .team-history-row .opponent,
 .lbfull-name .players {
-  font-size: 14px;
+  font-size: 16px;
 }
 .randomise-subtitle,
 .randomise-stepper-hint {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
 }
 .randomise-status,
 .randomise-reel-rank,
 .randomise-reel-badge {
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* Modals, account and subscription */
@@ -8056,30 +8056,30 @@ button {
 .paywall-divider,
 .paywall-plan-badge,
 .auth-divider {
-  font-size: 11px;
+  font-size: 16px;
 }
 .nightly-detail,
 .settings-row-hint {
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.45;
 }
 .paywall-features,
 .auth-sub,
 .account-row {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
 }
 .paywall-plan-price {
-  font-size: 14px;
+  font-size: 16px;
 }
 .settings-row-label > span:first-child {
-  font-size: 15px;
+  font-size: 16px;
 }
 .player-chip {
-  font-size: 14px;
+  font-size: 16px;
 }
 .splash {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 /* Phone scoreboard: names and actions stay readable without crowding scores. */
@@ -8091,7 +8091,7 @@ button {
 .mobile-podium-rest-head,
 .mobile-stats-head,
 .mobile-stat-label {
-  font-size: 11px;
+  font-size: 16px;
 }
 .mobile-court-name,
 .mobile-court-team-name,
@@ -8099,13 +8099,13 @@ button {
 .mobile-resting-team,
 .mobile-standings-row,
 .mobile-podium-row .info .meta {
-  font-size: 14px;
+  font-size: 16px;
 }
 .mobile-tie-btn,
 .mobile-movement,
 .mobile-standings-toggle,
 .mobile-stat-detail {
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* iPad operator scoring and standings */
@@ -8118,24 +8118,24 @@ button {
 .op-team-tie-pick button,
 .op-court-pts-chip,
 .lbfull-header {
-  font-size: 12px;
+  font-size: 16px;
 }
 .op-mini-lb-title,
 .op-team-name,
 .op-end-summary {
-  font-size: 14px;
+  font-size: 16px;
 }
 .op-timer-status,
 .op-mini-lb-meta {
-  font-size: 11px;
+  font-size: 16px;
 }
 
 @media (min-height: 501px) {
   .display-toolbar-summary {
-    font-size: 14px;
+    font-size: 16px;
   }
   .display-next-duration-label {
-    font-size: 11px;
+    font-size: 16px;
   }
 }
 
@@ -8162,21 +8162,21 @@ button {
 .tv-court-tie,
 .tv-centre-tie,
 .tv-tie-btn {
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* Podium and generated/shareable summaries */
 .podium-head-eyebrow,
 .podium-team .place-tag,
 .podium-rest-title {
-  font-size: 11px;
+  font-size: 16px;
 }
 .podium-head-sub,
 .podium-team .team-players,
 .podium-team .team-points,
 .podium-rest-row .rank,
 .podium-rest-row .wl {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
 }
 
@@ -8189,7 +8189,7 @@ button {
     font-size: 28px;
   }
   .home-hero-proof span {
-    font-size: 12px;
+    font-size: 16px;
   }
   .landing-mode {
     padding-top: 16px;

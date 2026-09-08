@@ -6,12 +6,14 @@
 
 import { useNavigate } from 'react-router-dom';
 import { FORMAT_ORDER, FORMAT_RULES } from '@/content/formatRules';
+import { ThemeSwitch } from '@/components/ThemeSwitch';
 
 export function HelpScreen() {
   const navigate = useNavigate();
   return (
     <div className="help">
       <div className="help-head">
+        <ThemeSwitch />
         <button className="btn ghost sm" onClick={() => navigate(-1)}>
           ← Back
         </button>

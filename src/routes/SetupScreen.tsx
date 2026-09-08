@@ -893,7 +893,7 @@ export function SetupScreen() {
           )}
         </div>
         {lastError && event.status === 'setup' && (
-          <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 8 }}>
+          <div style={{ color: 'var(--red)', fontSize: 16, marginTop: 8 }}>
             {lastError}
           </div>
         )}
@@ -988,7 +988,7 @@ function SortableTeamList({
   if (teams.length === 0) {
     return (
       <div className="setup-list">
-        <div style={{ color: 'var(--text-2)', fontSize: 14, fontStyle: 'italic' }}>No teams yet.</div>
+        <div style={{ color: 'var(--text-2)', fontSize: 16, fontStyle: 'italic' }}>No teams yet.</div>
       </div>
     );
   }
@@ -1558,7 +1558,7 @@ function SortableCourtRow({
         />
         <span
           style={{
-            fontSize: 11,
+            fontSize: 16,
             color: 'var(--text-2)',
             fontFamily: 'var(--font-mono)',
             letterSpacing: '0.12em',

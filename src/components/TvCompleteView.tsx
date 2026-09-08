@@ -10,6 +10,7 @@ import { Avatar } from './Avatar';
 import { RankMovement } from './RankMovement';
 import { GamesLine } from './GamesLine';
 import { Icons } from './Icons';
+import { BrandLogo } from './BrandLogo';
 
 /**
  * Standalone 1920×1080 "Tournament Complete" canvas.
@@ -88,7 +89,7 @@ export function TvCompleteView({ event }: { event: EventState }) {
 
       <div className="tv-header">
         <div className="tv-header-brand">
-          <div className="brand-mark lg">K</div>
+          <div className="brand-mark lg"><BrandLogo /></div>
           <div className="tv-header-event">
             <div className="tv-header-event-name">{event.name}</div>
             <div className="tv-header-event-meta">

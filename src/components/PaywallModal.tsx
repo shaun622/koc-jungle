@@ -127,7 +127,7 @@ export function PaywallModal({
               You're on the free trial, {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.
             </p>
           )}
-          <p style={{ color: 'var(--text-2)', fontSize: 15, lineHeight: 1.55 }}>
+          <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
             {nativeBilling
               ? 'King of the Court, Americano and cloud sync are unlocked.'
               : 'Pro is currently included free in the PWA. King of the Court, Americano and cloud sync are unlocked.'}
@@ -149,7 +149,7 @@ export function PaywallModal({
       <div className="modal paywall-modal">
         <h2>Unlock everything with Pro</h2>
         {reason && (
-          <p style={{ color: 'var(--accent)', fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>{reason}</p>
+          <p style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1.5, fontWeight: 600 }}>{reason}</p>
         )}
         <ul className="paywall-features">
           {FEATURES.map((f) => (
@@ -172,7 +172,7 @@ export function PaywallModal({
               Start 7-day free trial
             </button>
           ) : (
-            <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5, textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.5, textAlign: 'center' }}>
               You've already used the free trial on this device.
             </p>
           )
@@ -190,7 +190,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Monthly
-              <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews monthly' : 'Auto-renews monthly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews monthly' : 'Auto-renews monthly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('monthly')}</span>
           </button>
@@ -201,19 +201,19 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Annual <span className="paywall-plan-badge">save 33%</span>
-              <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews yearly' : 'Auto-renews yearly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews yearly' : 'Auto-renews yearly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('annual')}</span>
           </button>
         </div>
 
         {purchaseError && (
-          <div style={{ color: 'var(--red)', fontSize: 14, textAlign: 'center', marginTop: 4 }}>
+          <div style={{ color: 'var(--red)', fontSize: 16, textAlign: 'center', marginTop: 4 }}>
             {purchaseError}
           </div>
         )}
         {!isIAPAvailable() && (
-          <div style={{ color: 'var(--text-2)', fontSize: 13, textAlign: 'center', marginTop: 4 }}>
+          <div style={{ color: 'var(--text-2)', fontSize: 16, textAlign: 'center', marginTop: 4 }}>
             Subscribe in the iOS or Android app to unlock.
           </div>
         )}
@@ -234,7 +234,7 @@ export function PaywallModal({
 
         <p
           style={{
-            fontSize: 12,
+            fontSize: 16,
             color: 'var(--text-2)',
             textAlign: 'center',
             marginTop: 10,
@@ -255,7 +255,7 @@ export function PaywallModal({
             justifyContent: 'center',
             gap: 6,
             marginTop: 8,
-            fontSize: 12,
+            fontSize: 16,
           }}
         >
           <button
