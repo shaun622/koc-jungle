@@ -65,8 +65,9 @@ if (exists('ios/App/App.xcodeproj/project.pbxproj')) {
   const project = read('ios/App/App.xcodeproj/project.pbxproj');
   if (project.includes('MARKETING_VERSION = 1.1;')) pass('Xcode marketing version is 1.1.');
   else error('Xcode MARKETING_VERSION must be 1.1.');
-  if (project.includes('CURRENT_PROJECT_VERSION = 3;')) pass('Xcode build number is 3.');
-  else error('Xcode CURRENT_PROJECT_VERSION must be 3 or higher.');
+  const buildNumbers = [...project.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(match => Number(match[1]));
+  if (buildNumbers.length && buildNumbers.every(build => build > 3)) pass('Xcode build number is newer than the rejected build 3.');
+  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the rejected build 3.');
 } else {
   error('Missing ios/App/App.xcodeproj. Run `npx cap add ios --packagemanager CocoaPods`.');
 }
@@ -96,6 +97,12 @@ else error('Missing VITE_REVENUECAT_PUBLIC_API_KEY_IOS in the release environmen
 const icon = exists('resources/icon.png') ? pngSize('resources/icon.png') : null;
 if (icon?.width === 1024 && icon.height === 1024) pass('App icon source is 1024 × 1024.');
 else error(`resources/icon.png must be a 1024 × 1024 PNG${icon ? ` (found ${icon.width} × ${icon.height})` : ''}.`);
+
+const nativeIcon = 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png';
+if (exists(nativeIcon) && fs.readFileSync(path.join(root, nativeIcon)).equals(fs.readFileSync(path.join(root, 'resources/icon.png')))) pass('Native icon matches the final branded icon, not the Capacitor placeholder.');
+else error('Native iOS app icon must match resources/icon.png.');
+if (exists('ios/App/ci_scripts/ci_post_clone.sh') && exists('ios/App/App.xcworkspace/contents.xcworkspacedata')) pass('Xcode Cloud dependency preparation and CocoaPods workspace exist.');
+else error('Xcode Cloud needs a post-clone script and CocoaPods workspace.');
 
 for (const [folder, label] of [
   ['screenshots/iphone-6.5', 'iPhone 6.5-inch'],

@@ -45,7 +45,8 @@ const config: CapacitorConfig = {
   // bundled web assets. For live-reload dev: `npx cap run ios --livereload`.
   server: {
     androidScheme: 'https',
-    iosScheme: 'https',
+    // WKWebView reserves http/https. Use Capacitor's supported local scheme.
+    iosScheme: 'capacitor',
   },
 };
 
