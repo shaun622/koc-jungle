@@ -120,8 +120,8 @@ export function PaywallModal({
     return (
       <Portal>
       <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="modal paywall-modal">
-          <h2>You're Pro 👑</h2>
+        <div className="modal paywall-modal" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
+          <h2 id="paywall-title">You're Pro 👑</h2>
           {trialDays > 0 && (
             <p>
               You're on the free trial, {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.
@@ -146,8 +146,13 @@ export function PaywallModal({
   return (
     <Portal>
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal paywall-modal">
-        <h2>Unlock everything with Pro</h2>
+      <div className="modal paywall-modal" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
+        <h2 id="paywall-title">{nativeBilling || !trialUsed ? 'Try Pro free for 7 days' : 'Unlock everything with Pro'}</h2>
+        {nativeBilling && <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
+          Eligible new subscribers get 7 days free, including King of the Court and Americano.
+          Choose a plan below to start. Your subscription becomes paid after the trial unless you cancel.
+          The App Store confirms your eligibility, price and first payment date before you approve.
+        </p>}
         {reason && (
           <p style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1.5, fontWeight: 600 }}>{reason}</p>
         )}
@@ -179,7 +184,7 @@ export function PaywallModal({
         )}
 
         <div className="paywall-divider">
-          <span>{nativeBilling ? 'choose a plan — 7 days free' : 'or subscribe'}</span>
+          <span>{nativeBilling ? 'Choose a plan to start' : 'or subscribe'}</span>
         </div>
 
         <div className="paywall-plans">
@@ -190,7 +195,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Monthly
-              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews monthly' : 'Auto-renews monthly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? 'Start free trial if eligible · then renews monthly' : 'Auto-renews monthly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('monthly')}</span>
           </button>
@@ -201,7 +206,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Annual <span className="paywall-plan-badge">save 33%</span>
-              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? '7 days free, then renews yearly' : 'Auto-renews yearly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? 'Start free trial if eligible · then renews yearly' : 'Auto-renews yearly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('annual')}</span>
           </button>
@@ -242,8 +247,9 @@ export function PaywallModal({
           }}
         >
           Eligible new subscribers receive a 7-day free trial. Pro Monthly and
-          Pro Annual are auto-renewable subscriptions. Payment is charged to
-          your Apple ID at confirmation of purchase. Each renews
+          Pro Annual are auto-renewable subscriptions. If eligible, payment starts
+          after your free trial; otherwise, payment is charged to your Apple ID
+          at confirmation of purchase. Each renews
           automatically unless cancelled at least 24 hours before the end of the
           current period; your account is charged within 24 hours before renewal.
           Manage or cancel anytime in your App Store account settings.

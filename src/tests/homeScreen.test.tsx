@@ -1,15 +1,23 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(), archive: vi.fn(), deleteLocal: vi.fn(), deleteCloud: vi.fn(), create: vi.fn(),
   getSignup: vi.fn(), copyLink: vi.fn(),
+  fetchOfferings: vi.fn(), purchase: vi.fn(), restore: vi.fn(),
 }));
 vi.mock('@/hooks/useAuth', () => ({useAuth: () => ({ user: {id:'owner-1',email:'organiser@example.com'},cloudEnabled:true })}));
 vi.mock('@/store/cloudSync', () => ({deleteCloudEvent:mocks.deleteCloud}));
 vi.mock('@/components/AppMenu', () => ({AppMenu: ({onCreate}:{onCreate:()=>void}) => <button onClick={onCreate}>Menu create event</button>}));
 vi.mock('@/lib/signups', () => ({getOwnedSignup:mocks.getSignup,copySignupLink:mocks.copyLink}));
+vi.mock('@/lib/iap', () => ({
+  isIAPAvailable: () => true,
+  isRedeemCodeAvailable: () => false,
+  fetchOfferings: mocks.fetchOfferings,
+  purchasePlan: mocks.purchase,
+  restorePurchases: mocks.restore,
+}));
 
 import { HomeScreen, featuredLibraryEvent, libraryFilterFor } from '@/routes/HomeScreen';
 import { useEventStore } from '@/store/eventStore';
@@ -27,7 +35,11 @@ function show(){return render(<MemoryRouter><HomeScreen/></MemoryRouter>)}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useEntitlementsStore.setState({pro:true});
+  useEntitlementsStore.setState({pro:true,trialUsed:false,trialEndsAt:undefined});
+  mocks.fetchOfferings.mockResolvedValue({
+    monthly: {product:{priceString:'$9.99'}},
+    annual: {product:{priceString:'$79.99'}},
+  });
   mocks.select.mockResolvedValue(null);mocks.archive.mockResolvedValue(undefined);mocks.deleteLocal.mockResolvedValue(undefined);
   useEventCatalogStore.setState({events,hydrated:true,lastError:null});
   useEventStore.setState({event:null,selectEventById:mocks.select,archiveLocalEvent:mocks.archive,deleteLocalEvent:mocks.deleteLocal,createEvent:mocks.create});
@@ -73,8 +85,79 @@ describe('event library presentation', () => {
     show();fireEvent.click(screen.getByRole('button',{name:'Create event'}));
     const dialog=screen.getByRole('dialog',{name:'Create an event'});
     expect(mocks.create).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button',{name:/King of the Court Fixed pairs/}));
+    fireEvent.click(within(dialog).getByRole('button',{name:'Choose format: King of the Court'}));
     expect(mocks.create).toHaveBeenCalledWith('Padel Night','koc');
+  });
+  it.each(['King of the Court', 'Team Americano'])('replaces the format chooser with a clear trial offer for %s', async (format) => {
+    useEntitlementsStore.setState({pro:false});
+    show();
+    fireEvent.click(screen.getByRole('button',{name:'Create event'}));
+    const chooser=screen.getByRole('dialog',{name:'Create an event'});
+    expect(within(chooser).getByText('Try both formats free for 7 days.')).toBeVisible();
+    expect(within(chooser).queryByText('Trial / Pro')).not.toBeInTheDocument();
+    fireEvent.click(within(chooser).getByRole('button',{name:`Choose format: ${format}`}));
+    expect(screen.queryByRole('dialog',{name:'Create an event'})).not.toBeInTheDocument();
+    expect(document.querySelector('dialog')).toBeNull();
+    const offer=screen.getByRole('dialog',{name:'Try Pro free for 7 days'});
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(offer).getByText(/The App Store confirms your eligibility/)).toBeVisible();
+    await waitFor(() => expect(within(offer).getByRole('button',{name:/Pro Monthly/})).toHaveTextContent('$9.99 / month'));
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.purchase).not.toHaveBeenCalled();
+    expect(useEntitlementsStore.getState().pro).toBe(false);
+    fireEvent.click(within(offer).getByRole('button',{name:'Not now'}));
+    expect(screen.getByRole('dialog',{name:'Create an event'})).toBeVisible();
+    expect(screen.queryByRole('dialog',{name:'Try Pro free for 7 days'})).not.toBeInTheDocument();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['King of the Court','Padel Night','koc','monthly'],
+    ['Team Americano','Team Americano','americano','annual'],
+  ])('continues creating %s only after store activation', async (format,name,id,plan) => {
+    useEntitlementsStore.setState({pro:false});
+    mocks.purchase.mockImplementation(async () => {
+      useEntitlementsStore.getState().setPro(true);
+      return {ok:true};
+    });
+    show();
+    fireEvent.click(screen.getByRole('button',{name:'Create event'}));
+    fireEvent.click(screen.getByRole('button',{name:`Choose format: ${format}`}));
+    await act(async () => fireEvent.click(screen.getByRole('button',{name:plan === 'monthly' ? /Pro Monthly/ : /Pro Annual/})));
+    expect(mocks.purchase).toHaveBeenCalledWith(plan);
+    expect(mocks.create).toHaveBeenCalledWith(name,id);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(useEntitlementsStore.getState().trialUsed).toBe(false);
+  });
+  it('keeps a cancelled store purchase on the offer without creating an event', async () => {
+    useEntitlementsStore.setState({pro:false});
+    mocks.purchase.mockResolvedValue({ok:false,error:'Purchase cancelled.'});
+    show();
+    fireEvent.click(screen.getByRole('button',{name:'Create event'}));
+    fireEvent.click(screen.getByRole('button',{name:'Choose format: King of the Court'}));
+    await act(async () => fireEvent.click(screen.getByRole('button',{name:/Pro Monthly/})));
+    expect(screen.getByRole('dialog',{name:'Try Pro free for 7 days'})).toHaveTextContent('Purchase cancelled.');
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it.each([true,false])('creates the chosen event after restore only with active Pro (%s)', async (active) => {
+    useEntitlementsStore.setState({pro:false});
+    mocks.restore.mockImplementation(async () => {
+      useEntitlementsStore.getState().setPro(active);
+      return {ok:true};
+    });
+    show();
+    fireEvent.click(screen.getByRole('button',{name:'Create event'}));
+    fireEvent.click(screen.getByRole('button',{name:'Choose format: Team Americano'}));
+    await act(async () => fireEvent.click(screen.getByRole('button',{name:'Restore purchases'})));
+    if (active) {
+      expect(mocks.create).toHaveBeenCalledWith('Team Americano','americano');
+      expect(mocks.create).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    } else {
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog',{name:'Create an event'})).toBeVisible();
+    }
   });
   it('keeps confirmation in front of permanent deletion', async () => {
     show();const row=screen.getByRole('heading',{name:'Later'}).closest('article')!;

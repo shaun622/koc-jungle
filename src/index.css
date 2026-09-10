@@ -6084,6 +6084,8 @@ button {
 /* Paywall (Stage 2.5 — subscription) */
 .paywall-modal {
   max-width: 28rem;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
 }
 .paywall-features {
   list-style: none;
@@ -6135,6 +6137,11 @@ button {
 }
 .paywall-plan-name {
   font-weight: 600;
+  min-width: 0;
+}
+.paywall-plan { gap: 12px; white-space: normal; }
+@media (max-width: 480px) {
+  .paywall-plan { flex-direction: column; align-items: flex-start; }
 }
 .paywall-plan-price {
   color: var(--text-2);

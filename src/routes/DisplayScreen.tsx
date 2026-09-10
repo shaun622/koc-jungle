@@ -156,10 +156,8 @@ export function DisplayScreen() {
 
   return (
     <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
-      {isMobile && <div className="mobile-theme-bar"><ThemeSwitch /></div>}
       {showFixedMenu && (
         <div className="display-menu-fixed">
-          <ThemeSwitch />
           <AppMenu event={event} />
         </div>
       )}
@@ -273,6 +271,7 @@ export function DisplayScreen() {
               <>
                 <div className="display-menu-backdrop" onClick={() => setMenuOpen(false)} />
                 <div className="display-menu">
+                  <div className="display-menu-appearance"><span>Appearance</span><ThemeSwitch /></div>
                   {backRoundIndex !== null && (
                     <button
                       className="display-menu-item"
@@ -661,6 +660,7 @@ function DisplayToolbar({
           <>
             <div className="display-menu-backdrop" onClick={onMenuToggle} />
             <div className="display-menu">
+              <div className="display-menu-appearance"><span>Appearance</span><ThemeSwitch /></div>
               {backRoundIndex !== null && (
                 <button className="display-menu-item" onClick={onBack}>
                   ← Back to Round {backRoundIndex}

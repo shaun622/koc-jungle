@@ -18,7 +18,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventStore } from '@/store/eventStore';
 import { useAuth } from '@/hooks/useAuth';
-import { useThemeStore } from '@/store/theme';
+import { ThemeSwitch } from './ThemeSwitch';
 import { Icons } from './Icons';
 import { AuthModal } from './AuthModal';
 import { SettingsModal } from './SettingsModal';
@@ -42,8 +42,6 @@ export function AppMenu({ event, trigger, onCreate }: { event: EventState | null
 
   const auth = useAuth();
   const syncStatus = useCloudSyncStatus();
-  const themePref = useThemeStore((s) => s.preference);
-  const cycleTheme = useThemeStore((s) => s.cyclePreference);
 
   const close = () => setOpen(false);
 
@@ -124,11 +122,11 @@ export function AppMenu({ event, trigger, onCreate }: { event: EventState | null
             )}
 
             {/* Appearance */}
-            <button className="app-menu-item" onClick={cycleTheme}>
-              {themePref === 'dark' ? <Icons.Moon className="icon" /> : <Icons.Sun className="icon" />}
+            <div className="app-menu-item app-menu-appearance">
+              <Icons.Moon className="icon" />
               <span className="app-menu-item-label">Appearance</span>
-              <span className="app-menu-item-meta" style={{ textTransform: 'capitalize' }}>{themePref}</span>
-            </button>
+              <ThemeSwitch />
+            </div>
 
             {/* Account / sync */}
             {auth.cloudEnabled && (

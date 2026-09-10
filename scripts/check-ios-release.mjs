@@ -53,8 +53,8 @@ function latestMtime(relativePath) {
 }
 
 const packageJson = JSON.parse(read('package.json'));
-if (packageJson.version === '1.1.0') pass('Release version is 1.1.0.');
-else error(`package.json version must be 1.1.0 (found ${packageJson.version}).`);
+if (packageJson.version === '1.1.1') pass('Release version is 1.1.1.');
+else error(`package.json version must be 1.1.1 (found ${packageJson.version}).`);
 
 const capacitorConfig = read('capacitor.config.ts');
 if (capacitorConfig.includes("appId: 'com.koc.padel'")) pass('Bundle ID matches App Store Connect.');
@@ -63,11 +63,11 @@ else error('Capacitor bundle ID must be com.koc.padel.');
 if (exists('ios/App/App.xcodeproj/project.pbxproj')) {
   pass('Capacitor iOS project exists.');
   const project = read('ios/App/App.xcodeproj/project.pbxproj');
-  if (project.includes('MARKETING_VERSION = 1.1;')) pass('Xcode marketing version is 1.1.');
-  else error('Xcode MARKETING_VERSION must be 1.1.');
+  if (project.includes('MARKETING_VERSION = 1.1.1;')) pass('Xcode marketing version is 1.1.1.');
+  else error('Xcode MARKETING_VERSION must be 1.1.1.');
   const buildNumbers = [...project.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(match => Number(match[1]));
-  if (buildNumbers.length && buildNumbers.every(build => build > 3)) pass('Xcode build number is newer than the rejected build 3.');
-  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the rejected build 3.');
+  if (buildNumbers.length && buildNumbers.every(build => build > 54)) pass('Xcode build number is newer than the released build 54.');
+  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the released build 54.');
 } else {
   error('Missing ios/App/App.xcodeproj. Run `npx cap add ios --packagemanager CocoaPods`.');
 }

@@ -1,7 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrandLogo } from './BrandLogo';
 import { AppMenu } from './AppMenu';
-import { ThemeSwitch } from './ThemeSwitch';
 import { useClubBrandingStore } from '@/store/clubBranding';
 import { eventRoute, type EventRouteName } from '@/lib/eventRoutes';
 import type { EventState, EventStatus } from '@/types/domain';
@@ -78,7 +77,6 @@ export function TopNav({ event }: Props) {
         ))}
       </div>
       <div className="op-top-right">
-        <ThemeSwitch />
         <AppMenu event={event} />
       </div>
     </div>

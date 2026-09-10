@@ -17,7 +17,6 @@ import { isIAPAvailable } from '@/lib/iap';
 import { eventRouteForStatus } from '@/lib/eventRoutes';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
-import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { AuthModal } from '@/components/AuthModal';
 import { PaywallModal } from '@/components/PaywallModal';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
@@ -81,7 +80,10 @@ export function HomeScreen() {
   const nativeBilling = isIAPAvailable();
   const [templates,setTemplates] = useState<Template[]>(() => listTemplates());
   const [authOpen,setAuthOpen] = useState(false);
-  const [paywall,setPaywall] = useState<{reason:string}|null>(null);
+  const [paywall,setPaywall] = useState<{
+    reason: string;
+    pendingEvent?: { name: string; format: TournamentFormatId };
+  }|null>(null);
   const [rulesForFormat,setRulesForFormat] = useState<TournamentFormatId|null>(null);
   const [deleteTarget,setDeleteTarget] = useState<EventCatalogMetadata|null>(null);
   const [deletingId,setDeletingId] = useState<string|null>(null);
@@ -128,12 +130,31 @@ export function HomeScreen() {
   }
 
   function tryCreate(name: string, format: TournamentFormatId, displayName: string) {
+    // Native dialogs occupy the browser's top layer: unmount the chooser
+    // before opening the paywall so it cannot cover the subscription flow.
+    setCreateOpen(false);
     if (isFormatLocked(format)) {
-      setPaywall({ reason: `${displayName} needs Pro.` });
+      setPaywall({
+        reason: `Pro includes ${displayName}. Activate access to continue creating your event.`,
+        pendingEvent: { name, format },
+      });
       return;
     }
-    setCreateOpen(false);
     createEvent(name, format);
+    openSelected(useEventStore.getState().event);
+  }
+
+  function closePaywall() {
+    const pending = paywall?.pendingEvent;
+    setPaywall(null);
+    if (!pending) return;
+    // Read the current entitlement: purchasing/restoring applies it before
+    // closing the paywall. Cancelling must never create a locked event.
+    if (isFormatLocked(pending.format)) {
+      setCreateOpen(true);
+      return;
+    }
+    createEvent(pending.name, pending.format);
     openSelected(useEventStore.getState().event);
   }
 
@@ -164,7 +185,6 @@ export function HomeScreen() {
           <button onClick={() => { setTemplates(listTemplates()); setTemplatesOpen(true); }}>Templates</button>
           <button onClick={() => navigate('/help')}>Help & guides</button>
         </nav>
-        <ThemeSwitch />
         <AppMenu event={null} onCreate={() => setCreateOpen(true)} trigger={<><span className="ed-avatar">{initials}</span><span className="ed-account-name">{firstName || 'Menu'}</span><span aria-hidden>⌄</span></>} />
       </header>
       <div className="ed-body">
@@ -191,13 +211,26 @@ export function HomeScreen() {
         </section>
         <footer className="ed-footer"><button onClick={() => navigate('/help')}>Help & guides</button><a href="/privacy/" target="_blank" rel="noreferrer">Privacy</a><a href="/terms/" target="_blank" rel="noreferrer">Terms</a><span>Score on iPad. Follow on TV.</span></footer>
       </div>
-      {createOpen && <DesignDialog title="Create an event" onClose={() => setCreateOpen(false)}><p>Choose how you want to play.</p><div className="ed-formats">
-        <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} locked={isFormatLocked('koc')} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
-        <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} locked={isFormatLocked('americano')} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
-      </div><div className="ed-dialog-actions"><button className="btn" onClick={() => {setCreateOpen(false);loadAsNew(buildDemoEvent());}}>Try a KoC demo</button><button className="btn" onClick={() => {setCreateOpen(false);setPaywall({reason:pro ? '' : 'Unlock the full toolkit.'});}}>{!nativeBilling ? 'Pro included' : pro ? 'Manage Pro' : 'Get Pro'}</button></div></DesignDialog>}
+      {createOpen && <DesignDialog title="Create an event" onClose={() => setCreateOpen(false)}>
+        <div className="ed-create">
+          <p className="ed-create-intro">Choose how you want to play.</p>
+          {!pro && <div className="ed-create-trial">
+            <strong>Try both formats free for 7 days.</strong>
+            <p>For eligible new subscribers. Choose a plan next; a paid subscription starts after your free trial unless you cancel.</p>
+          </div>}
+          <div className="ed-create-formats">
+            <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
+            <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
+          </div>
+          <div className="ed-create-footer">
+            <button className="btn" onClick={() => {setCreateOpen(false);loadAsNew(buildDemoEvent());}}>Try a KoC demo</button>
+            <button className="btn" onClick={() => {setCreateOpen(false);setPaywall({reason:pro ? '' : 'Unlock the full toolkit.'});}}>{!nativeBilling ? 'Pro included' : pro ? 'Manage Pro' : 'View Pro plans'}</button>
+          </div>
+        </div>
+      </DesignDialog>}
       {templatesOpen && <DesignDialog title="Saved templates" onClose={() => setTemplatesOpen(false)}><p>Reuse your court settings and event details.</p>{templates.length === 0 && <p>No templates yet. Save one from an event’s setup to use it here.</p>}{templates.map(template => <div className="ed-template" key={template.id}><button className="btn" onClick={() => {setTemplatesOpen(false);loadAsNew(templateToEventState(template));}}><strong>{template.name}</strong><span>{template.teams.length} teams · {template.courts.length} courts</span></button><button className="btn" aria-label={`Delete ${template.name} template`} onClick={() => {deleteTemplate(template.id);setTemplates(listTemplates());}}><Icons.Trash className="icon"/></button></div>)}</DesignDialog>}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-      {paywall && <PaywallModal reason={paywall.reason} onClose={() => setPaywall(null)} />}
+      {paywall && <PaywallModal reason={paywall.reason} onClose={closePaywall} />}
       {rulesForFormat && <FormatRulesModal formatId={rulesForFormat} onClose={() => setRulesForFormat(null)} />}
       <ConfirmDialog
         open={!!deleteTarget}
@@ -235,42 +268,28 @@ function ModeCard({
   name,
   blurb,
   icon,
-  locked,
   onPick,
   onShowRules,
-  disabled = false,
-  status,
 }: {
   name: string;
   blurb: string;
   icon: ReactNode;
-  locked: boolean;
-  onPick?: () => void;
-  onShowRules?: () => void;
-  disabled?: boolean;
-  status?: string;
+  onPick: () => void;
+  onShowRules: () => void;
 }) {
   return (
-    <div className={'landing-mode-wrap ' + (locked ? 'locked ' : '') + (disabled ? 'disabled' : '')}>
-      <button className="landing-mode" onClick={onPick} disabled={disabled}>
-        <span className="landing-mode-icon" aria-hidden>{icon}</span>
-        <span className="landing-mode-name">
-          {name}
-          {status && <span className="coming-soon-chip">{status}</span>}
-          {locked && <span className="lock-chip">Trial / Pro</span>}
-        </span>
-        <span className="landing-mode-blurb">{blurb}</span>
-      </button>
-      {onShowRules && (
-        <button
-          type="button"
-          className="landing-mode-info"
-          onClick={(event) => { event.stopPropagation(); onShowRules(); }}
-          aria-label={`Show rules for ${name}`}
-        >
-          Rules
+    <article className="ed-format-card">
+      <div className="ed-format-heading">
+        <span className="ed-format-icon" aria-hidden>{icon}</span>
+        <h3>{name}</h3>
+      </div>
+      <p>{blurb}</p>
+      <div className="ed-format-actions">
+        <button type="button" className="btn primary" onClick={onPick} aria-label={`Choose format: ${name}`}>
+          Choose format <ArrowRight size={18} aria-hidden />
         </button>
-      )}
-    </div>
+        <button type="button" className="ed-format-rules" onClick={onShowRules} aria-label={`View rules for ${name}`}>View rules</button>
+      </div>
+    </article>
   );
 }
