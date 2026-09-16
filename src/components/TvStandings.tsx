@@ -1,3 +1,4 @@
+import { FittedTvStandings } from './FittedTvStandings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventState } from '@/types/domain';
 import { leaderboard, rankMovements, teamNameFor } from '@/store/selectors';
@@ -11,7 +12,7 @@ export function standingsPageSize(count: number, capacity: number): number {
 }
 
 /** Presentation only. The full ranking is derived from the existing selector. */
-export function TvStandings({ event, subtitle }: { event: EventState; subtitle: string }) {
+function PagedTvStandings({ event, subtitle }: { event: EventState; subtitle: string }) {
   const rows = useMemo(() => leaderboard(event), [event]);
   const movements = useMemo(() => rankMovements(event), [event]);
   const list = useRef<HTMLDivElement>(null);
@@ -79,4 +80,9 @@ export function TvStandings({ event, subtitle }: { event: EventState; subtitle: 
       </div>
     </section>
   );
+}
+
+/** Keep non-KoC pagination unchanged; only KoC uses the approved fitted board. */
+export function TvStandings(props: { event: EventState; subtitle: string }) {
+  return (props.event.format ?? 'koc') === 'koc' ? <FittedTvStandings {...props} /> : <PagedTvStandings {...props} />;
 }

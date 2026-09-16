@@ -20,6 +20,7 @@ import type { MainRound } from '@/types/domain';
 import '@/index.css';
 import '@/styles/event-design.css';
 import '@/styles/app-design.css';
+import '@/styles/scoreboard.css';
 
 const event=buildDemoEvent();
 event.name='Silver King of the Court';event.venue='Jungle Padel Sanur';event.status='setup';
@@ -30,7 +31,8 @@ const params=new URLSearchParams(location.search);
 const page=params.get('page')||'home';
 if(params.has('theme'))useThemeStore.getState().setPreference(params.get('theme')==='dark'?'dark':'light');
 if(['display','between','complete','setup','leaderboard','qualifier','seeding'].includes(page)){
-  const count=params.get('teams')==='16'?16:6;
+  const requestedCount=Number(params.get('teams'));
+  const count=Number.isInteger(requestedCount)&&requestedCount>=2&&requestedCount<=32&&requestedCount%2===0?requestedCount:6;
   event.format='koc';event.settings.publishedSignupId=undefined;event.settings.publishedSignupOpen=false;event.settings.announceRoundStart=false;event.settings.soundOnTimerEnd=false;
   event.courts=Array.from({length:count/2},(_,i)=>({id:`court-${i}`,name:i===count/2-1?'Centre Court':`Court ${i+1}`,position:i+1,pointValue:i+3}));
   event.teams=Array.from({length:count},(_,i)=>({...event.teams[i%14],id:`pair-${i}`,name:['The Smashers','Espanas','Ruloz','Team Germany','The Woowhoos','Net Positive'][i]||`Pair ${i+1}`}));

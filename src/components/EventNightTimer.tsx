@@ -20,10 +20,11 @@ export function EventNightTimer({ timer, roundIndex, totalRounds, durationMs, wa
   const status = !hasRound ? 'Ready' : timer.hasFinished ? "Time’s up" : timer.isPaused ? 'Paused' : timer.isRunning ? 'Running' : 'Ready';
   const urgency = timer.hasStarted ? timer.remainingMs <= 60_000 ? 'danger' : timer.remainingMs <= warningAtMs ? 'warn' : '' : '';
   const remaining = durationMs > 0 ? Math.max(0, Math.min(100, timer.remainingMs / durationMs * 100)) : 0;
+  const timeLabel = hasRound ? formatMs(timer.remainingMs) : '–';
   return <section className="tv-timer-block night-timer" aria-label="Round timer">
     <div className="night-timer-head"><h2>Round <strong>{roundIndex || '–'}</strong> <span>/ {totalRounds}</span></h2><span className={'night-timer-status ' + urgency}><i />{status}</span></div>
-    <div className="night-timer-centre"><div className="tv-timer-label">Time remaining</div><div role="timer" className={'tv-timer-value size-xl ' + urgency}>{hasRound ? formatMs(timer.remainingMs) : '–'}</div>
-      <div className="tv-timer-progress"><div className="tv-timer-progress-bar" style={{ width: `${remaining}%` }} /></div><div className="night-timer-scale"><span>{Math.round(durationMs / 60000)} minute round</span><span>00:00</span></div>
+    <div className="night-timer-centre"><div className="tv-timer-label">Time remaining</div><div role="timer" className={'tv-timer-value size-xl ' + urgency} style={{ ['--timer-digits' as string]: Math.max(5, timeLabel.length) }}>{timeLabel}</div>
+      <div className="tv-timer-progress"><div className="tv-timer-progress-bar" style={{ width: `${remaining}%` }} /></div><div className="night-timer-scale"><span>{Math.round(durationMs / 60000)} min round</span><span>00:00</span></div>
     </div>
     <div className="night-timer-foot"><RoundProgress current={roundIndex} total={totalRounds} /><p>{roundIndex >= totalRounds ? 'Final round' : <>Up next <strong>Round {roundIndex + 1}</strong></>}</p></div>
   </section>;

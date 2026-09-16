@@ -17,6 +17,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { TvStandings } from '@/components/TvStandings';
+import { CourtTeamText } from '@/components/CourtTeamText';
 import { EventNightTimer, RoundProgress } from '@/components/EventNightTimer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NightlyStatsModal } from '@/components/NightlyStatsModal';
@@ -47,7 +48,8 @@ export function DisplayScreen() {
   useAnnouncements();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);
-  const [scale, setScale] = useState(1);
+  const [{ scale, canvasHeight }, setCanvasSize] = useState({ scale: 1, canvasHeight: 1080 });
+  const shellRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
@@ -78,24 +80,27 @@ export function DisplayScreen() {
   const [confirmBack, setConfirmBack] = useState(false);
   const [showAdjustCourts, setShowAdjustCourts] = useState(false);
 
-  // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
-  // bottom for the operator toolbar so the canvas doesn't get hidden behind
-  // it. On phone landscape the toolbar shrinks (see (max-height: 500px) CSS
-  // rules), so we reserve less and let the canvas grow.
+  // Fit the complete scoreboard above the actual toolbar. Use the extra
+  // vertical space on 4:3 iPads instead of leaving a 16:9 letterbox below it.
   useEffect(() => {
+    if (isMobile) return;
+    const shell = shellRef.current;
+    const toolbar = shell?.querySelector<HTMLElement>('.display-toolbar');
     function recalc() {
-      const w = window.innerWidth;
-      const phoneLandscape =
-        typeof window !== 'undefined' &&
-        window.matchMedia('(max-height: 500px)').matches;
-      const reserve = phoneLandscape ? 56 : 96;
-      const h = window.innerHeight - reserve;
-      setScale(Math.max(0.1, Math.min(w / 1920, h / 1080)));
+      const w = shell?.clientWidth || window.innerWidth;
+      const reserve = toolbar ? toolbar.getBoundingClientRect().height + 12 : 0;
+      const h = Math.max(1, (shell?.clientHeight || window.innerHeight) - reserve);
+      const fittedScoreboard = (event?.format ?? 'koc') === 'koc' && event?.status !== 'complete';
+      const nextScale = Math.max(0.1, fittedScoreboard ? w / 1920 : Math.min(w / 1920, h / 1080));
+      setCanvasSize({ scale: nextScale, canvasHeight: h / nextScale });
     }
     recalc();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(recalc);
+    if (shell) observer?.observe(shell);
+    if (toolbar) observer?.observe(toolbar);
     window.addEventListener('resize', recalc);
-    return () => window.removeEventListener('resize', recalc);
-  }, []);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', recalc); };
+  }, [event?.status, event?.format, isMobile]);
 
   // Close the menu on Escape, also reachable for keyboard users
   useEffect(() => {
@@ -155,7 +160,7 @@ export function DisplayScreen() {
   const showFixedMenu = !(isMobile && (showOperatorRound || showBetweenRounds));
 
   return (
-    <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
+    <div ref={shellRef} className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
       {showFixedMenu && (
         <div className="display-menu-fixed">
           <AppMenu event={event} />
@@ -165,12 +170,12 @@ export function DisplayScreen() {
       {isMobile ? (
         <MobileDisplay event={event} />
       ) : (
-        <div className="display-canvas-wrap" style={{ height: 1080 * scale }}>
+        <div className="display-canvas-wrap" style={{ height: canvasHeight * scale }}>
           <div
             className="display-canvas"
             style={{
               width: 1920,
-              height: 1080,
+              height: canvasHeight,
               transform: `scale(${scale})`,
               transformOrigin: 'top center',
               ['--display-scale' as string]: scale,
@@ -804,7 +809,7 @@ function TvLiveCanvas({
   const completed = event.rounds.filter((r) => r.completedAt).length;
   // King-of-the-Court chrome (crown, "King's Court", climb/drop, King stat)
   // only makes sense for KoC. Other formats show a neutral label.
-  const isKoc = event.format === 'koc';
+  const isKoc = (event.format ?? 'koc') === 'koc';
   const isBracket = event.format === 'bracket';
   const featureLabel = isBracket
     ? bracketRoundName(roundIndex, totalRounds)
@@ -813,7 +818,7 @@ function TvLiveCanvas({
       : (centre?.name ?? 'Featured court');
 
   return (
-    <div className="tv-display">
+    <div className={'tv-display' + (isKoc ? ' tv-display--quiet' : '')}>
       <div className="tv-header">
         <div className="tv-header-brand">
           <div className="brand-mark lg"><BrandLogo /></div>
@@ -863,6 +868,7 @@ function TvLiveCanvas({
             </div>
             <div className="tv-centre-scores">
               <CentreScore
+                label={centreA ? teamPlayersLabel(centreA) : 'Team A'}
                 value={centreMatch?.scoreA ?? 0}
                 isWinner={
                   centreMatch
@@ -877,6 +883,7 @@ function TvLiveCanvas({
               />
               <div className="tv-centre-vs">VS</div>
               <CentreScore
+                label={centreB ? teamPlayersLabel(centreB) : 'Team B'}
                 value={centreMatch?.scoreB ?? 0}
                 isWinner={
                   centreMatch
@@ -897,7 +904,6 @@ function TvLiveCanvas({
                 {centreB ? teamPlayersLabel(centreB) : 'TBD'}
               </div>
             </div>
-            <div />
           </div>
 
           {showControls && centreMatch && centreA && centreB && (
@@ -985,11 +991,13 @@ function TvLiveCanvas({
 }
 
 function CentreScore({
+  label,
   value,
   isWinner,
   showControls,
   onIncrement,
 }: {
+  label: string;
   value: number;
   isWinner: boolean;
   showControls: boolean;
@@ -1006,7 +1014,7 @@ function CentreScore({
     <div className="tv-centre-score-group">
       <button
         className="tv-score-btn tv-score-btn--minus"
-        aria-label="Decrease"
+        aria-label={`Decrease ${label} score`}
         onClick={() => onIncrement(-1)}
       >
         <Icons.Minus className="icon" />
@@ -1016,7 +1024,7 @@ function CentreScore({
       </div>
       <button
         className="tv-score-btn tv-score-btn--plus"
-        aria-label="Increase"
+        aria-label={`Increase ${label} score`}
         onClick={() => onIncrement(1)}
       >
         <Icons.Plus className="icon" />
@@ -1115,12 +1123,10 @@ function TvCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamA} />
         </div>
         <ScoreCell
+          label={teamA ? teamPlayersLabel(teamA) : 'Team A'}
           value={match.scoreA}
           winner={aWin}
           tied={tied && !result?.winnerId}
@@ -1131,12 +1137,10 @@ function TvCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamB} />
         </div>
         <ScoreCell
+          label={teamB ? teamPlayersLabel(teamB) : 'Team B'}
           value={match.scoreB}
           winner={bWin}
           tied={tied && !result?.winnerId}
@@ -1170,12 +1174,14 @@ function TvCourtCard({
 }
 
 function ScoreCell({
+  label,
   value,
   winner,
   tied,
   showControls,
   onIncrement,
 }: {
+  label: string;
   value: number;
   winner: boolean;
   tied: boolean;
@@ -1193,7 +1199,7 @@ function ScoreCell({
     <div className="tv-court-score-group">
       <button
         className="tv-score-btn tv-score-btn--minus"
-        aria-label="Decrease"
+        aria-label={`Decrease ${label} score`}
         onClick={() => onIncrement(-1)}
       >
         <Icons.Minus className="icon" />
@@ -1203,7 +1209,7 @@ function ScoreCell({
       </div>
       <button
         className="tv-score-btn tv-score-btn--plus"
-        aria-label="Increase"
+        aria-label={`Increase ${label} score`}
         onClick={() => onIncrement(1)}
       >
         <Icons.Plus className="icon" />
@@ -1283,7 +1289,7 @@ function TvBetweenCanvas({
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
     : 'TBD';
 
-  const isKoc = event.format === 'koc';
+  const isKoc = (event.format ?? 'koc') === 'koc';
   const isBracket = event.format === 'bracket';
   const featureLabel = isBracket
     ? bracketRoundName(nextRoundIndex, totalRounds)
@@ -1292,7 +1298,7 @@ function TvBetweenCanvas({
       : (centre?.name ?? 'Featured court');
 
   return (
-    <div className="tv-display tv-display--between">
+    <div className={'tv-display tv-display--between' + (isKoc ? ' tv-display--quiet' : '')}>
       <div className="tv-header">
         <div className="tv-header-brand">
           <div className="brand-mark lg"><BrandLogo /></div>
@@ -1372,7 +1378,6 @@ function TvBetweenCanvas({
                 />
               )}
             </div>
-            <div />
           </div>
 
           <div className="tv-lower">
@@ -1479,20 +1484,14 @@ function TvBetweenCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamA} />
         </div>
         {showMovement && teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamB} />
         </div>
         {showMovement && teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
       </div>
