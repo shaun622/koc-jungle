@@ -45,6 +45,8 @@ import {
   type SignupEvent,
   type SignupRegistration,
 } from '@/lib/signups';
+import { AmericanoSetup } from '@/components/americano/AmericanoSetup';
+import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -53,7 +55,7 @@ const TIE_RULE_LABELS: Record<TieRule, string> = {
   replay: 'Replay match',
 };
 
-export function SetupScreen() {
+function LegacySetupScreen() {
   const event = useEventStore((s) => s.event);
   const loadEvent = useEventStore((s) => s.loadEvent);
   const addTeam = useEventStore((s) => s.addTeam);
@@ -1392,6 +1394,12 @@ function NewTeamForm({
       </button>
     </div>
   );
+}
+
+export function SetupScreen() {
+  const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV2(event)) return <AmericanoSetup event={event} />;
+  return <LegacySetupScreen />;
 }
 
 function NumberField({

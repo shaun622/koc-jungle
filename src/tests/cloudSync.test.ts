@@ -83,7 +83,16 @@ const cloud = vi.hoisted(() => {
   };
 });
 
+const americanoCloud = vi.hoisted(() => ({
+  save: vi.fn(),
+  remove: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase', () => ({ supabase: cloud.client }));
+vi.mock('@/lib/americanoV2', () => ({
+  saveAmericanoEventV2: americanoCloud.save,
+  deleteAmericanoEventV2: americanoCloud.remove,
+}));
 
 import {
   deleteCloudEvent,
@@ -91,6 +100,7 @@ import {
   markLocalEventMutation,
   startCloudSync,
   stopCloudSync,
+  useCloudSyncStatus,
 } from '@/store/cloudSync';
 import { useEventCatalogStore } from '@/store/eventCatalog';
 import {
@@ -100,6 +110,7 @@ import {
 } from '@/store/eventRepository';
 import { useEventStore } from '@/store/eventStore';
 import { DEFAULT_SETTINGS, type EventState } from '@/types/domain';
+import { americanoV2Fixture } from '@/tests/americanoV2Fixtures';
 
 function eventFixture(id: string, name: string): EventState {
   return {
@@ -140,6 +151,8 @@ describe('event-scoped cloud sync', () => {
     vi.useFakeTimers();
     stopCloudSync();
     cloud.reset();
+    americanoCloud.save.mockReset();
+    americanoCloud.remove.mockReset();
     localStorage.clear();
     for (const record of await listLocalEventRecords()) {
       await removeLocalEventRecord(record.id);
@@ -577,5 +590,80 @@ describe('event-scoped cloud sync', () => {
     expect((cloud.upserts[1].state as EventState).name).toBe('Second edit');
     resolvers[1]();
     await settle();
+  });
+
+  it('keeps a stale Americano draft locally when the server returns a revision conflict', async () => {
+    const event = { ...americanoV2Fixture(), id: 'versioned-conflict', revision: '4', name: 'Local draft' };
+    await saveLocal(event as unknown as EventState);
+    useEventStore.setState({ event: event as never });
+    americanoCloud.save.mockResolvedValue({
+      status: 'conflict', requestId: 'server-request', code: 'EVENT_REVISION_CONFLICT',
+      snapshot: { event: { id: event.id, protocolVersion: 2, revision: '5', updatedAt: new Date().toISOString(), state: { ...event, revision: '5', name: 'Remote draft' } }, signup: null },
+    });
+
+    startCloudSync('user-1');
+    await settle();
+    markLocalEventMutation(event, null);
+    const result = await flushCloudSync();
+    await settle();
+
+    expect(result.ok).toBe(false);
+    expect(useCloudSyncStatus.getState().error).toMatch(/another device/i);
+    expect((await listLocalEventRecords()).find((row) => row.id === event.id)?.state.name).toBe('Local draft');
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-1')).toContain(event.id);
+  });
+
+  it('does not discard a newer Americano edit when an earlier save is acknowledged', async () => {
+    const original = { ...americanoV2Fixture(), id: 'versioned-in-flight', revision: '3', name: 'First local edit' };
+    await saveLocal(original as unknown as EventState);
+    useEventStore.setState({ event: original as never });
+    let resolveSave: (value: unknown) => void = () => undefined;
+    americanoCloud.save.mockImplementationOnce(() => new Promise((resolve) => { resolveSave = resolve; }));
+    americanoCloud.save.mockImplementationOnce(async (next: typeof original) => ({
+      status: 'applied', requestId: 'second-save', committedEventRevision: '5',
+      snapshot: { event: { id: next.id, protocolVersion: 2, revision: '5', updatedAt: new Date().toISOString(), state: { ...next, revision: '5' } }, signup: null },
+    }));
+
+    startCloudSync('user-1');
+    await settle();
+    markLocalEventMutation(original, null);
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(americanoCloud.save).toHaveBeenCalledTimes(1);
+
+    const newer = { ...original, name: 'Second local edit' };
+    useEventStore.setState({ event: newer as never });
+    markLocalEventMutation(newer, null);
+    resolveSave({
+      status: 'applied', requestId: 'first-save', committedEventRevision: '4',
+      snapshot: { event: { id: original.id, protocolVersion: 2, revision: '4', updatedAt: new Date().toISOString(), state: { ...original, revision: '4' } }, signup: null },
+    });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+
+    expect(americanoCloud.save).toHaveBeenCalledTimes(2);
+    expect(americanoCloud.save.mock.calls[1][0].name).toBe('Second local edit');
+    expect(useEventStore.getState().event?.name).toBe('Second local edit');
+  });
+
+  it('deletes protocol-2 Americano events through the versioned tombstone RPC', async () => {
+    const event = { ...americanoV2Fixture(), id: 'versioned-delete', revision: '9' };
+    await saveLocal(event as unknown as EventState);
+    useEventStore.setState({ event: event as never });
+    americanoCloud.remove.mockResolvedValue({
+      status: 'applied', requestId: 'delete-request', eventId: event.id, deletedAt: new Date().toISOString(),
+    });
+    startCloudSync('user-1');
+    await settle();
+
+    await deleteCloudEvent(event.id);
+    await settle();
+
+    expect(americanoCloud.remove).toHaveBeenCalledWith(expect.objectContaining({ eventId: event.id, baseEventRevision: '9' }));
+    expect(cloud.rpcs).toEqual([]);
+    expect(localStorage.getItem('koc-cloud-sync-v3:user-1')).toContain('"pending":false');
+    // Local removal is deliberately owned by eventStore.deleteLocalEvent so a
+    // failed remote request cannot erase the only recoverable draft.
+    expect((await listLocalEventRecords()).find((row) => row.id === event.id)).toBeTruthy();
   });
 });

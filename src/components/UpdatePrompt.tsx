@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { flushCloudSync } from '@/store/cloudSync';
+import { useTournamentStore } from '@/store/tournamentStore';
 
 /**
  * Listens for a fresh service-worker version and prompts the operator to
  * refresh. Sits as a small floating toast at the bottom-right.
  */
 export function UpdatePrompt() {
+  const tournament = useTournamentStore((state) => state.active);
+  const pendingTournamentOperations = useTournamentStore((state) => state.pendingOperations.length);
+  const tournamentUnsafeToReload = Boolean(pendingTournamentOperations || tournament && (tournament.projected.lifecycle === 'live' || tournament.outbox.length));
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
@@ -58,11 +62,11 @@ export function UpdatePrompt() {
       <div className="pwa-toast pwa-toast--update" role="status">
         <div className="pwa-toast-body">
           <strong>New version available.</strong>
-          <span>Refresh to pick it up. Your event state stays.</span>
+          <span>{tournamentUnsafeToReload ? 'Update held until this tournament is synced and no longer live.' : 'Refresh to pick it up. Your event state stays.'}</span>
         </div>
         <button
           className="btn primary sm"
-          disabled={updating}
+          disabled={updating || tournamentUnsafeToReload}
           onClick={applyUpdate}
         >
           {updating ? 'Updating…' : 'Refresh'}

@@ -12,6 +12,10 @@ describe('event time zones', () => {
 
   it('rejects an ambiguous daylight-saving time', () => {
     expect(() => zonedLocalToIso('2026-10-25T02:30', 'Europe/Paris')).toThrow(/occurs twice/i);
+    expect(zonedLocalToIso('2026-10-25T02:30', 'Europe/Paris', 'earlier')).toBe('2026-10-25T00:30:00.000Z');
+    expect(zonedLocalToIso('2026-10-25T02:30', 'Europe/Paris', 'later')).toBe('2026-10-25T01:30:00.000Z');
+    expect(zonedLocalToIso('2026-11-01T01:30', 'America/New_York', 'earlier')).toBe('2026-11-01T05:30:00.000Z');
+    expect(zonedLocalToIso('2026-11-01T01:30', 'America/New_York', 'later')).toBe('2026-11-01T06:30:00.000Z');
   });
 
   it('formats using the event zone instead of the viewer zone', () => {

@@ -58,3 +58,17 @@ Verify an actual recovery email in an isolated test account before release.
   updates on a second device. Do not use a real customer's event for this test.
 - Verify recovery email delivery and browser sync against the hosted test
   environment; unit tests and an isolated database cannot establish these.
+
+## Americano protocol 2 migrations
+
+The `20260911100000`–`20260911130000` migrations add versioned Americano
+storage, a mode-aware signup queue, idempotent owner/public RPCs and old-client
+write guards. They are additive: existing events and signup rows retain
+protocol 1 defaults and are not rebalanced or rewritten by migration.
+
+For local verification, set `KOC_TEST_DATABASE_URL` to a loopback PostgreSQL
+database whose name begins `koc_americano_test_`, then run
+`npm run test:db:americano`. The harness refuses all other hosts and names and
+does not read Supabase credentials. These migrations are not controlled by the
+frontend feature flag; do not apply them remotely until the compatible-client
+rollout and migration checklist have been approved.

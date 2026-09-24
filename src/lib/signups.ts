@@ -13,6 +13,11 @@ export interface SignupEvent {
   startsAt: string | null;
   endsAt: string | null;
   capacityTeams: number;
+  /** Explicit signup protocol. Missing/1 remains the legacy pair workflow. */
+  protocolVersion?: 1 | 2;
+  /** Protocol-2 registration unit. Legacy signups default to fixed pairs. */
+  entryMode?: 'fixed-pairs' | 'individual';
+  capacity?: { unit: 'teams' | 'players'; value: number };
   /** Server compare-and-swap revision for organiser metadata/capacity writes. */
   capacityRevision: number;
   details: string;
@@ -49,6 +54,7 @@ export interface SignupRegistration {
    * enter the pair queue at that later time, not at the solo's sign-up time. */
   pairCompletedAt?: string | null;
   organizerRank?: number | null;
+  entryMode?: 'fixed-pairs' | 'individual';
 }
 
 export interface SignupTeamIdentity {
@@ -159,6 +165,9 @@ interface SignupEventRow {
   starts_at: string | null;
   ends_at: string | null;
   capacity_teams: number;
+  protocol_version?: 1 | 2 | null;
+  entry_mode?: 'fixed-pairs' | 'individual' | null;
+  capacity_players?: number | null;
   capacity_revision?: number | null;
   details: string | null;
   prizes: string | null;
@@ -187,6 +196,7 @@ interface SignupRegistrationRow {
   updated_at?: string;
   pair_completed_at?: string | null;
   organizer_rank?: number | null;
+  entry_mode?: 'fixed-pairs' | 'individual' | null;
 }
 
 interface SignupTemplateRow {
@@ -221,6 +231,11 @@ function mapEvent(row: SignupEventRow): SignupEvent {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     capacityTeams: row.capacity_teams,
+    protocolVersion: row.protocol_version ?? 1,
+    entryMode: row.entry_mode ?? 'fixed-pairs',
+    capacity: row.entry_mode === 'individual'
+      ? { unit: 'players', value: row.capacity_players ?? 0 }
+      : { unit: 'teams', value: row.capacity_teams },
     capacityRevision: row.capacity_revision ?? 0,
     details: row.details ?? '',
     prizes: row.prizes ?? '',
@@ -280,6 +295,7 @@ function mapRegistration(row: SignupRegistrationRow, position: number): SignupRe
     updatedAt: row.updated_at,
     pairCompletedAt: row.pair_completed_at ?? null,
     organizerRank: row.organizer_rank ?? null,
+    entryMode: row.entry_mode ?? 'fixed-pairs',
   };
 }
 
@@ -737,13 +753,27 @@ export async function deleteOrganizerRegistrationIfStatus(
 
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
   const client = requirePublicSupabase();
-  const { data, error } = await client.rpc('get_public_signup_v2', {
+  const { data, error } = await client.rpc('get_public_signup_v3', {
     p_account_slug: accountSlug || null,
     p_event_slug: publicSlug,
   });
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
-  return data as PublicSignup;
+  const value = data as PublicSignup;
+  const normalized = value.event.capacity ?? {
+    unit: 'teams' as const,
+    value: value.event.capacityTeams ?? 0,
+  };
+  return {
+    ...value,
+    event: {
+      ...value.event,
+      protocolVersion: value.event.protocolVersion ?? 1,
+      entryMode: value.event.entryMode ?? 'fixed-pairs',
+      capacity: normalized,
+      capacityTeams: normalized.unit === 'teams' ? normalized.value : 0,
+    },
+  };
 }
 
 function registrationRequestFingerprint(parts: string[]): string {

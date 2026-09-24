@@ -1,10 +1,17 @@
-import type { Court, EventSettings, EventState, Team } from '@/types/domain';
+import type { Court, EventSettings, EventState, Team, TournamentFormatId } from '@/types/domain';
+import type {
+  AmericanoConfigV2,
+  AmericanoEventStateV2,
+  IndividualEntrant,
+  VersionedEventState,
+} from '@/logic/americanoV2/types';
+import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
 import { newId } from '@/logic/idGen';
 import { safeGet, safeSet } from '@/utils/storage';
 
 const KEY = 'koc-templates-v1';
 
-export interface Template {
+interface TemplateBase {
   id: string;
   name: string;
   savedAt: number;
@@ -13,9 +20,28 @@ export interface Template {
   settings: EventSettings;
 }
 
+export interface LegacyTemplate extends TemplateBase {
+  version?: 1;
+  format?: TournamentFormatId;
+  formatConfig?: Record<string, unknown>;
+}
+
+export interface AmericanoTemplateV2 extends TemplateBase {
+  version: 2;
+  format: 'americano';
+  formatConfig: AmericanoConfigV2;
+  participants: IndividualEntrant[];
+}
+
+export type Template = LegacyTemplate | AmericanoTemplateV2;
+
 function independentSettings(settings: EventSettings): EventSettings {
   const clean = { ...settings };
   delete clean.publishedSignupId;
+  delete clean.publishedStartsAt;
+  delete clean.publishedEndsAt;
+  delete clean.publishedSignupOpen;
+  delete clean.publishedCancelledAt;
   delete clean.ignoredAutoSignupPairKeys;
   delete clean.ignoredAutoSignupRegistrationIds;
   return clean;
@@ -32,30 +58,73 @@ function independentTeam(team: Team): Team {
   return clean;
 }
 
+function independentParticipant(participant: IndividualEntrant): IndividualEntrant {
+  const clean = { ...participant };
+  delete clean.signupRegistrationId;
+  return clean;
+}
+
+function isTemplate(value: unknown): value is Template {
+  if (!value || typeof value !== 'object') return false;
+  const template = value as Partial<TemplateBase> & {
+    version?: number;
+    format?: string;
+    formatConfig?: Partial<AmericanoConfigV2>;
+    participants?: unknown;
+  };
+  if (
+    typeof template.id !== 'string'
+    || typeof template.name !== 'string'
+    || typeof template.savedAt !== 'number'
+    || !Array.isArray(template.courts)
+    || !Array.isArray(template.teams)
+    || !template.settings
+  ) return false;
+  if (template.version === undefined || template.version === 1) return true;
+  return template.version === 2
+    && template.format === 'americano'
+    && template.formatConfig?.rulesVersion === 2
+    && Array.isArray(template.participants);
+}
+
 export function listTemplates(): Template[] {
   const raw = safeGet(KEY);
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as Template[];
+    return parsed.filter(isTemplate);
   } catch {
     return [];
   }
 }
 
-export function saveTemplate(name: string, event: EventState): Template {
+export function saveTemplate(name: string, event: VersionedEventState): Template {
   const all = listTemplates();
-  // If a template with the same name exists, replace it (idempotent save)
-  const filtered = all.filter((t) => t.name.toLowerCase() !== name.toLowerCase().trim());
-  const template: Template = {
+  const normalizedName = name.trim();
+  const filtered = all.filter((template) => template.name.toLowerCase() !== normalizedName.toLowerCase());
+  const base: TemplateBase = {
     id: newId(),
-    name: name.trim(),
+    name: normalizedName,
     savedAt: Date.now(),
     courts: event.courts.map((court) => ({ ...court })),
     teams: event.teams.filter((team) => team.active).map(independentTeam),
     settings: independentSettings(event.settings),
   };
+  const template: Template = isAmericanoEventV2(event)
+    ? {
+        ...base,
+        version: 2,
+        format: 'americano',
+        formatConfig: { ...event.formatConfig },
+        participants: event.participants.filter((participant) => participant.active).map(independentParticipant),
+      }
+    : {
+        ...base,
+        version: 1,
+        format: event.format,
+        formatConfig: event.formatConfig ? { ...event.formatConfig } : undefined,
+      };
   filtered.push(template);
   filtered.sort((a, b) => b.savedAt - a.savedAt);
   safeSet(KEY, JSON.stringify(filtered));
@@ -63,32 +132,70 @@ export function saveTemplate(name: string, event: EventState): Template {
 }
 
 export function deleteTemplate(id: string): void {
-  const all = listTemplates().filter((t) => t.id !== id);
+  const all = listTemplates().filter((template) => template.id !== id);
   safeSet(KEY, JSON.stringify(all));
 }
 
-export function templateToEventState(template: Template): EventState {
-  // Generate fresh IDs so the new event is independent of the saved template.
+function freshTeams(teams: Team[]): Team[] {
+  return teams.map((storedTeam) => {
+    const team = independentTeam(storedTeam);
+    return {
+      ...team,
+      id: newId(),
+      createdAt: Date.now(),
+      active: true,
+      players: [
+        { ...team.players[0], id: newId() },
+        { ...team.players[1], id: newId() },
+      ],
+    };
+  });
+}
+
+export function templateToEventState(template: LegacyTemplate): EventState;
+export function templateToEventState(template: AmericanoTemplateV2): AmericanoEventStateV2;
+export function templateToEventState(template: Template): VersionedEventState;
+export function templateToEventState(template: Template): VersionedEventState {
+  const createdAt = Date.now();
+  const courts = template.courts.map((court) => ({ ...court, id: newId() }));
+  const settings = independentSettings(template.settings);
+  if (template.version === 2) {
+    return {
+      schemaVersion: 2,
+      protocolVersion: 2,
+      revision: '0',
+      id: newId(),
+      name: template.name,
+      createdAt,
+      status: 'setup',
+      settings: {
+        ...settings,
+        roundsTotal: 0,
+        defaultRoundDurationMs: template.formatConfig.paceMinutes * 60_000,
+      },
+      courts,
+      teams: freshTeams(template.teams),
+      participants: template.participants.map((participant) => ({
+        ...independentParticipant(participant),
+        id: newId(),
+        createdAt,
+        active: true,
+      })),
+      rounds: [],
+      format: 'americano',
+      formatConfig: { ...template.formatConfig },
+    };
+  }
   return {
     id: newId(),
     name: template.name,
-    createdAt: Date.now(),
+    createdAt,
     status: 'setup',
-    settings: independentSettings(template.settings),
-    courts: template.courts.map((c) => ({ ...c, id: newId() })),
-    teams: template.teams.map((storedTeam) => {
-      const t = independentTeam(storedTeam);
-      return {
-        ...t,
-        id: newId(),
-        createdAt: Date.now(),
-        active: true,
-        players: [
-          { ...t.players[0], id: newId() },
-          { ...t.players[1], id: newId() },
-        ] as [{ id: string; name: string }, { id: string; name: string }],
-      };
-    }),
+    settings,
+    courts,
+    teams: freshTeams(template.teams),
     rounds: [],
+    format: template.format,
+    formatConfig: template.formatConfig ? { ...template.formatConfig } : undefined,
   };
 }

@@ -17,6 +17,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { AppMenu } from '@/components/AppMenu';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { TvStandings } from '@/components/TvStandings';
+import { CourtTeamText } from '@/components/CourtTeamText';
 import { EventNightTimer, RoundProgress } from '@/components/EventNightTimer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NightlyStatsModal } from '@/components/NightlyStatsModal';
@@ -34,6 +35,8 @@ import { useKeepAwake } from '@/hooks/useKeepAwake';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 import { eventRoute } from '@/lib/eventRoutes';
+import { AmericanoDisplay } from '@/components/americano/AmericanoDisplay';
+import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -43,11 +46,12 @@ interface Movement {
   arrow: MovementArrow;
 }
 
-export function DisplayScreen() {
+function LegacyDisplayScreen() {
   useAnnouncements();
   const event = useEventStore((s) => s.event);
   const round = currentRound(event);
-  const [scale, setScale] = useState(1);
+  const [{ scale, canvasHeight }, setCanvasSize] = useState({ scale: 1, canvasHeight: 1080 });
+  const shellRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
@@ -78,24 +82,26 @@ export function DisplayScreen() {
   const [confirmBack, setConfirmBack] = useState(false);
   const [showAdjustCourts, setShowAdjustCourts] = useState(false);
 
-  // Fit-to-window scaling — design canvas is 1920x1080. Reserve room at the
-  // bottom for the operator toolbar so the canvas doesn't get hidden behind
-  // it. On phone landscape the toolbar shrinks (see (max-height: 500px) CSS
-  // rules), so we reserve less and let the canvas grow.
+  // Fit the complete scoreboard above the actual toolbar. Use the extra
+  // vertical space on 4:3 iPads instead of leaving a 16:9 letterbox below it.
   useEffect(() => {
+    if (isMobile) return;
+    const shell = shellRef.current;
+    const toolbar = shell?.querySelector<HTMLElement>('.display-toolbar');
     function recalc() {
-      const w = window.innerWidth;
-      const phoneLandscape =
-        typeof window !== 'undefined' &&
-        window.matchMedia('(max-height: 500px)').matches;
-      const reserve = phoneLandscape ? 56 : 96;
-      const h = window.innerHeight - reserve;
-      setScale(Math.max(0.1, Math.min(w / 1920, h / 1080)));
+      const w = shell?.clientWidth || window.innerWidth;
+      const reserve = toolbar ? toolbar.getBoundingClientRect().height + 12 : 0;
+      const h = Math.max(1, (shell?.clientHeight || window.innerHeight) - reserve);
+      const nextScale = Math.max(0.1, Math.min(w / 1920, h / 1080));
+      setCanvasSize({ scale: nextScale, canvasHeight: h / nextScale });
     }
     recalc();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(recalc);
+    if (shell) observer?.observe(shell);
+    if (toolbar) observer?.observe(toolbar);
     window.addEventListener('resize', recalc);
-    return () => window.removeEventListener('resize', recalc);
-  }, []);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', recalc); };
+  }, [event?.status, isMobile]);
 
   // Close the menu on Escape, also reachable for keyboard users
   useEffect(() => {
@@ -155,7 +161,7 @@ export function DisplayScreen() {
   const showFixedMenu = !(isMobile && (showOperatorRound || showBetweenRounds));
 
   return (
-    <div className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
+    <div ref={shellRef} className={'display-shell ' + (isMobile ? 'display-shell--mobile' : '')}>
       {showFixedMenu && (
         <div className="display-menu-fixed">
           <AppMenu event={event} />
@@ -165,12 +171,12 @@ export function DisplayScreen() {
       {isMobile ? (
         <MobileDisplay event={event} />
       ) : (
-        <div className="display-canvas-wrap" style={{ height: 1080 * scale }}>
+        <div className="display-canvas-wrap" style={{ height: canvasHeight * scale }}>
           <div
             className="display-canvas"
             style={{
               width: 1920,
-              height: 1080,
+              height: canvasHeight,
               transform: `scale(${scale})`,
               transformOrigin: 'top center',
               ['--display-scale' as string]: scale,
@@ -897,7 +903,6 @@ function TvLiveCanvas({
                 {centreB ? teamPlayersLabel(centreB) : 'TBD'}
               </div>
             </div>
-            <div />
           </div>
 
           {showControls && centreMatch && centreA && centreB && (
@@ -1115,10 +1120,7 @@ function TvCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamA} />
         </div>
         <ScoreCell
           value={match.scoreA}
@@ -1131,10 +1133,7 @@ function TvCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamB} />
         </div>
         <ScoreCell
           value={match.scoreB}
@@ -1372,7 +1371,6 @@ function TvBetweenCanvas({
                 />
               )}
             </div>
-            <div />
           </div>
 
           <div className="tv-lower">
@@ -1479,20 +1477,14 @@ function TvBetweenCourtCard({
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamA && <TeamAvatars players={teamA.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamA?.name && <div className="tv-court-team-label">{teamA.name}</div>}
-            <div className="tv-court-team-name">{teamA ? teamPlayersLabel(teamA) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamA} />
         </div>
         {showMovement && teamA && <MovementChip arrow={movements.get(teamA.id)?.arrow ?? 'stay'} />}
       </div>
       <div className="tv-court-row">
         <div className="tv-court-team">
           {teamB && <TeamAvatars players={teamB.players} size="sm" />}
-          <div className="tv-court-team-text">
-            {teamB?.name && <div className="tv-court-team-label">{teamB.name}</div>}
-            <div className="tv-court-team-name">{teamB ? teamPlayersLabel(teamB) : 'TBD'}</div>
-          </div>
+          <CourtTeamText team={teamB} />
         </div>
         {showMovement && teamB && <MovementChip arrow={movements.get(teamB.id)?.arrow ?? 'stay'} />}
       </div>
@@ -1517,4 +1509,10 @@ function MovementChip({ arrow, large }: { arrow: MovementArrow; large?: boolean 
       <span>{label}</span>
     </div>
   );
+}
+
+export function DisplayScreen() {
+  const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV2(event)) return <AmericanoDisplay event={event} />;
+  return <LegacyDisplayScreen />;
 }

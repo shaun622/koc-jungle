@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { buildSignupUrl, type SignupEvent, type SignupRegistration } from '@/lib/signups';
-import type { EventState, Team } from '@/types/domain';
+import type { SignupRegistrationV2, SignupSnapshotV3 } from '@/lib/americanoV2';
+import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import type { Team } from '@/types/domain';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
 
 export interface RosterShareResult {
@@ -28,7 +30,10 @@ function normalizedPairKey(playerOne: string, playerTwo: string): string {
     .join('|');
 }
 
-function formatSchedule(signup?: SignupEvent | null): string[] {
+type ShareSignup = SignupEvent | SignupSnapshotV3;
+type ShareRegistration = SignupRegistration | SignupRegistrationV2;
+
+function formatSchedule(signup?: ShareSignup | null): string[] {
   if (!signup?.startsAt) return [];
   const start = new Date(signup.startsAt);
   if (Number.isNaN(start.getTime())) return [];
@@ -55,7 +60,8 @@ function teamLines(team: Team, index: number): string[] {
     : [`${numbered(index)} ${playerNames}`];
 }
 
-function waitingLine(registration: SignupRegistration, index: number): string {
+function waitingLine(registration: ShareRegistration, index: number, individual = false): string {
+  if (individual) return `${index + 1}. ${registration.playerOne}`;
   if (!registration.playerTwo) return `${index + 1}. ${registration.playerOne} — looking for a partner`;
   const players = `${registration.playerOne} & ${registration.playerTwo}`;
   return registration.teamName?.trim()
@@ -64,15 +70,17 @@ function waitingLine(registration: SignupRegistration, index: number): string {
 }
 
 export function buildRosterShareText(input: {
-  event: EventState;
-  teams: Team[];
-  signup?: SignupEvent | null;
-  registrations?: SignupRegistration[];
+  event: VersionedEventState;
+  teams?: Team[];
+  signup?: ShareSignup | null;
+  registrations?: ShareRegistration[];
 }): string {
-  const { event, teams, signup, registrations = [] } = input;
+  const { event, teams = event.teams, signup, registrations = [] } = input;
   const title = (signup?.title || event.name || 'Padel event').trim();
   const venue = (signup?.venue || event.venue || '').trim();
-  const capacity = event.courts.length * 2;
+  const americanoV2 = isAmericanoEventV2(event);
+  const individual = americanoV2 && event.formatConfig.pairingMode === 'rotating';
+  const capacity = event.courts.length * (individual ? 4 : 2);
   const confirmedTeams = teams.filter((team) => team.active);
   const representedRegistrationIds = new Set(
     confirmedTeams
@@ -85,7 +93,15 @@ export function buildRosterShareText(input: {
       team.players[1].name,
     )),
   );
-  const rosterView = buildSignupRosterView(registrations, capacity);
+  const rosterView = individual
+    ? {
+        confirmedPairs: [],
+        waitlistedPairs: registrations.filter((row) => row.status === 'waitlisted') as SignupRegistration[],
+        lookingForPartner: [],
+        confirmedPairCount: 0,
+        pairSpacesLeft: 0,
+      }
+    : buildSignupRosterView(registrations as SignupRegistration[], capacity);
   const isAlreadyRepresented = (registration: SignupRegistration): boolean =>
     representedRegistrationIds.has(registration.id)
     || (
@@ -99,13 +115,22 @@ export function buildRosterShareText(input: {
 
   if (venue) lines.push(`📍 ${venue}`);
   lines.push(...formatSchedule(signup));
-  lines.push(`👥 ${confirmedTeams.length} of ${capacity} teams confirmed`, '');
+  const confirmedCount = individual
+    ? event.participants.filter((participant) => participant.active).length
+    : confirmedTeams.length;
+  lines.push(`👥 ${confirmedCount} of ${capacity} ${individual ? 'players' : 'teams'} confirmed`, '');
 
-  confirmedTeams.forEach((team, index) => {
-    lines.push(...teamLines(team, index), '');
-  });
+  if (individual) {
+    event.participants.filter((participant) => participant.active).forEach((participant, index) => {
+      lines.push(`${numbered(index)} ${participant.name}`, '');
+    });
+  } else {
+    confirmedTeams.forEach((team, index) => {
+      lines.push(...teamLines(team, index), '');
+    });
+  }
 
-  const soloPlayers = rosterView.lookingForPartner
+  const soloPlayers = individual ? [] : rosterView.lookingForPartner
     .filter((registration) => !isAlreadyRepresented(registration));
   if (soloPlayers.length > 0) {
     lines.push('👤 LOOKING FOR A PARTNER');
@@ -117,8 +142,12 @@ export function buildRosterShareText(input: {
     .filter((registration) => !isAlreadyRepresented(registration));
   if (waitingPairs.length > 0) {
     lines.push('⏳ WAITING LIST');
-    waitingPairs.forEach((registration, index) => lines.push(waitingLine(registration, index)));
+    waitingPairs.forEach((registration, index) => lines.push(waitingLine(registration, index, individual)));
     lines.push('');
+  }
+
+  if (americanoV2 && event.completionReason === 'early') {
+    lines.push('⚠️ Ended early — only completed rounds count.', '');
   }
 
   if (signup) {

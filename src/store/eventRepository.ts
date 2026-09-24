@@ -1,11 +1,15 @@
-import type { EventState, EventStatus, TournamentFormatId } from '@/types/domain';
+import type { EventStatus, TournamentFormatId } from '@/types/domain';
+import type { VersionedEventState } from '@/logic/americanoV2/types';
+import type { PairingMode } from '@/logic/americanoV2/types';
+import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
+import { parseEventState } from '@/utils/eventSchema';
 
 export const EVENT_CATALOG_DB_NAME = 'koc-event-catalog-v1';
 export const EVENT_CATALOG_STORE_NAME = 'events';
 
 export interface EventCatalogRecord {
   id: string;
-  state: EventState;
+  state: VersionedEventState;
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
@@ -25,6 +29,8 @@ export interface EventCatalogMetadata {
   /** Derived display-only values; never persisted as a second roster. */
   teamCount?: number;
   teamCapacity?: number;
+  rosterUnit?: 'teams' | 'players';
+  americanoMode?: PairingMode;
 }
 
 export interface EventRepository {
@@ -51,12 +57,12 @@ export class MemoryEventRepository implements EventRepository {
   private readonly records = new Map<string, EventCatalogRecord>();
 
   async list(): Promise<EventCatalogRecord[]> {
-    return Array.from(this.records.values(), cloneRecord);
+    return Array.from(this.records.values(), cloneRecord).map(assertRecord);
   }
 
   async get(id: string): Promise<EventCatalogRecord | null> {
     const record = this.records.get(id);
-    return record ? cloneRecord(record) : null;
+    return record ? assertRecord(cloneRecord(record)) : null;
   }
 
   async put(record: EventCatalogRecord): Promise<void> {
@@ -80,7 +86,7 @@ class IndexedDbEventRepository implements EventRepository {
       database.transaction(EVENT_CATALOG_STORE_NAME, 'readonly')
         .objectStore(EVENT_CATALOG_STORE_NAME)
         .getAll(),
-    ).then((records) => records.map(cloneRecord));
+    ).then((records) => records.map(cloneRecord).map(assertRecord));
   }
 
   async get(id: string): Promise<EventCatalogRecord | null> {
@@ -90,7 +96,7 @@ class IndexedDbEventRepository implements EventRepository {
         .objectStore(EVENT_CATALOG_STORE_NAME)
         .get(id),
     );
-    return result ? cloneRecord(result) : null;
+    return result ? assertRecord(cloneRecord(result)) : null;
   }
 
   async put(record: EventCatalogRecord): Promise<void> {
@@ -126,10 +132,13 @@ class IndexedDbEventRepository implements EventRepository {
   }
 }
 
-function assertRecord(record: EventCatalogRecord): void {
+function assertRecord(record: EventCatalogRecord): EventCatalogRecord {
   if (!record.id || record.state.id !== record.id) {
     throw new Error('Event catalog record id must match its event state id.');
   }
+  const parsed = parseEventState(record.state);
+  if (parsed.id !== record.id) throw new Error('Validated event id must match its catalog key.');
+  return record;
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
@@ -170,6 +179,13 @@ export function removeLocalEventRecord(id: string): Promise<void> {
 }
 
 export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetadata {
+  const state = record.state;
+  const americanoV2 = isAmericanoEventV2(state);
+  const rotating = americanoV2 && state.formatConfig.pairingMode === 'rotating';
+  const teamCount = rotating
+    ? state.participants.filter((participant) => participant.active).length
+    : state.teams.filter((team) => team.active).length;
+  const teamCapacity = state.courts.length * (rotating ? 4 : 2);
   return {
     id: record.id,
     name: record.state.name,
@@ -180,8 +196,10 @@ export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetad
     updatedAt: record.updatedAt,
     archivedAt: record.archivedAt,
     startsAt: record.state.settings.publishedStartsAt ?? null,
-    teamCount: record.state.teams.filter((team) => team.active).length,
-    teamCapacity: record.state.courts.length * 2,
+    teamCount,
+    teamCapacity,
+    rosterUnit: rotating ? 'players' : 'teams',
+    americanoMode: americanoV2 ? state.formatConfig.pairingMode : undefined,
     signupState: record.state.settings.publishedCancelledAt
       ? 'cancelled'
       : record.state.settings.publishedSignupId

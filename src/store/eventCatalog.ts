@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { EventState } from '@/types/domain';
+import type { VersionedEventState } from '@/logic/americanoV2/types';
+import { isLegacyEventState, parseEventState } from '@/utils/eventSchema';
 import {
   createEventRepository,
   getLocalEventRecord,
@@ -30,9 +32,9 @@ export interface EventCatalogState {
 
   initialize: () => Promise<void>;
   refresh: () => Promise<void>;
-  loadEvent: (id: string) => Promise<EventState | null>;
-  selectEvent: (id: string) => Promise<EventState | null>;
-  saveEvent: (event: EventState, options?: SaveCatalogEventOptions) => Promise<void>;
+  loadEvent: (id: string) => Promise<VersionedEventState | null>;
+  selectEvent: (id: string) => Promise<VersionedEventState | null>;
+  saveEvent: (event: VersionedEventState, options?: SaveCatalogEventOptions) => Promise<void>;
   archiveEvent: (id: string, archived?: boolean) => Promise<void>;
   deleteLocalEvent: (id: string) => Promise<void>;
   clearError: () => void;
@@ -104,16 +106,8 @@ export function parseLegacyStoredEvent(raw: string | null | undefined): EventSta
       event?: unknown;
     };
     const candidate = parsed?.state?.event ?? parsed?.event;
-    if (!candidate || typeof candidate !== 'object') return null;
-    const event = candidate as Partial<EventState>;
-    if (
-      typeof event.id !== 'string' ||
-      typeof event.name !== 'string' ||
-      !Array.isArray(event.courts) ||
-      !Array.isArray(event.teams) ||
-      !Array.isArray(event.rounds)
-    ) return null;
-    return candidate as EventState;
+    const event = parseEventState(candidate);
+    return isLegacyEventState(event) ? event : null;
   } catch {
     return null;
   }

@@ -10,8 +10,10 @@ import {
 } from '@/store/selectors';
 import { Icons } from '@/components/Icons';
 import { RankMovement } from '@/components/RankMovement';
+import { AmericanoLeaderboard } from '@/components/americano/AmericanoLeaderboard';
+import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
 
-export function LeaderboardScreen() {
+function LegacyLeaderboardScreen() {
   const event = useEventStore((s) => s.event);
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -258,4 +260,10 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
       </div>
     </div>
   );
+}
+
+export function LeaderboardScreen() {
+  const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV2(event)) return <AmericanoLeaderboard event={event} />;
+  return <LegacyLeaderboardScreen />;
 }

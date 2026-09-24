@@ -1,0 +1,8 @@
+{
+  "event": { "id": "signup-fixture", "capacityTeams": 2, "isOpen": true },
+  "registrations": [
+    { "id": "reg-pair", "teamName": "Complete Pair", "playerOne": "Pair One", "playerTwo": "Pair Two", "status": "confirmed", "queueRank": 1 },
+    { "id": "reg-looking", "teamName": "", "playerOne": "Solo One", "playerTwo": "", "status": "looking", "queueRank": 2 },
+    { "id": "reg-waiting", "teamName": "Waiting Pair", "playerOne": "Wait One", "playerTwo": "Wait Two", "status": "waitlisted", "queueRank": 3 }
+  ]
+}

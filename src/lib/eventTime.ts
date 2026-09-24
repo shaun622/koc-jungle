@@ -16,8 +16,10 @@ export function supportedTimeZones(): string[] {
   return Array.from(new Set([browserTimeZone(), 'UTC', ...(intl.supportedValuesOf?.('timeZone') ?? [])]));
 }
 
-export function zonedLocalToIso(localValue: string, timeZone: string): string | null {
-  if (!localValue) return null;
+export type ZonedTimeOccurrence = 'earlier' | 'later';
+
+export function zonedLocalCandidates(localValue: string, timeZone: string): string[] {
+  if (!localValue) return [];
   const match = localValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) throw new Error('Choose a valid date and time.');
   const [, year, month, day, hour, minute] = match;
@@ -29,8 +31,14 @@ export function zonedLocalToIso(localValue: string, timeZone: string): string | 
     if (localMinuteParts(iso, timeZone) === target) candidates.add(iso);
   }
   if (candidates.size === 0) throw new Error('That local time does not exist in the selected time zone. Choose another time.');
-  if (candidates.size > 1) throw new Error('That local time occurs twice in the selected time zone. Choose another time.');
-  return [...candidates][0];
+  return [...candidates].sort();
+}
+
+export function zonedLocalToIso(localValue: string, timeZone: string, occurrence?: ZonedTimeOccurrence): string | null {
+  if (!localValue) return null;
+  const candidates = zonedLocalCandidates(localValue, timeZone);
+  if (candidates.length > 1 && !occurrence) throw new Error('That local time occurs twice in the selected time zone. Choose the earlier or later occurrence.');
+  return candidates[occurrence === 'later' ? candidates.length - 1 : 0];
 }
 
 export function formatEventDateTime(iso: string | null, timeZone?: string | null): string {

@@ -9,7 +9,9 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import type { EventState } from '@/types/domain';
+import type { VersionedEventState } from '@/logic/americanoV2/types';
+import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
+import { deleteAmericanoEventV2, saveAmericanoEventV2 } from '@/lib/americanoV2';
 import { useEventCatalogStore } from './eventCatalog';
 import {
   listLocalEventRecords,
@@ -42,6 +44,8 @@ interface DirtyMarker {
 interface TombstoneMarker {
   deletedAt: number;
   pending: boolean;
+  protocolVersion?: 2;
+  baseRevision?: string;
 }
 
 interface MutationLedger {
@@ -58,7 +62,7 @@ interface Session {
   channel: RealtimeChannel | null;
   unsubStore: Stop;
   pushTimers: Map<string, ReturnType<typeof setTimeout>>;
-  dirtySnapshots: Map<string, EventState>;
+  dirtySnapshots: Map<string, VersionedEventState>;
   pendingById: Map<string, Promise<void>>;
   meta: SyncMeta;
   bootstrap: Promise<void>;
@@ -102,7 +106,7 @@ export interface CloudSyncFlushResult {
 
 interface CloudEventRow {
   id: string;
-  state: EventState | null;
+  state: VersionedEventState | null;
   updated_at: string;
 }
 
@@ -255,9 +259,12 @@ export function markLocalEventDeleted(eventId: string): boolean {
   const userId = active?.userId ?? readLastUserId();
   const ledger = readLocalMutationLedger(userId);
   delete ledger.dirtyById[eventId];
+  const current = currentEventWithId(eventId);
+  const versioned = current && isAmericanoEventV2(current) ? current : null;
   ledger.tombstonesById[eventId] = {
     deletedAt: Math.max(Date.now(), ledger.tombstonesById[eventId]?.deletedAt ?? 0),
     pending: true,
+    ...(versioned ? { protocolVersion: 2 as const, baseRevision: versioned.revision } : {}),
   };
   writeLocalMutationLedger(userId, ledger);
 
@@ -339,8 +346,8 @@ export const flushAllCloudEvents = flushCloudSync;
  * tombstone A: that transition is event selection, not deletion.
  */
 export function markLocalEventMutation(
-  event: EventState | null,
-  previous: EventState | null,
+  event: VersionedEventState | null,
+  previous: VersionedEventState | null,
 ): boolean {
   if (isApplyingCatalogEvent()) return false;
   if (event && applyingExternalIds.has(event.id)) return false;
@@ -369,7 +376,7 @@ export function markLocalEventMutation(
 
 /** Apply one cross-tab body snapshot without replacing unrelated events. */
 export function applyStorageBroadcast(
-  event: EventState | null,
+  event: VersionedEventState | null,
   pinnedEventId: string | null = null,
 ): boolean {
   if (!event) {
@@ -532,7 +539,7 @@ async function resumePendingSessionMutations(session: Session): Promise<void> {
 
 async function applyRemoteUpsert(
   session: Session,
-  event: EventState,
+  event: VersionedEventState,
   remoteAt: number,
 ): Promise<void> {
   if (active !== session || session.meta.tombstonesById[event.id]) return;
@@ -574,7 +581,7 @@ async function applyRemoteDeletion(
   await removeExternalEvent(eventId);
 }
 
-async function saveExternalEvent(event: EventState): Promise<void> {
+async function saveExternalEvent(event: VersionedEventState): Promise<void> {
   await saveEventToLocalCatalog(event, {
     updatedAt: Date.now(),
     makeActive: false,
@@ -590,7 +597,7 @@ async function removeExternalEvent(eventId: string): Promise<void> {
   }
 }
 
-function setExternalActiveEvent(event: EventState | null): void {
+function setExternalActiveEvent(event: VersionedEventState | null): void {
   if (!event) {
     applyingExternalNull = true;
     try {
@@ -608,7 +615,7 @@ function setExternalActiveEvent(event: EventState | null): void {
   }
 }
 
-function recordDirty(session: Session, event: EventState, changedAt = Date.now()): void {
+function recordDirty(session: Session, event: VersionedEventState, changedAt = Date.now()): void {
   if (session.meta.tombstonesById[event.id]) return;
   const marker = dirtyMarkerFor(event, changedAt);
   session.meta.dirtyById[event.id] = marker;
@@ -624,7 +631,7 @@ function recordDirty(session: Session, event: EventState, changedAt = Date.now()
   schedulePush(session, event);
 }
 
-function schedulePush(session: Session, event: EventState): void {
+function schedulePush(session: Session, event: VersionedEventState): void {
   cancelPendingPush(session, event.id);
   const snapshot = cloneEvent(event);
   session.pushTimers.set(event.id, setTimeout(() => {
@@ -633,12 +640,31 @@ function schedulePush(session: Session, event: EventState): void {
   }, PUSH_DEBOUNCE_MS));
 }
 
-function queuePush(session: Session, event: EventState): Promise<void> {
+function queuePush(session: Session, event: VersionedEventState): Promise<void> {
   const snapshot = cloneEvent(event);
   const snapshotFingerprint = eventFingerprint(snapshot);
   publishStatus(session, 'syncing');
   return enqueueRemote(session, event.id, async () => {
     if (!supabase || session.meta.tombstonesById[event.id]) return;
+    if (isAmericanoEventV2(snapshot)) {
+      const reply = await saveAmericanoEventV2(snapshot, snapshot.revision);
+      if (reply.status === 'rejected') throw new Error(reply.message);
+      if (reply.status === 'conflict') throw new Error('This Americano was changed on another device. Your local draft was kept; reload the server version before saving again.');
+      const current = currentEventWithId(snapshot.id);
+      if (current && eventFingerprint(current) === snapshotFingerprint) {
+        await saveExternalEvent(reply.snapshot.event.state);
+        setExternalActiveEvent(reply.snapshot.event.state);
+      }
+      const latestMarker = session.meta.dirtyById[event.id];
+      if (latestMarker?.fingerprint === snapshotFingerprint) {
+        delete session.meta.dirtyById[event.id];
+        session.dirtySnapshots.delete(event.id);
+        clearLocalDirtyMarker(session.userId, event.id, snapshotFingerprint);
+        writeSyncMeta(session.userId, session.meta);
+      }
+      session.lastError = null;
+      return;
+    }
     const updatedAt = new Date().toISOString();
     const { error } = await supabase.from('events').upsert(
       {
@@ -670,6 +696,14 @@ function queueDelete(session: Session, eventId: string): Promise<void> {
     if (!supabase) return;
     const marker = session.meta.tombstonesById[eventId];
     if (!marker?.pending) return;
+    if (marker.protocolVersion === 2 && marker.baseRevision) {
+      const reply = await deleteAmericanoEventV2({ eventId, baseEventRevision: marker.baseRevision });
+      if (reply.status === 'rejected') throw new Error(reply.message);
+      if (reply.status === 'conflict') throw new Error('This Americano changed before it could be deleted. Reload it and confirm deletion again.');
+      if (!('deletedAt' in reply)) throw new Error('The server returned an invalid Americano deletion response.');
+      markTombstoneSynced(session, eventId, parseTimestamp(reply.deletedAt) || marker.deletedAt);
+      return;
+    }
     const { data, error } = await supabase.rpc('delete_event', {
       p_event_id: eventId,
     });
@@ -692,6 +726,7 @@ function markTombstoneSynced(session: Session, eventId: string, deletedAt: numbe
   const synced = {
     deletedAt: Math.max(deletedAt, current.deletedAt),
     pending: false,
+    ...(current.protocolVersion === 2 ? { protocolVersion: 2 as const, baseRevision: current.baseRevision } : {}),
   };
   session.meta.tombstonesById[eventId] = synced;
   delete session.meta.dirtyById[eventId];
@@ -802,8 +837,8 @@ function hasTombstone(eventId: string): boolean {
   return Boolean(readLocalMutationLedger(userId).tombstonesById[eventId]);
 }
 
-function currentEventWithId(eventId: string): EventState | null {
-  const current = useEventStore.getState().event;
+function currentEventWithId(eventId: string): VersionedEventState | null {
+  const current = useEventStore.getState().event as VersionedEventState | null;
   return current?.id === eventId ? current : null;
 }
 
@@ -957,6 +992,9 @@ function sanitizeTombstoneMap(value: unknown): Record<string, TombstoneMarker> {
     result[eventId] = {
       deletedAt: typeof candidate.deletedAt === 'number' ? candidate.deletedAt : 0,
       pending: candidate.pending !== false,
+      ...(candidate.protocolVersion === 2 && typeof candidate.baseRevision === 'string'
+        ? { protocolVersion: 2 as const, baseRevision: candidate.baseRevision }
+        : {}),
     };
   }
   return result;
@@ -981,16 +1019,21 @@ function mergeTombstones(
     result[eventId] = {
       deletedAt: Math.max(current?.deletedAt ?? 0, marker.deletedAt),
       pending: Boolean(current?.pending || marker.pending),
+      ...(marker.protocolVersion === 2 && marker.baseRevision
+        ? { protocolVersion: 2 as const, baseRevision: marker.baseRevision }
+        : current?.protocolVersion === 2 && current.baseRevision
+          ? { protocolVersion: 2 as const, baseRevision: current.baseRevision }
+          : {}),
     };
   }
   return result;
 }
 
-function dirtyMarkerFor(event: EventState, changedAt = Date.now()): DirtyMarker {
+function dirtyMarkerFor(event: VersionedEventState, changedAt = Date.now()): DirtyMarker {
   return { fingerprint: eventFingerprint(event), changedAt };
 }
 
-function eventFingerprint(event: EventState): string {
+function eventFingerprint(event: VersionedEventState): string {
   try {
     return JSON.stringify(event);
   } catch {
@@ -998,9 +1041,9 @@ function eventFingerprint(event: EventState): string {
   }
 }
 
-function cloneEvent(event: EventState): EventState {
+function cloneEvent(event: VersionedEventState): VersionedEventState {
   if (typeof globalThis.structuredClone === 'function') return globalThis.structuredClone(event);
-  return JSON.parse(JSON.stringify(event)) as EventState;
+  return JSON.parse(JSON.stringify(event)) as VersionedEventState;
 }
 
 function parseTimestamp(value: unknown): number {

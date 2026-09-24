@@ -19,12 +19,12 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const supabase: SupabaseClient | null =
-  url && anonKey
-    ? createClient(url, anonKey, {
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
@@ -47,9 +47,9 @@ export const supabase: SupabaseClient | null =
  * the page on "Loading event" forever.
  */
 export const publicSupabase: SupabaseClient | null =
-  url && anonKey
-    ? createClient(url, anonKey, {
-        accessToken: async () => anonKey,
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        accessToken: async () => supabaseAnonKey,
         db: { timeout: 12_000 },
       })
     : null;
@@ -57,8 +57,8 @@ export const publicSupabase: SupabaseClient | null =
 /** Password recovery must never adopt a recovery session into the organiser's
  * persisted sync client, especially on a shared scoring device. */
 export const recoverySupabase: SupabaseClient | null =
-  url && anonKey
-    ? createClient(url, anonKey, {
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: false,
           autoRefreshToken: false,

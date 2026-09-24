@@ -1,6 +1,13 @@
 import type { EventState, MainRound, Team } from '@/types/domain';
 import { computeStandings, sortStandings, type TeamStanding } from '@/logic/scoring';
 import { decideWinnerLoser } from '@/logic/rotation';
+export {
+  americanoEntrantView,
+  americanoMatchHistory,
+  americanoPodium,
+  americanoSideView,
+  computeAmericanoStandings,
+} from '@/logic/americanoV2/standings';
 
 export function teamNameFor(event: EventState | null, id: string): string {
   if (!event) return id;

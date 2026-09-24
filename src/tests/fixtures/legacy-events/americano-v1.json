@@ -1,0 +1,23 @@
+{
+  "id": "legacy-americano-v1",
+  "name": "Synthetic Legacy Americano",
+  "createdAt": 5000,
+  "status": "between-rounds",
+  "format": "americano",
+  "formatConfig": { "teams": ["team-a", "team-b", "team-c", "team-d"] },
+  "settings": { "defaultRoundDurationMs": 600000, "tieRule": "operator-decides", "soundOnTimerEnd": false, "warningAtMs": 60000, "roundsTotal": 3, "announceRoundStart": false },
+  "courts": [
+    { "id": "court-1", "position": 2, "name": "Centre Court", "pointValue": 9 },
+    { "id": "court-2", "position": 1, "name": "Court 2", "pointValue": 8 }
+  ],
+  "teams": [
+    { "id": "team-a", "players": [{ "id": "a1", "name": "A One" }, { "id": "a2", "name": "A Two" }], "createdAt": 1, "active": true },
+    { "id": "team-b", "players": [{ "id": "b1", "name": "B One" }, { "id": "b2", "name": "B Two" }], "createdAt": 2, "active": true },
+    { "id": "team-c", "players": [{ "id": "c1", "name": "C One" }, { "id": "c2", "name": "C Two" }], "createdAt": 3, "active": true },
+    { "id": "team-d", "players": [{ "id": "d1", "name": "D One" }, { "id": "d2", "name": "D Two" }], "createdAt": 4, "active": true }
+  ],
+  "rounds": [{ "id": "round-1", "index": 1, "durationMs": 600000, "totalPausedMs": 0, "completedAt": 6000, "matches": [
+    { "id": "m1", "courtId": "court-1", "teamAId": "team-a", "teamBId": "team-d", "scoreA": 10, "scoreB": 7, "status": "completed", "pointValueAtTime": 9 },
+    { "id": "m2", "courtId": "court-2", "teamAId": "team-b", "teamBId": "team-c", "scoreA": 5, "scoreB": 8, "status": "completed", "pointValueAtTime": 8 }
+  ] }]
+}

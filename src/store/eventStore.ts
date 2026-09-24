@@ -28,6 +28,8 @@ import { getFormat } from '@/logic/formats';
 import { hapticTick } from '@/lib/haptics';
 import type { SignupRegistration } from '@/lib/signups';
 import { reconcileConfirmedSignupRoster } from '@/utils/rosterReconciliation';
+import type { PairingMode, VersionedEventState } from '@/logic/americanoV2/types';
+import { createAmericanoEventV2 } from '@/logic/americanoV2/runtime';
 import {
   LEGACY_EVENT_STORAGE_KEY,
   type SaveCatalogEventOptions,
@@ -56,17 +58,18 @@ interface Actions {
   /** Ensure the local event catalog is ready and restore its active event. */
   initializeCatalog: () => Promise<void>;
   /** Select a locally stored event and make it the active-event facade. */
-  selectEventById: (id: string) => Promise<EventState | null>;
+  selectEventById: (id: string) => Promise<VersionedEventState | null>;
   /** Load an event into this tab without changing/broadcasting catalog selection. */
-  loadPinnedEventById: (id: string) => Promise<EventState | null>;
+  loadPinnedEventById: (id: string) => Promise<VersionedEventState | null>;
   /** Archive/unarchive a local event without deleting its body. */
   archiveLocalEvent: (id: string, archived?: boolean) => Promise<void>;
   /** Permanently remove one event from this device's local catalog. */
   deleteLocalEvent: (id: string) => Promise<void>;
 
   createEvent: (name: string, format?: TournamentFormatId) => void;
+  createAmericanoEvent: (name: string, pairingMode: PairingMode) => void;
   resetEvent: () => void;
-  loadEvent: (event: EventState) => void;
+  loadEvent: (event: VersionedEventState) => void;
   setFormatConfig: (patch: Record<string, unknown>) => void;
   /** Start a non-qualifier format (e.g. Round Robin) directly into round 1. */
   startTournament: () => void;
@@ -305,17 +308,17 @@ function eventStoreError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function replaceActiveEventFromCatalog(event: EventState | null): void {
+function replaceActiveEventFromCatalog(event: VersionedEventState | null): void {
   applyingCatalogEvent = true;
   try {
-    useEventStore.setState({ event, lastError: null });
+    useEventStore.setState({ event: event as EventState | null, lastError: null });
   } finally {
     applyingCatalogEvent = false;
   }
 }
 
 /** Apply a trusted cloud/cross-tab snapshot without treating it as a local edit. */
-export function applyExternalEventToActiveFacade(event: EventState | null): void {
+export function applyExternalEventToActiveFacade(event: VersionedEventState | null): void {
   replaceActiveEventFromCatalog(event);
 }
 
@@ -347,7 +350,7 @@ async function initializeCatalogFacade(): Promise<void> {
   return catalogInitializationPromise;
 }
 
-async function selectCatalogEvent(id: string): Promise<EventState | null> {
+async function selectCatalogEvent(id: string): Promise<VersionedEventState | null> {
   if (deletedCatalogEventIds.has(id)) return null;
   return enqueueCatalogOperation(async () => {
     if (deletedCatalogEventIds.has(id)) return null;
@@ -358,7 +361,7 @@ async function selectCatalogEvent(id: string): Promise<EventState | null> {
   });
 }
 
-async function loadPinnedCatalogEvent(id: string): Promise<EventState | null> {
+async function loadPinnedCatalogEvent(id: string): Promise<VersionedEventState | null> {
   if (deletedCatalogEventIds.has(id)) return null;
   return enqueueCatalogOperation(async () => {
     if (deletedCatalogEventIds.has(id)) return null;
@@ -375,7 +378,7 @@ async function loadPinnedCatalogEvent(id: string): Promise<EventState | null> {
  * waiting (or finishes just before the queued delete) cannot resurrect it.
  */
 export async function saveEventToLocalCatalog(
-  event: EventState,
+  event: VersionedEventState,
   options: SaveCatalogEventOptions = {},
 ): Promise<boolean> {
   if (deletedCatalogEventIds.has(event.id)) return false;
@@ -452,6 +455,11 @@ export const useEventStore = create<EventStore>()(
         set({ event, lastError: null });
       },
 
+      createAmericanoEvent: (name, pairingMode) => {
+        const event = createAmericanoEventV2(name, pairingMode);
+        set({ event: event as unknown as EventState, lastError: null });
+      },
+
       setFormatConfig: (patch) => {
         const event = get().event;
         if (!event) return;
@@ -465,7 +473,7 @@ export const useEventStore = create<EventStore>()(
 
       resetEvent: () => set({ event: null, lastError: null }),
 
-      loadEvent: (event) => set({ event, lastError: null }),
+      loadEvent: (event) => set({ event: event as EventState, lastError: null }),
 
       addTeam: (input) => get().addTeams([input]),
 

@@ -1,0 +1,34 @@
+project_id = "koc-tournament-local-template"
+
+[api]
+enabled = true
+port = 55421
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55422
+shadow_port = 55420
+major_version = 15
+
+[studio]
+enabled = true
+port = 55423
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = true
+port = 55424
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:4186"
+additional_redirect_urls = ["http://127.0.0.1:4186", "http://127.0.0.1:4187"]
+enable_signup = true
+
+[functions.tournament-owner]
+verify_jwt = false
+
+[functions.tournament-public]
+verify_jwt = false

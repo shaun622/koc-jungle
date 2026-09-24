@@ -44,19 +44,21 @@ const koc: FormatRuleGuide = {
 
 const americano: FormatRuleGuide = {
   id: 'americano',
-  name: 'Team Americano (fixed pairs)',
-  tagline: 'One pool, rotating opponents. Maximum variety in the rounds you set.',
+  name: 'Americano',
+  tagline: 'Play for every point—with rotating partners or as a fixed team.',
   bestFor:
-    'Open nights with a fixed time window where you want to mix it up and face as many different opponents as possible. Set the round count to fit the time you have.',
+    'Social or competitive sessions where every rally matters. Rotating pairs ranks each player individually; fixed pairs keeps teams together and ranks the teams.',
   rules: [
-    'All teams form one shared pool, with no groups.',
-    'The schedule rotates each round (Berger tables) so each team faces as many different opponents as the rounds allow.',
-    'The operator picks the total number of rounds; the format truncates the full schedule at that count.',
-    'If the operator sets more rounds than the full schedule has, it wraps and repeats from the start.',
-    'Court position determines point value as in other formats.',
+    'Choose Rotating pairs to change partners between matches and collect points individually, or Fixed pairs to compete with the same partner throughout.',
+    'The organiser chooses a positive whole number of total rally points per match. Common choices are 16, 24 or 32. Every rally won is one point for that side.',
+    'A result such as 10–14 gives 10 points to each player on the first rotating side and 14 to each player on the second; fixed teams receive 10 and 14 respectively.',
+    'A full schedule is used where the confirmed field has an exact complete rotation. Balanced and custom schedules clearly show rests, repeats and appearance differences before Start.',
+    'Two serves at a time should rotate through all four players. This is guidance—the app does not track the server.',
+    'Four players or two fixed teams is the minimum. Capacity comes from courts: four rotating players or two fixed teams per court.',
+    'The pace estimate helps plan the session but never ends a match or forces a result. The optional countdown is advisory only.',
   ],
   scoring:
-    'Win → earn the court\'s point value. Final ranking by total points; ties break on games-for, then alphabetical.',
+    'All confirmed rally points are added across completed rounds. Highest total wins. Equal totals share the same competition placing (for example 1, 1, 3); wins, names and court position are not tiebreakers.',
 };
 
 const mexicano: FormatRuleGuide = {

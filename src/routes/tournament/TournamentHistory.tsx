@@ -1,0 +1,32 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTournamentStore } from '@/store/tournamentStore';
+import { restoreTournamentBackup, tournamentBackup, tournamentCsv, type TournamentBackup } from '@/utils/tournamentExport';
+
+const MAX_BACKUP_BYTES=5*1024*1024;
+
+export function TournamentHistory() {
+  const record=useTournamentStore((store)=>store.active)!; const state=record.projected;
+  const apply=useTournamentStore((store)=>store.applyCommand); const restore=useTournamentStore((store)=>store.restoreTournament);
+  const importConnected=useTournamentStore((store)=>store.importConnectedTournament); const remove=useTournamentStore((store)=>store.deleteTournament);
+  const navigate=useNavigate();
+  const [includeRecovery,setIncludeRecovery]=useState(false); const [includeContacts,setIncludeContacts]=useState(false);
+  const [pendingBackup,setPendingBackup]=useState<TournamentBackup|null>(null); const [restoreProjected,setRestoreProjected]=useState(true);
+  const [restoreMessage,setRestoreMessage]=useState(''); const [deleteText,setDeleteText]=useState('');
+  const download=(name:string,content:string,type:string)=>{const url=URL.createObjectURL(new Blob([content],{type}));const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();URL.revokeObjectURL(url);};
+
+  async function createRecoveryCopy() {
+    if(!pendingBackup)return;
+    try {
+      const recovered=restoreTournamentBackup(pendingBackup,restoreProjected);
+      const next=record.mode==='connected'?await importConnected(recovered.state,recovered.contacts):await restore(recovered.state,recovered.contacts,recovered.drafts);
+      navigate(`/${record.mode==='connected'?'tournaments':'tournament-demo'}/${next.tournamentId}/setup`);
+    } catch(error){setRestoreMessage(error instanceof Error?error.message:'Could not restore backup. Nothing was written.');}
+  }
+
+  return <main className="tv1-main"><div className="tv1-page-head"><div><p className="eyebrow">AUDIT & RECOVERY</p><h1>Change history</h1><p>Undo creates a compensating command. It never erases history or restores an old whole snapshot.</p></div></div>
+    <section className="tv1-panel"><div className="tv1-panel-head"><div><h2>Backups & exports</h2><p>Roster CSV excludes private contacts by default. Recovery drafts and contacts each require a separate explicit opt-in.</p></div></div><div className="tv1-recovery-options"><label className="tv1-private-check"><input type="checkbox" checked={includeRecovery} onChange={(event)=>setIncludeRecovery(event.target.checked)}/>Include private recovery drafts (never controller authority or a replayable outbox)</label><label className="tv1-private-check"><input type="checkbox" checked={includeContacts} onChange={(event)=>setIncludeContacts(event.target.checked)}/>Include private contacts</label></div><div className="tv1-template-actions"><button className="btn" onClick={()=>download(`${state.meta.title}.csv`,tournamentCsv(record,includeContacts),'text/csv')}>Download roster CSV</button><button className="btn" onClick={()=>download(`${state.meta.title}.json`,JSON.stringify(tournamentBackup(record,includeRecovery,includeContacts),null,2),'application/json')}>Download JSON backup</button><label className="btn">Choose backup to restore<input className="tv1-file-input" type="file" accept="application/json,.json" onChange={(event)=>{const file=event.target.files?.[0];if(!file)return;if(file.size>MAX_BACKUP_BYTES){setRestoreMessage('Backup is larger than 5 MB. Nothing was imported.');return;}void file.text().then((text)=>{const backup=JSON.parse(text) as TournamentBackup;if(backup.schema!=='tournament-v1-backup'||backup.version!==1)throw new Error('Unsupported tournament backup.');restoreTournamentBackup(backup,Boolean(backup.projected));setPendingBackup(backup);setRestoreProjected(Boolean(backup.projected));setRestoreMessage('Backup validated. Choose the snapshot, then create a separate recovery copy.');}).catch((error)=>setRestoreMessage(error instanceof Error?error.message:'Could not read backup. Nothing was written.'));}}/></label></div>{pendingBackup&&<div className="tv1-restore-preview"><strong>Create a new {record.mode==='connected'?'connected import':'local-only demo'} recovery copy</strong><p>The current tournament is not overwritten. Pending commands are never replayed. Controller capability, claim nonce and public link are never copied.</p><p>Original audit available read-only: {pendingBackup.sourceAudit?.length??0} entries.</p>{pendingBackup.projected&&<label className="tv1-private-check"><input type="radio" name="restore-source" checked={restoreProjected} onChange={()=>setRestoreProjected(true)}/>Projected snapshot containing local event work</label>}<label className="tv1-private-check"><input type="radio" name="restore-source" checked={!restoreProjected} onChange={()=>setRestoreProjected(false)}/>Last acknowledged server snapshot</label><button className="btn primary" onClick={()=>void createRecoveryCopy()}>Create recovery copy</button><button className="btn" onClick={()=>setPendingBackup(null)}>Cancel</button></div>}{restoreMessage&&<p className="tv1-note" role="status">{restoreMessage}</p>}</section>
+    <section className="tv1-panel"><h2>Immutable audit</h2><div className="tv1-history">{[...state.audit].reverse().map((item)=><article key={item.commandId}><div><strong>{item.kind.replaceAll('-',' ')}</strong><span>{new Date(item.at).toLocaleString()} · revision {item.resultingRevision}</span>{item.reason&&<p>{item.reason}</p>}</div><button className="btn" disabled={item.kind==='undo-command'} onClick={()=>void apply('undo-command',{commandId:item.commandId},'Undo requested from history').then(()=>setRestoreMessage('Compensating undo applied.')).catch((error)=>setRestoreMessage(error.message))}>Undo</button></article>)}</div>{!state.audit.length&&<p>No changes recorded yet.</p>}</section>
+    <section className="tv1-panel tv1-danger-zone"><h2>Delete tournament</h2><p>Deletion is durable and retried by its original operation ID. Type the exact tournament title to enable it.</p><label>Type “{state.meta.title}”<input value={deleteText} onChange={(event)=>setDeleteText(event.target.value)}/></label><button className="btn danger" disabled={deleteText!==state.meta.title} onClick={()=>void remove(state.id).then(()=>navigate('/home')).catch((error)=>setRestoreMessage(error.message))}>Delete permanently</button></section>
+  </main>;
+}

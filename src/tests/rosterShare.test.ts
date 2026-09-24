@@ -1,6 +1,8 @@
 import { buildRosterShareText, whatsappRosterUrl } from '@/utils/rosterShare';
 import { DEFAULT_SETTINGS, type EventState, type Team } from '@/types/domain';
 import type { SignupEvent, SignupRegistration } from '@/lib/signups';
+import type { SignupSnapshotV3 } from '@/lib/americanoV2';
+import { americanoV2Fixture } from '@/tests/americanoV2Fixtures';
 
 function team(id: string, name: string | undefined, playerOne: string, playerTwo: string): Team {
   return {
@@ -185,5 +187,45 @@ describe('plain-text roster sharing', () => {
 
     expect(text).toContain('👥 0 of 4 teams confirmed');
     expect(text).not.toContain('Dropped team');
+  });
+
+  it('shares rotating Americano players once and never includes private contacts', () => {
+    const rotating = americanoV2Fixture('rotating');
+    const signupV3 = {
+      ...signup,
+      protocolVersion: 2,
+      entryMode: 'individual',
+      capacity: { unit: 'players', value: 8 },
+      registrations: [],
+      capacityRevision: '2',
+      rosterRevision: '4',
+    } as unknown as SignupSnapshotV3;
+    const text = buildRosterShareText({
+      event: rotating,
+      signup: signupV3,
+      registrations: [{
+        id: 'waiting-player', teamName: '', playerOne: 'Waiting Player', playerTwo: null,
+        contact: '+62123456789', status: 'waitlisted', entryMode: 'individual', organizerRank: 5,
+        pairCompletedAt: null, createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-01T00:00:00Z',
+      }],
+    });
+
+    expect(text).toContain('👥 4 of 8 players confirmed');
+    expect(text).toContain('1. One');
+    expect(text).toContain('4. Four');
+    expect(text).toContain('1. Waiting Player');
+    expect(text).not.toContain('Waiting Player — looking for a partner');
+    expect(text).not.toContain('+62123456789');
+    expect(text).not.toContain('1️⃣');
+  });
+
+  it('labels an early Americano result without exposing any contact details', () => {
+    const fixed = americanoV2Fixture('fixed');
+    fixed.status = 'complete';
+    fixed.completionReason = 'early';
+    const text = buildRosterShareText({ event: fixed });
+    expect(text).toContain('⚠️ Ended early — only completed rounds count.');
+    expect(text).toContain('1. First Pair');
+    expect(text).toContain('One & Two');
   });
 });

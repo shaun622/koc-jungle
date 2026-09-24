@@ -1,4 +1,4 @@
-import type { EventState, EventStatus } from '@/types/domain';
+import type { EventStatus } from '@/types/domain';
 
 export type EventRouteName =
   | 'setup'
@@ -27,7 +27,7 @@ export function routeNameForStatus(status: EventStatus): EventRouteName {
   }
 }
 
-export function eventRouteForStatus(event: EventState): string {
+export function eventRouteForStatus(event: { id: string; status: EventStatus }): string {
   return eventRoute(event.id, routeNameForStatus(event.status));
 }
 

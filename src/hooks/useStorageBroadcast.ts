@@ -9,7 +9,8 @@ import {
   markLocalEventDeleted,
   markLocalEventMutation,
 } from '@/store/cloudSync';
-import type { EventState } from '@/types/domain';
+import type { VersionedEventState } from '@/logic/americanoV2/types';
+import { isLegacyEventState, parseEventState } from '@/utils/eventSchema';
 
 export const EVENT_BROADCAST_KEY = 'koc-event-broadcast-v3';
 const LEGACY_BROADCAST_KEY = 'koc-event-broadcast-v2';
@@ -24,7 +25,7 @@ type EventBroadcast =
       schema: 3;
       operation: 'upsert';
       eventId: string;
-      event: EventState;
+      event: VersionedEventState;
       version: Version;
     }
   | {
@@ -35,12 +36,12 @@ type EventBroadcast =
     };
 
 type PublishMessage =
-  | { operation: 'upsert'; eventId: string; event: EventState }
+  | { operation: 'upsert'; eventId: string; event: VersionedEventState }
   | { operation: 'delete' | 'select'; eventId: string };
 
 interface LegacyBroadcast {
   version: Version;
-  event: EventState | null;
+  event: VersionedEventState | null;
 }
 
 function compareVersion(a: Version, b: Version): number {
@@ -79,11 +80,12 @@ function readMessage(raw: string | null): EventBroadcast | LegacyBroadcast | nul
       ) return null;
       if (value.operation === 'upsert') {
         if (!value.event || typeof value.event !== 'object') return null;
+        const event = parseEventState(value.event);
         return {
           schema: 3,
           operation: 'upsert',
           eventId: value.eventId,
-          event: value.event as EventState,
+          event,
           version,
         };
       }
@@ -95,7 +97,9 @@ function readMessage(raw: string | null): EventBroadcast | LegacyBroadcast | nul
       };
     }
     if (!Object.prototype.hasOwnProperty.call(value, 'event')) return null;
-    return { version, event: (value.event as EventState | null) ?? null };
+    if (value.event === null || value.event === undefined) return { version, event: null };
+    const event = parseEventState(value.event);
+    return isLegacyEventState(event) ? { version, event } : null;
   } catch {
     return null;
   }
@@ -151,7 +155,7 @@ function publish(message: PublishMessage): void {
   }
 }
 
-function fingerprint(event: EventState): string {
+function fingerprint(event: VersionedEventState): string {
   try {
     return JSON.stringify(event);
   } catch {
@@ -206,19 +210,21 @@ export function useStorageBroadcast(
       if (state.event === previous.event) return;
       if (isApplyingCatalogEvent()) return;
       if (state.event) {
-        const eventFingerprint = fingerprint(state.event);
+        const versionedEvent = state.event as VersionedEventState;
+        const previousEvent = previous.event as VersionedEventState | null;
+        const eventFingerprint = fingerprint(versionedEvent);
         if (lastPublishedFingerprints.get(state.event.id) === eventFingerprint) return;
-        if (!markLocalEventMutation(state.event, previous.event)) return;
+        if (!markLocalEventMutation(versionedEvent, previousEvent)) return;
         lastPublishedFingerprints.set(state.event.id, eventFingerprint);
         publish({
           operation: 'upsert',
           eventId: state.event.id,
-          event: state.event,
+          event: versionedEvent,
         });
         return;
       }
       if (!previous.event) return;
-      if (!markLocalEventMutation(null, previous.event)) return;
+      if (!markLocalEventMutation(null, previous.event as VersionedEventState)) return;
       lastPublishedFingerprints.delete(previous.event.id);
       publish({ operation: 'delete', eventId: previous.event.id });
     });

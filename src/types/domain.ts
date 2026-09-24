@@ -160,6 +160,9 @@ export type TournamentFormatId =
   | 'bracket';
 
 export interface EventState {
+  /** Missing and 1 are the legacy event schema. Version 2 is represented by
+   * the validated AmericanoEventStateV2 branch rather than this interface. */
+  schemaVersion?: 1;
   id: ID;
   name: string;
   venue?: string;

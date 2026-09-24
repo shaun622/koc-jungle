@@ -33,6 +33,17 @@ import { logInIAP, logOutIAP } from '@/lib/iap';
 import { isPublicSignupPath } from '@/lib/signups';
 import { useEntitlementsStore } from '@/store/entitlements';
 import { eventIdFromPath, eventRoute, eventRouteForStatus, routeNameForStatus } from '@/lib/eventRoutes';
+import { TournamentShell } from '@/components/tournament/TournamentShell';
+import { TournamentSetup } from '@/routes/tournament/TournamentSetup';
+import { TournamentEntries } from '@/routes/tournament/TournamentEntries';
+import { TournamentDraw } from '@/routes/tournament/TournamentDraw';
+import { TournamentDesk } from '@/routes/tournament/TournamentDesk';
+import { TournamentCourts } from '@/routes/tournament/TournamentCourts';
+import { TournamentHistory } from '@/routes/tournament/TournamentHistory';
+import { TournamentPublicSignup } from '@/routes/tournament/TournamentPublicSignup';
+import { TournamentDisplay } from '@/routes/tournament/TournamentDisplay';
+
+const isTournamentPath = (pathname: string) => pathname.startsWith('/tournaments/') || pathname.startsWith('/tournament-demo/') || pathname.startsWith('/t/');
 
 const FREE_EVENT_ROUTES = new Set(['leaderboard', 'display', 'setup']);
 
@@ -142,7 +153,7 @@ function OperatorCloudSyncGate() {
 
 function CloudSyncGate() {
   const location = useLocation();
-  if (isPublicSignupPath(location.pathname) || location.pathname === '/auth/recovery') return null;
+  if (isTournamentPath(location.pathname) || isPublicSignupPath(location.pathname) || location.pathname === '/auth/recovery') return null;
   return <OperatorCloudSyncGate />;
 }
 
@@ -152,7 +163,7 @@ function StorageBroadcastGate() {
   // may open or display another competition without replacing the event this
   // operator tab is editing.
   const pinnedEventId = eventIdFromPath(location.pathname);
-  useStorageBroadcast(!isPublicSignupPath(location.pathname) && location.pathname !== '/auth/recovery', pinnedEventId);
+  useStorageBroadcast(!isTournamentPath(location.pathname) && !isPublicSignupPath(location.pathname) && location.pathname !== '/auth/recovery', pinnedEventId);
   return null;
 }
 
@@ -183,7 +194,8 @@ export function App() {
     void useEventStore.getState().initializeCatalog();
   }, []);
 
-  if (!hydrated || !catalogHydrated) {
+  const directTournamentRoute = window.location.hash.startsWith('#/tournaments/') || window.location.hash.startsWith('#/tournament-demo/') || window.location.hash.startsWith('#/t/');
+  if (!directTournamentRoute && (!hydrated || !catalogHydrated)) {
     return <div className="splash">Loading…</div>;
   }
 
@@ -196,9 +208,29 @@ export function App() {
       <Routes>
         <Route path="/signup/:accountSlug/:slug" element={<PublicSignupScreen />} />
         <Route path="/signup/:slug" element={<PublicSignupScreen />} />
+        <Route path="/t/:publicSlug/signup" element={<TournamentPublicSignup />} />
+        <Route path="/t/:publicSlug/display" element={<TournamentDisplay />} />
         <Route path="/auth/recovery" element={<PasswordRecoveryScreen />} />
         <Route path="/home" element={<HomeScreen />} />
         <Route path="/help" element={<HelpScreen />} />
+        <Route path="/tournaments/:tournamentId" element={<TournamentShell mode="connected" />}>
+          <Route index element={<Navigate to="setup" replace />} />
+          <Route path="setup" element={<TournamentSetup />} />
+          <Route path="entries" element={<TournamentEntries />} />
+          <Route path="draw" element={<TournamentDraw />} />
+          <Route path="desk" element={<TournamentDesk />} />
+          <Route path="courts" element={<TournamentCourts />} />
+          <Route path="history" element={<TournamentHistory />} />
+        </Route>
+        <Route path="/tournament-demo/:tournamentId" element={<TournamentShell mode="demo" />}>
+          <Route index element={<Navigate to="setup" replace />} />
+          <Route path="setup" element={<TournamentSetup />} />
+          <Route path="entries" element={<TournamentEntries />} />
+          <Route path="draw" element={<TournamentDraw />} />
+          <Route path="desk" element={<TournamentDesk />} />
+          <Route path="courts" element={<TournamentCourts />} />
+          <Route path="history" element={<TournamentHistory />} />
+        </Route>
         <Route path="/events/:eventId" element={<EventSelectionGate />}>
           <Route element={<EventRouteGate />}>
             <Route index element={<EventStatusRedirect />} />

@@ -1,0 +1,14 @@
+{
+  "id": "legacy-koc-qualifier",
+  "name": "Synthetic KoC Qualifier",
+  "createdAt": 2000,
+  "status": "qualifier",
+  "settings": { "defaultRoundDurationMs": 1200000, "tieRule": "operator-decides", "soundOnTimerEnd": true, "warningAtMs": 60000, "roundsTotal": 6, "announceRoundStart": false, "qualifierEnabled": true, "qualifierUnit": "points", "qualifierTarget": 16 },
+  "courts": [{ "id": "court-1", "position": 1, "name": "Centre Court", "pointValue": 9 }],
+  "teams": [
+    { "id": "team-a", "players": [{ "id": "a1", "name": "A One" }, { "id": "a2", "name": "A Two" }], "createdAt": 1, "active": true },
+    { "id": "team-b", "players": [{ "id": "b1", "name": "B One" }, { "id": "b2", "name": "B Two" }], "createdAt": 2, "active": true }
+  ],
+  "qualifier": { "durationMs": 600000, "totalPausedMs": 0, "shuffleSeed": 123, "matches": [{ "id": "q1", "courtId": "court-1", "teamAId": "team-a", "teamBId": "team-b", "scoreA": 10, "scoreB": 6, "status": "completed", "pointValueAtTime": 9, "resultEntered": true }] },
+  "rounds": []
+}

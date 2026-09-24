@@ -63,6 +63,35 @@ export interface QualifierScoreRule {
   target: number;
 }
 
+export interface FixedTotalScoreRule {
+  target: number;
+  label: string;
+}
+
+/** Generic fixed-total validator shared by qualifier scoring and Americano
+ * final-result controls. It never clamps or interprets an empty input as 0. */
+export function validateFixedTotalScore(
+  scoreA: number,
+  scoreB: number,
+  rule: FixedTotalScoreRule,
+): ValidationIssue | null {
+  if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) {
+    return { message: 'Scores must be finite numbers.' };
+  }
+  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB)) {
+    return { message: 'Scores must be whole numbers.' };
+  }
+  if (scoreA < 0 || scoreB < 0) {
+    return { message: 'Scores cannot be negative.' };
+  }
+  if (scoreA > rule.target || scoreB > rule.target || scoreA + scoreB !== rule.target) {
+    return {
+      message: `${rule.label} must sum to ${rule.target} (got ${scoreA + scoreB}).`,
+    };
+  }
+  return null;
+}
+
 /**
  * Validate one qualifier match's scores.
  *  - points / games: scores must sum to the target (every point/game played).
@@ -86,12 +115,8 @@ export function validateQualifierScore(
   const unit = rule?.unit ?? 'points';
   const target = rule?.target ?? QUALIFIER_SUM;
   if (unit === 'points' || unit === 'games') {
-    if (scoreA + scoreB !== target) {
-      const noun = unit === 'games' ? 'games' : 'points';
-      return {
-        message: `Qualifier ${noun} must sum to ${target} (got ${scoreA + scoreB}).`,
-      };
-    }
+    const noun = unit === 'games' ? 'games' : 'points';
+    return validateFixedTotalScore(scoreA, scoreB, { target, label: `Qualifier ${noun}` });
   }
   // 'time': no sum constraint.
   return null;

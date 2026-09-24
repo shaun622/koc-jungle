@@ -11,6 +11,12 @@ import {
 } from '@/lib/signups';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
 import { formatEventDateTime } from '@/lib/eventTime';
+import {
+  joinPublicAmericanoPair,
+  registerPublicAmericanoPair,
+  registerPublicAmericanoPlayer,
+  registerPublicAmericanoSingle,
+} from '@/lib/americanoV2';
 
 function registrationLabel(registration: SignupRegistration): string {
   if (!registration.playerTwo.trim()) return registration.playerOne;
@@ -67,7 +73,7 @@ export function PublicSignupScreen() {
     registrationId: string;
     status: 'confirmed' | 'waitlisted' | 'looking';
     position: number;
-    kind: 'solo' | 'pair' | 'joined';
+    kind: 'solo' | 'pair' | 'joined' | 'player';
     refreshVersionAtSubmit: number;
     missing?: boolean;
   } | null>(null);
@@ -205,9 +211,11 @@ export function PublicSignupScreen() {
 
   async function register() {
     if (!data || website) return;
+    const isAmericanoV2 = data.event.protocolVersion === 2;
+    const isIndividual = isAmericanoV2 && data.event.entryMode === 'individual';
     const errors: Record<string, string> = {};
-    if (!playerOne.trim()) errors.playerOne = signupMode === 'pair' ? 'Enter player one.' : 'Enter your name.';
-    if (signupMode === 'pair' && !playerTwo.trim()) errors.playerTwo = 'Enter player two.';
+    if (!playerOne.trim()) errors.playerOne = isIndividual || signupMode === 'solo' ? 'Enter your name.' : 'Enter player one.';
+    if (!isIndividual && signupMode === 'pair' && !playerTwo.trim()) errors.playerTwo = 'Enter player two.';
     if (!contact.trim()) errors.contact = 'Enter a WhatsApp number or email.';
     if (Object.keys(errors).length) {
       showValidation(errors, { playerOne: playerOneRef, playerTwo: playerTwoRef, contact: contactRef });
@@ -218,16 +226,69 @@ export function PublicSignupScreen() {
     setFieldErrors({});
     registerRequestId.current ??= crypto.randomUUID();
     try {
-      const registered = await registerPublicTeam({
-        accountSlug: accountSlug || undefined,
-        publicSlug: slug,
-        teamName: signupMode === 'pair' ? teamName : '',
-        playerOne,
-        playerTwo: signupMode === 'pair' ? playerTwo : '',
-        contact,
-        requestId: registerRequestId.current,
-      });
-      setResult({ ...registered, kind: signupMode, refreshVersionAtSubmit: refreshVersion });
+      let registered: { registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number };
+      if (isIndividual) {
+        const response = await registerPublicAmericanoPlayer({
+          accountSlug: data.event.accountSlug,
+          eventSlug: data.event.eventSlug,
+          playerName: playerOne,
+          contact,
+          requestId: registerRequestId.current,
+        });
+        if (response.status === 'rejected') {
+          if (response.field && ['playerOne', 'contact'].includes(response.field)) {
+            showValidation({ [response.field]: response.message }, { playerOne: playerOneRef, contact: contactRef });
+            return;
+          }
+          throw new Error(response.message);
+        }
+        registered = {
+          registrationId: response.registrationId,
+          status: response.registrationStatus as typeof registered.status,
+          position: response.position ?? 0,
+        };
+      } else if (isAmericanoV2) {
+        const response = signupMode === 'solo'
+          ? await registerPublicAmericanoSingle({
+              accountSlug: data.event.accountSlug,
+              eventSlug: data.event.eventSlug,
+              playerOne,
+              contact,
+              requestId: registerRequestId.current,
+            })
+          : await registerPublicAmericanoPair({
+              accountSlug: data.event.accountSlug,
+              eventSlug: data.event.eventSlug,
+              teamName,
+              playerOne,
+              playerTwo,
+              contact,
+              requestId: registerRequestId.current,
+            });
+        if (response.status === 'rejected') {
+          if (response.field && ['playerOne', 'playerTwo', 'contact'].includes(response.field)) {
+            showValidation({ [response.field]: response.message }, { playerOne: playerOneRef, playerTwo: playerTwoRef, contact: contactRef });
+            return;
+          }
+          throw new Error(response.message);
+        }
+        registered = {
+          registrationId: response.registrationId,
+          status: response.registrationStatus as typeof registered.status,
+          position: response.position ?? 0,
+        };
+      } else {
+        registered = await registerPublicTeam({
+          accountSlug: accountSlug || undefined,
+          publicSlug: slug,
+          teamName: signupMode === 'pair' ? teamName : '',
+          playerOne,
+          playerTwo: signupMode === 'pair' ? playerTwo : '',
+          contact,
+          requestId: registerRequestId.current,
+        });
+      }
+      setResult({ ...registered, kind: isIndividual ? 'player' : signupMode, refreshVersionAtSubmit: refreshVersion });
       registerRequestId.current = null;
       setTeamName('');
       setPlayerOne('');
@@ -250,12 +311,15 @@ export function PublicSignupScreen() {
     setFieldErrors({});
     joinRequestId.current = null;
     window.setTimeout(() => {
-      document.querySelector('.signup-public-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const form = document.querySelector('.signup-public-form-card');
+      if (form && typeof form.scrollIntoView === 'function') {
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }, 0);
   }
 
   async function joinPlayer() {
-    if (!joinTarget) return;
+    if (!joinTarget || !data) return;
     const errors: Record<string, string> = {};
     if (!joinName.trim()) errors.joinName = 'Enter your name.';
     if (!joinContact.trim()) errors.joinContact = 'Enter a WhatsApp number or email.';
@@ -268,14 +332,39 @@ export function PublicSignupScreen() {
     setFieldErrors({});
     joinRequestId.current ??= crypto.randomUUID();
     try {
-      const joined = await joinPublicSingle({
-        accountSlug: accountSlug || undefined,
-        publicSlug: slug,
-        registrationId: joinTarget.id,
-        playerName: joinName,
-        contact: joinContact,
-        requestId: joinRequestId.current,
-      });
+      let joined: { registrationId: string; status: 'confirmed' | 'waitlisted' | 'looking'; position: number };
+      if (data.event.protocolVersion === 2) {
+        const response = await joinPublicAmericanoPair({
+          accountSlug: data.event.accountSlug,
+          eventSlug: data.event.eventSlug,
+          registrationId: joinTarget.id,
+          playerTwo: joinName,
+          contact: joinContact,
+          requestId: joinRequestId.current,
+        });
+        if (response.status === 'rejected') {
+          const field = response.field === 'playerTwo' ? 'joinName' : response.field === 'contact' ? 'joinContact' : null;
+          if (field) {
+            showValidation({ [field]: response.message }, { joinName: joinNameRef, joinContact: joinContactRef });
+            return;
+          }
+          throw new Error(response.message);
+        }
+        joined = {
+          registrationId: response.registrationId,
+          status: response.registrationStatus as typeof joined.status,
+          position: response.position ?? 0,
+        };
+      } else {
+        joined = await joinPublicSingle({
+          accountSlug: accountSlug || undefined,
+          publicSlug: slug,
+          registrationId: joinTarget.id,
+          playerName: joinName,
+          contact: joinContact,
+          requestId: joinRequestId.current,
+        });
+      }
       setJoinTarget(null);
       setJoinName('');
       setJoinContact('');
@@ -313,13 +402,18 @@ export function PublicSignupScreen() {
     );
   }
 
-  const {
-    confirmedPairs,
-    waitlistedPairs,
-    lookingForPartner,
-    confirmedPairCount,
-    pairSpacesLeft: spaces,
-  } = buildSignupRosterView(data.registrations, data.event.capacityTeams);
+  const isIndividualV2 = data.event.protocolVersion === 2 && data.event.entryMode === 'individual';
+  const capacity = data.event.capacity?.value ?? data.event.capacityTeams;
+  const pairRoster = buildSignupRosterView(data.registrations, data.event.capacityTeams);
+  const confirmedPairs = isIndividualV2
+    ? data.registrations.filter((registration) => registration.status === 'confirmed')
+    : pairRoster.confirmedPairs;
+  const waitlistedPairs = isIndividualV2
+    ? data.registrations.filter((registration) => registration.status === 'waitlisted')
+    : pairRoster.waitlistedPairs;
+  const lookingForPartner = isIndividualV2 ? [] : pairRoster.lookingForPartner;
+  const confirmedPairCount = confirmedPairs.length;
+  const spaces = Math.max(0, capacity - confirmedPairCount);
   const countdown = getCountdownParts(data.event.startsAt, clockNow);
   const eventEnded = Boolean(data.event.endsAt && Date.parse(data.event.endsAt) <= clockNow);
   const eventCancelled = Boolean(data.event.cancelledAt);
@@ -338,13 +432,15 @@ export function PublicSignupScreen() {
         <span>
           <strong>{registrationLabel(registration)}</strong>
           {isPair && registration.teamName && <small>{registration.playerOne} & {registration.playerTwo}</small>}
-          {!isPair && <small>Solo player looking for a partner</small>}
+          {!isPair && !isIndividualV2 && <small>Solo player looking for a partner</small>}
         </span>
         <span className="signup-public-row-actions">
           <span className={'signup-public-status ' + (kind === 'confirmed' ? 'confirmed' : 'waiting')}>
-            {isPair ? (waiting ? 'PAIR · WAITING' : 'PAIR · CONFIRMED') : 'NEEDS PARTNER'}
+            {isIndividualV2
+              ? (waiting ? 'PLAYER · WAITING' : 'PLAYER · CONFIRMED')
+              : isPair ? (waiting ? 'PAIR · WAITING' : 'PAIR · CONFIRMED') : 'NEEDS PARTNER'}
           </span>
-          {!isPair && registrationsOpen && (
+          {!isIndividualV2 && !isPair && registrationsOpen && (
             <button className="btn signup-public-join" type="button" onClick={() => startJoin(registration)}>
               Join
             </button>
@@ -402,8 +498,8 @@ export function PublicSignupScreen() {
           <strong>{!registrationsOpen
             ? eventCancelled ? 'Event cancelled' : eventEnded ? 'Event ended' : 'Registration closed'
             : spaces > 0
-              ? `${spaces} team space${spaces === 1 ? '' : 's'} left`
-              : 'Confirmed teams full'}</strong>
+              ? `${spaces} ${isIndividualV2 ? 'player' : 'team'} space${spaces === 1 ? '' : 's'} left`
+              : `Confirmed ${isIndividualV2 ? 'players' : 'teams'} full`}</strong>
           <span>{!registrationsOpen
             ? eventCancelled
               ? data.event.cancellationMessage || 'This event has been cancelled by the organiser.'
@@ -413,8 +509,12 @@ export function PublicSignupScreen() {
               ? 'This event has already started.'
               : 'Registrations have been closed by the organiser.'
             : spaces > 0
-              ? 'Register a pair, or join the partner list solo.'
-              : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
+              ? isIndividualV2
+                ? 'Register as a player. Partners change each round.'
+                : 'Register a pair, or join the partner list solo.'
+              : isIndividualV2
+                ? 'New players join the waiting list.'
+                : 'New pairs join the waiting list. Solo players can still look for a partner.'}</span>
         </div>
         </div>
         <div className="ed-court-photo" role="img" aria-label="Padel court" />
@@ -437,26 +537,32 @@ export function PublicSignupScreen() {
               <span>THE LINE-UP</span>
               <h2>Who's playing</h2>
             </div>
-            <strong>{confirmedPairCount}/{data.event.capacityTeams}</strong>
+            <strong>{confirmedPairCount}/{capacity}</strong>
           </div>
-          <div className="ed-roster-fill" aria-label={`${confirmedPairCount} of ${data.event.capacityTeams} teams confirmed`}><span style={{width: `${data.event.capacityTeams > 0 ? Math.min(100, confirmedPairCount / data.event.capacityTeams * 100) : 0}%`}} /></div>
-          <p className="signup-public-priority-note">Pairs have priority. Solo players can be joined by another player here.</p>
+          <div className="ed-roster-fill" aria-label={`${confirmedPairCount} of ${capacity} ${isIndividualV2 ? 'players' : 'teams'} confirmed`}><span style={{width: `${capacity > 0 ? Math.min(100, confirmedPairCount / capacity * 100) : 0}%`}} /></div>
+          <p className="signup-public-priority-note">
+            {isIndividualV2
+              ? 'Players rotate partners each round. Points belong to each player.'
+              : 'Pairs have priority. Solo players can be joined by another player here.'}
+          </p>
 
           <div className="signup-public-list">
             {(showAllTeams ? confirmedPairs : confirmedPairs.slice(0, 6)).map((registration, index) => rosterRow(registration, index + 1, 'confirmed'))}
-            {confirmedPairs.length === 0 && <div className="signup-public-empty">No confirmed teams yet.</div>}
+            {confirmedPairs.length === 0 && <div className="signup-public-empty">No confirmed {isIndividualV2 ? 'players' : 'teams'} yet.</div>}
           </div>
 
           {confirmedPairs.length > 6 && <button className="ed-show-teams" type="button" aria-expanded={showAllTeams} onClick={() => setShowAllTeams(value => !value)}>{showAllTeams ? 'Show fewer teams' : `Show all ${confirmedPairs.length} teams`}</button>}
 
-          <div className="signup-public-waiting-head">
-            <span>LOOKING FOR A PARTNER</span>
-            <strong>{lookingForPartner.length}</strong>
-          </div>
-          <div className="signup-public-list waiting">
-            {lookingForPartner.map((registration, index) => rosterRow(registration, index + 1, 'solo'))}
-            {lookingForPartner.length === 0 && <div className="signup-public-empty">Nobody is looking for a partner.</div>}
-          </div>
+          {!isIndividualV2 && <>
+            <div className="signup-public-waiting-head">
+              <span>LOOKING FOR A PARTNER</span>
+              <strong>{lookingForPartner.length}</strong>
+            </div>
+            <div className="signup-public-list waiting">
+              {lookingForPartner.map((registration, index) => rosterRow(registration, index + 1, 'solo'))}
+              {lookingForPartner.length === 0 && <div className="signup-public-empty">Nobody is looking for a partner.</div>}
+            </div>
+          </>}
 
           <div className="signup-public-waiting-head">
             <span>WAITING LIST</span>
@@ -500,6 +606,8 @@ export function PublicSignupScreen() {
               <span>{result.kind === 'solo' || result.status === 'confirmed' ? '✓' : result.position}</span>
               <h2>{result.missing
                 ? 'No longer on the live list'
+                : result.kind === 'player'
+                ? result.status === 'confirmed' ? 'You’re confirmed!' : 'You’re on the waiting list'
                 : result.kind === 'solo'
                 ? 'You’re looking for a partner!'
                 : result.status === 'confirmed'
@@ -508,6 +616,10 @@ export function PublicSignupScreen() {
               <p>
                 {result.missing
                   ? 'The organiser may have changed or removed this registration. Contact them to confirm what happened.'
+                  : result.kind === 'player'
+                  ? result.status === 'confirmed'
+                    ? 'You are on the player list. Your partner will change each round.'
+                    : `You are waiting-list position ${result.position}. The list updates automatically when places change.`
                   : result.kind === 'solo'
                   ? 'Another player can join you from the live partner list. A team place is counted only after you form a pair.'
                   : result.status === 'confirmed'
@@ -523,7 +635,9 @@ export function PublicSignupScreen() {
               <div className="signup-public-section-head">
                 <div>
                   <span>NO ACCOUNT NEEDED</span>
-                  <h2>{signupMode === 'solo'
+                  <h2>{isIndividualV2
+                    ? spaces > 0 ? 'Save your spot.' : 'Join the waiting list'
+                    : signupMode === 'solo'
                     ? 'Find a partner'
                     : spaces > 0
                       ? 'Save your spot.'
@@ -542,26 +656,26 @@ export function PublicSignupScreen() {
                 </div>
               ) : (
                 <div className="signup-public-form">
-                  <div className="signup-public-mode" role="group" aria-label="Sign-up type">
+                  {!isIndividualV2 && <div className="signup-public-mode" role="group" aria-label="Sign-up type">
                     <button className={signupMode === 'pair' ? 'active' : ''} aria-pressed={signupMode === 'pair'} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('pair'); }}>
                       Sign up as a pair
                     </button>
                     <button className={signupMode === 'solo' ? 'active' : ''} aria-pressed={signupMode === 'solo'} type="button" onClick={() => { registerRequestId.current = null; setSignupMode('solo'); }}>
                       Sign up solo
                     </button>
-                  </div>
-                  {signupMode === 'pair' && (
+                  </div>}
+                  {!isIndividualV2 && signupMode === 'pair' && (
                     <label>
                       <span>Pair name <small>optional</small></span>
                       <input value={teamName} onChange={(e) => { registerRequestId.current = null; setTeamName(e.target.value); }} placeholder="The Smashers" />
                     </label>
                   )}
                   <label>
-                    <span>{signupMode === 'pair' ? 'Player one' : 'Your name'}</span>
+                    <span>{isIndividualV2 || signupMode === 'solo' ? 'Your name' : 'Player one'}</span>
                     <input ref={playerOneRef} value={playerOne} onChange={(e) => { registerRequestId.current = null; setPlayerOne(e.target.value); setFieldErrors((current) => ({ ...current, playerOne: '' })); }} autoComplete="name" aria-invalid={Boolean(fieldErrors.playerOne)} aria-describedby={fieldErrors.playerOne ? 'player-one-error' : undefined} />
                     {fieldErrors.playerOne && <small id="player-one-error" className="signup-field-error">{fieldErrors.playerOne}</small>}
                   </label>
-                  {signupMode === 'pair' && (
+                  {!isIndividualV2 && signupMode === 'pair' && (
                     <label>
                       <span>Player two</span>
                       <input ref={playerTwoRef} value={playerTwo} onChange={(e) => { registerRequestId.current = null; setPlayerTwo(e.target.value); setFieldErrors((current) => ({ ...current, playerTwo: '' })); }} autoComplete="name" aria-invalid={Boolean(fieldErrors.playerTwo)} aria-describedby={fieldErrors.playerTwo ? 'player-two-error' : undefined} />
@@ -578,7 +692,7 @@ export function PublicSignupScreen() {
                     <input value={website} onChange={(e) => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
                   </label>
                   <button className="btn primary full lg" type="button" disabled={submitting} onClick={register}>
-                    {submitting ? 'Registering…' : signupMode === 'pair' ? 'Register our pair' : 'Register me'}
+                    {submitting ? 'Registering…' : isIndividualV2 ? 'Register as a player' : signupMode === 'pair' ? 'Register our pair' : 'Register me'}
                   </button>
                   <p className="signup-public-private">
                     Player names appear on the public list. Contact details are visible only to the organiser. See our <a href="/privacy/" target="_blank" rel="noreferrer">privacy policy</a>.

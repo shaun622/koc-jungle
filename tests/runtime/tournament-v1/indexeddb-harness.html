@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Tournament IndexedDB harness</title></head>
+<body><main id="status">Loading real-browser IndexedDB harness…</main>
+<script type="module">
+import { createTournamentV1 } from '/src/logic/tournament/index.ts';
+import { createTournamentRecord, createTournamentRepository } from '/src/store/tournamentRepository.ts';
+
+const status = document.querySelector('#status');
+const owner = 'browser-owner';
+const transactionDone = (transaction) => new Promise((resolve, reject) => {
+  transaction.oncomplete = () => resolve();
+  transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction failed.'));
+});
+const deleteDatabase = (name) => new Promise((resolve, reject) => {
+  const request = indexedDB.deleteDatabase(name);
+  request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); request.onblocked = () => reject(new Error('Delete blocked.'));
+});
+const openVersionOne = (name, record) => new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'key' }).put(record);
+  request.onsuccess = () => { request.result.close(); resolve(); };
+  request.onerror = () => reject(request.error);
+});
+const holdVersionOne = (name) => new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'key' });
+  request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+});
+const putRaw = async (name, record) => {
+  const request = indexedDB.open(name, 2);
+  const database = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  const transaction = database.transaction('records', 'readwrite');
+  transaction.objectStore('records').put(record);
+  await transactionDone(transaction); database.close();
+};
+const newState = (id) => createTournamentV1({ id, title: 'Browser durability', now: 1, divisionId: `division-${id}`, courtIds: [`court-${id}`] });
+
+async function setupShared(name, tabId = 'tab-a') {
+  await deleteDatabase(name).catch(() => undefined);
+  const repository = createTournamentRepository(indexedDB, { databaseName: name });
+  const record = createTournamentRecord(owner, newState('shared'), 1);
+  record.localTabOwner = { tabId, version: 1, claimedAt: 1 };
+  await repository.create(record);
+  return { localVersion: record.localVersion, fenceVersion: 1 };
+}
+async function claimShared(name, expectedFenceVersion, tabId) {
+  const repository = createTournamentRepository(indexedDB, { databaseName: name });
+  const claimed = await repository.claimTab(owner, 'shared', expectedFenceVersion, tabId, 2);
+  return claimed && { localVersion: claimed.localVersion, fenceVersion: claimed.localTabOwner.version, tabId: claimed.localTabOwner.tabId };
+}
+async function mutateShared(name, tabId, key) {
+  const repository = createTournamentRepository(indexedDB, { databaseName: name });
+  const current = await repository.get(owner, 'shared');
+  try {
+    const saved = await repository.mutate(owner, 'shared', { expectedLocalVersion: current.localVersion, tabId, now: 3 }, (record) => ({ ...record, drafts: { ...record.drafts, formByKey: { ...record.drafts.formByKey, [key]: true } } }));
+    return { applied: true, localVersion: saved.localVersion };
+  } catch (error) { return { applied: false, message: error instanceof Error ? error.message : String(error) }; }
+}
+
+async function run() {
+  const failures = [];
+  const check = (condition, message) => { if (!condition) failures.push(message); };
+
+  const databaseName = `koc-tournament-v7-${crypto.randomUUID()}`;
+  await deleteDatabase(databaseName).catch(() => undefined);
+  const repository = createTournamentRepository(indexedDB, { databaseName });
+  const record = createTournamentRecord(owner, newState('valid'), 1);
+  record.localTabOwner = { tabId: 'tab-a', version: 1, claimedAt: 1 };
+  record.drafts.scoreByFixture['score-draft-id'] = { sets: [{ gamesA: 5, gamesB: 3 }] };
+  await repository.create(record);
+  const first = await repository.mutate(owner, 'valid', { expectedLocalVersion: '0', tabId: 'tab-a', now: 2 }, (current) => ({ ...current, drafts: { ...current.drafts, formByKey: { saved: true } } }));
+  check(first.localVersion === '1' && first.drafts.formByKey.saved === true, 'completed mutation was not durable');
+
+  try {
+    await repository.mutate(owner, 'valid', { expectedLocalVersion: '1', tabId: 'tab-a', now: 3 }, () => { throw new Error('injected abort'); });
+    failures.push('injected abort unexpectedly committed');
+  } catch { /* expected */ }
+  const afterAbort = await repository.get(owner, 'valid');
+  check(afterAbort.localVersion === '1' && afterAbort.drafts.formByKey.saved === true, 'aborted transaction changed durable bytes');
+
+  try {
+    await repository.mutate(owner, 'valid', { expectedLocalVersion: '1', tabId: 'tab-b', now: 4 }, (current) => current);
+    failures.push('stale tab unexpectedly wrote');
+  } catch { /* expected */ }
+
+  await putRaw(databaseName, { key: `${owner}:corrupt`, ownerId: owner, tournamentId: 'corrupt', sentinel: 'original-corrupt-bytes' });
+  const visible = await repository.list(owner);
+  const quarantine = await repository.listQuarantine();
+  check(visible.length === 1 && visible[0].tournamentId === 'valid', 'corrupt record hid a valid event');
+  check(quarantine.some((item) => item.original?.sentinel === 'original-corrupt-bytes'), 'quarantined original bytes are not exportable');
+  check(!JSON.stringify(visible[0]).includes('capability'), 'generic record exposed controller capability material');
+
+  const migrationName = `koc-tournament-v7-migration-${crypto.randomUUID()}`;
+  const legacy = structuredClone(record);
+  legacy.storageVersion = 1;
+  delete legacy.mode; delete legacy.remoteStatus; delete legacy.acknowledgedContacts;
+  await openVersionOne(migrationName, legacy);
+  const migratedRepository = createTournamentRepository(indexedDB, { databaseName: migrationName });
+  const migrated = await migratedRepository.get(owner, 'valid');
+  check(migrated?.storageVersion === 2, 'valid legacy record did not upcast');
+  check(migrated?.projected.ruleProfiles[0].id === record.projected.ruleProfiles[0].id, 'rule ID changed during upcast');
+  check(migrated?.drafts.scoreByFixture['score-draft-id']?.sets[0].gamesA === 5, 'score draft identity/content changed during upcast');
+
+  const blockedName = `koc-tournament-v7-blocked-${crypto.randomUUID()}`;
+  const blockingConnection = await holdVersionOne(blockedName);
+  const blockedRepository = createTournamentRepository(indexedDB, { databaseName: blockedName });
+  let blockedRejected = false;
+  try { await blockedRepository.list(owner); } catch (error) { blockedRejected = /blocked/i.test(error instanceof Error ? error.message : String(error)); }
+  check(blockedRejected, 'blocked schema upgrade did not fail visibly');
+  blockingConnection.close();
+
+  await deleteDatabase(databaseName).catch(() => undefined);
+  await deleteDatabase(migrationName).catch(() => undefined);
+  await deleteDatabase(blockedName).catch(() => undefined);
+  status.textContent = failures.length ? failures.join('; ') : 'PASS';
+  return { pass: failures.length === 0, failures };
+}
+
+globalThis.tournamentHarness = { ready: true, run, setupShared, claimShared, mutateShared };
+status.textContent = 'READY';
+</script></body></html>

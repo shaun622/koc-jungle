@@ -1,0 +1,25 @@
+{
+  "title": "Jungle Gold & Silver",
+  "venue": "Jungle Padel Sanur",
+  "timeZone": "Asia/Makassar",
+  "division": "Open",
+  "courts": ["Court 1", "Court 2", "Court 3", "Court 4"],
+  "entries": [
+    ["Team 01", "Player 01A", "Player 01B"],
+    ["Team 02", "Player 02A", "Player 02B"],
+    ["Team 03", "Player 03A", "Player 03B"],
+    ["Team 04", "Player 04A", "Player 04B"],
+    ["Team 05", "Player 05A", "Player 05B"],
+    ["Team 06", "Player 06A", "Player 06B"],
+    ["Team 07", "Player 07A", "Player 07B"],
+    ["Team 08", "Player 08A", "Player 08B"],
+    ["Team 09", "Player 09A", "Player 09B"],
+    ["Team 10", "Player 10A", "Player 10B"],
+    ["Team 11", "Player 11A", "Player 11B"],
+    ["Team 12", "Player 12A", "Player 12B"],
+    ["Team 13", "Player 13A", "Player 13B"],
+    ["Team 14", "Player 14A", "Player 14B"],
+    ["Team 15", "Player 15A", "Player 15B"],
+    ["Team 16", "Player 16A", "Player 16B"]
+  ]
+}

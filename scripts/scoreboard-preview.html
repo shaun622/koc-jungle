@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>KoC night — quieter design preview</title></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Montserrat:wght@600;700;800;900&display=swap');
+#koc-proportions{--koc-bg:#091910;--koc-panel:#12271e;--koc-line:#2b4435;--koc-text:#f0f5e9;--koc-muted:#b7c9b3;--koc-lime:#c0f277;--koc-timer:#192f20;color-scheme:dark;container:kocmock / inline-size;width:100%;font-family:Lato,Arial,sans-serif;color:var(--koc-text)}
+#koc-proportions *{box-sizing:border-box}
+#koc-proportions button{font-family:inherit;cursor:pointer}
+#koc-proportions .koc-window{background:var(--koc-bg);width:100%;height:clamp(720px,53cqw,1000px);display:grid;grid-template-rows:64px minmax(0,1fr) 62px;gap:14px;overflow:hidden}
+#koc-proportions .koc-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 20px;background:#183c2c;border-bottom:1px solid #35563f}
+#koc-proportions .koc-brand{display:flex;align-items:center;gap:12px;min-width:0}
+#koc-proportions .koc-logo{width:40px;height:40px;border:1px solid #57723b;border-radius:10px;background:#152419;display:grid;place-items:center;font-size:26px;flex-shrink:0}
+#koc-proportions .koc-brand strong{font:800 clamp(16px,1.25cqw,23px)/1.15 Montserrat,Arial,sans-serif}
+#koc-proportions .koc-brand small{display:block;color:#c3d8ba;font-size:14px;margin-top:4px}
+#koc-proportions .koc-top-meta{font-size:15px;display:flex;align-items:center;gap:18px;color:#c6d9ba;white-space:nowrap}
+#koc-proportions .koc-indicator{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid #426344;border-radius:7px;color:var(--koc-lime)}
+#koc-proportions .koc-indicator:before{content:'';width:6px;height:6px;border-radius:100%;background:currentColor}
+#koc-proportions .koc-body{display:grid;grid-template-columns:minmax(0,22%) minmax(0,1fr);gap:14px;padding:0 14px;min-height:0;min-width:0}
+#koc-proportions .koc-panel{background:var(--koc-panel);border:1px solid var(--koc-line);border-radius:13px;min-width:0;min-height:0}
+#koc-proportions .koc-standings{padding:14px 12px;display:flex;flex-direction:column}
+#koc-proportions .koc-standing-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 0 12px;border-bottom:1px solid var(--koc-line)}
+#koc-proportions h2{font:800 clamp(16px,1.3cqw,24px)/1.1 Montserrat,Arial,sans-serif;margin:0}
+#koc-proportions .koc-standing-head span{font-size:12px;color:var(--koc-muted);white-space:nowrap}
+#koc-proportions .koc-ranks{display:flex;flex-direction:column;flex:1;min-height:0}
+#koc-proportions .koc-rank{display:grid;grid-template-columns:20px minmax(0,1fr) 27px;align-items:center;gap:5px;min-height:0;flex:1;border-bottom:1px solid #294133}
+#koc-proportions .koc-rank:last-child{border:0}
+#koc-proportions .koc-rank>span{color:var(--koc-muted);font-size:13px}
+#koc-proportions .koc-rank:first-child>span{color:var(--koc-lime)}
+#koc-proportions .koc-rank-name{min-width:0;display:grid;gap:2px}
+#koc-proportions .koc-rank-name strong{font-size:clamp(13px,1.04cqw,18px);line-height:1.12;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#koc-proportions .koc-rank-name small{font-size:clamp(11px,.93cqw,16px);line-height:1.15;color:var(--koc-muted);white-space:nowrap}
+#koc-proportions .koc-rank>b{font:800 clamp(17px,1.3cqw,24px)/1 Montserrat,Arial,sans-serif;text-align:right;font-variant-numeric:tabular-nums}
+#koc-proportions .koc-main{display:grid;grid-template-rows:clamp(108px,10.3cqw,162px) minmax(0,1fr);gap:14px;min-height:0;min-width:0}
+#koc-proportions .koc-centre{display:grid;grid-template-columns:minmax(100px,.85fr) minmax(0,1.3fr) auto minmax(0,1.3fr);align-items:center;gap:15px;padding:15px 20px;background:#20472e;border-color:#5a7d3d;box-shadow:inset 3px 0 0 var(--koc-lime)}
+#koc-proportions .koc-crown{color:var(--koc-lime);font-size:clamp(11px,1cqw,16px);font-weight:900;letter-spacing:.05em;display:flex;align-items:center;gap:6px}
+#koc-proportions .koc-crown svg{width:18px;height:18px}
+#koc-proportions .koc-centre-title h2{margin:7px 0 8px;font-size:clamp(18px,1.8cqw,32px)}
+#koc-proportions .koc-centre-title small{font-size:13px;color:var(--koc-lime)}
+#koc-proportions .koc-feature-pair{display:grid;gap:6px;min-width:0}
+#koc-proportions .koc-feature-pair:last-child{text-align:right}
+#koc-proportions .koc-feature-pair small{font-size:clamp(12px,1cqw,17px);color:#c4d9b9}
+#koc-proportions .koc-feature-pair strong{font:800 clamp(16px,1.6cqw,28px)/1.15 Montserrat,Arial,sans-serif;overflow-wrap:anywhere}
+#koc-proportions .koc-feature-score{display:flex;align-items:center;gap:clamp(10px,1.3cqw,25px);font-variant-numeric:tabular-nums}
+#koc-proportions .koc-feature-score>b{font:800 clamp(40px,4.1cqw,74px)/1 Montserrat,Arial,sans-serif}
+#koc-proportions .koc-feature-score>span{color:var(--koc-lime);font-weight:900;font-size:18px}
+#koc-proportions .koc-lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.18fr) minmax(0,1fr);gap:14px;min-height:0;min-width:0}
+#koc-proportions .koc-courts{display:grid;grid-auto-rows:minmax(0,1fr);gap:10px;min-width:0;min-height:0}
+#koc-proportions .koc-court{padding:7px 11px;display:grid;grid-template-rows:auto minmax(0,1fr) minmax(0,1fr);min-height:0}
+#koc-proportions .koc-court-head{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--koc-line);padding-bottom:3px}
+#koc-proportions .koc-court-head h2{font-size:clamp(16px,1.4cqw,25px)}
+#koc-proportions .koc-court-head span{font-size:12px;color:var(--koc-muted);white-space:nowrap}
+#koc-proportions .koc-court-head b{color:var(--koc-lime);font-weight:400}
+#koc-proportions .koc-match-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;min-height:0;padding-top:1px}
+#koc-proportions .koc-match-row+.koc-match-row{border-top:1px solid var(--koc-line)}
+#koc-proportions .koc-pair{display:grid;gap:2px;min-width:0}
+#koc-proportions .koc-pair small{font-size:clamp(11px,.88cqw,15px);line-height:1.05;color:var(--koc-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#koc-proportions .koc-pair strong{font-size:clamp(13px,1.16cqw,20px);line-height:1.1;overflow-wrap:anywhere}
+#koc-proportions .koc-score{display:flex;align-items:center;gap:5px}
+#koc-proportions .koc-score strong{font:800 clamp(25px,2.4cqw,44px)/1 Montserrat,Arial,sans-serif;font-variant-numeric:tabular-nums;min-width:1em;text-align:center}
+#koc-proportions .koc-score button{border:1px solid var(--koc-line);background:#1d3427;color:#8da085;width:clamp(23px,2.2cqw,38px);height:clamp(26px,2.4cqw,40px);font-size:20px;border-radius:6px;padding:0;line-height:1}
+#koc-proportions .koc-timer{container-type:inline-size;background:linear-gradient(180deg,#243d26 0%,var(--koc-timer) 78%);border-color:#496737;border-top:3px solid #b6df7d;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;position:relative;gap:0}
+#koc-proportions .koc-timer-status{font-size:14px;color:#c5d8b8;display:flex;gap:7px;align-items:center;margin-bottom:40px}
+#koc-proportions .koc-timer-status:before{content:'';background:var(--koc-lime);width:6px;height:6px;border-radius:50%}
+#koc-proportions .koc-timer-caption{font-size:clamp(12px,5cqw,18px);color:#bfd3b2;text-transform:uppercase;letter-spacing:.12em}
+#koc-proportions .koc-time{font:800 35cqw/1 Montserrat,Arial,sans-serif;letter-spacing:-.075em;font-variant-numeric:tabular-nums;color:var(--koc-lime);margin:12px 0 21px;padding-right:.08em;white-space:nowrap}
+#koc-proportions .koc-progress{width:86%;height:5px;background:#314b34;border-radius:3px;overflow:hidden}
+#koc-proportions .koc-progress>span{display:block;height:100%;width:68.5%;background:#b7e379}
+#koc-proportions .koc-round{font:700 clamp(18px,8cqw,30px)/1.2 Montserrat,Arial,sans-serif;margin-top:22px;color:var(--koc-text);text-align:center}
+#koc-proportions .koc-round span{font-weight:400;color:#b7c9a8}
+#koc-proportions .koc-pace{font-size:clamp(12px,5cqw,17px);color:#b7c9a8;margin-top:8px;text-align:center}
+#koc-proportions .koc-up-next{position:absolute;bottom:22px;font-size:14px;color:#b7c9a8;text-align:center}
+#koc-proportions .koc-up-next strong{color:#e6efdb;margin-left:6px}
+#koc-proportions .koc-operator{display:flex;align-items:center;gap:9px;padding:0 16px;border-top:1px solid var(--koc-line);background:#12271e}
+#koc-proportions .koc-operator button{padding:10px 14px;font-size:14px;border-radius:8px;border:1px solid #3b5940;background:#1b3525;color:var(--koc-text);min-height:40px;white-space:nowrap}
+#koc-proportions .koc-operator .koc-resume{background:var(--koc-lime);border-color:var(--koc-lime);color:#122810;font-weight:900;min-width:125px}
+#koc-proportions .koc-operator .koc-end{margin-left:auto;background:transparent}
+#koc-proportions .koc-operator .koc-preview-label{margin-left:10px;color:#a1b596;font-size:12px;letter-spacing:.07em;text-transform:uppercase}
+#koc-proportions[data-layout='current'] .koc-body{margin-inline:6.8%;grid-template-columns:minmax(0,24%) minmax(0,1fr)}
+#koc-proportions[data-layout='current'] .koc-lower{grid-template-columns:minmax(0,1fr) minmax(0,.68fr) minmax(0,1fr)}
+#koc-proportions[data-layout='current'] .koc-time{font-size:28cqw}
+#koc-proportions[data-layout='current'] .koc-round{position:absolute;top:20px;font-size:clamp(14px,7cqw,23px)}
+#koc-proportions[data-layout='current'] .koc-timer-status{position:absolute;top:62px}
+#koc-proportions[data-layout='current'] .koc-pace{font-size:12px}
+#koc-proportions[data-courts='3'] .koc-lower{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr)}
+#koc-proportions[data-courts='3'] .koc-ranks{flex:0 0 auto}
+#koc-proportions[data-courts='3'] .koc-rank{padding:16px 0;flex:none}
+#koc-proportions[data-courts='3'] .koc-pair strong{font-size:clamp(16px,1.5cqw,24px)}
+#koc-proportions[data-courts='3'][data-layout='current'] .koc-lower{grid-template-columns:minmax(0,1fr) minmax(0,.68fr) minmax(0,1fr)}
+@container kocmock (max-width:900px){
+ #koc-proportions .koc-window{height:auto;min-height:720px;grid-template-rows:64px auto 62px}
+ #koc-proportions .koc-body{grid-template-columns:minmax(185px,26%) minmax(0,1fr);gap:10px;padding:0 10px}
+ #koc-proportions .koc-lower{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+ #koc-proportions .koc-timer{grid-column:1/-1;grid-row:1;height:200px;container-type:size;padding:12px;display:grid;grid-template-columns:1fr 1.3fr 1fr;grid-template-rows:auto auto auto;gap:5px 12px}
+ #koc-proportions .koc-time{font-size:clamp(56px,15cqw,104px);grid-column:2;grid-row:1/4;margin:0}
+ #koc-proportions .koc-timer-caption{grid-column:1;grid-row:1;letter-spacing:0;font-size:12px}
+ #koc-proportions .koc-timer-status{grid-column:1;grid-row:2;margin:0;justify-content:center}
+ #koc-proportions .koc-round{grid-column:3;grid-row:1;margin:0;font-size:18px}
+ #koc-proportions .koc-pace{grid-column:3;grid-row:2;margin:0;font-size:12px}
+ #koc-proportions .koc-progress{grid-column:1/-1;grid-row:3;align-self:end;justify-self:center}
+ #koc-proportions .koc-up-next{display:none}
+ #koc-proportions .koc-courts{grid-row:2;grid-auto-rows:minmax(130px,1fr)}
+ #koc-proportions .koc-centre{gap:9px;padding:12px;grid-template-columns:1fr auto 1fr}
+ #koc-proportions .koc-centre-title{grid-column:1/-1;display:flex;align-items:center;gap:10px}
+ #koc-proportions .koc-centre-title h2{margin:0;font-size:17px}
+ #koc-proportions .koc-crown{font-size:11px}
+ #koc-proportions .koc-main{grid-template-rows:125px minmax(0,1fr);gap:10px}
+ #koc-proportions .koc-score button{display:none}
+ #koc-proportions .koc-standing-head{align-items:start;flex-direction:column}
+ #koc-proportions .koc-top-meta{font-size:13px;gap:8px}
+ #koc-proportions .koc-operator .koc-preview-label{display:none}
+}
+@container kocmock (max-width:600px){
+ #koc-proportions .koc-window{grid-template-rows:auto auto auto;gap:10px}
+ #koc-proportions .koc-top{padding:12px;align-items:start}
+ #koc-proportions .koc-top-meta{display:none}
+ #koc-proportions .koc-body{display:flex;flex-direction:column}
+ #koc-proportions .koc-standings{order:2}
+ #koc-proportions .koc-rank{padding:8px 0;flex:none}
+ #koc-proportions .koc-standing-head{flex-direction:row}
+ #koc-proportions .koc-rank-name strong{font-size:14px}
+ #koc-proportions .koc-rank-name small{font-size:13px}
+ #koc-proportions .koc-operator{padding:10px;flex-wrap:wrap}
+ #koc-proportions .koc-operator button{padding:10px;font-size:13px}
+ #koc-proportions .koc-operator .koc-end{margin-left:0}
+ #koc-proportions .koc-timer{height:190px}
+ #koc-proportions .koc-time{font-size:20cqw}
+ #koc-proportions .koc-timer-caption{font-size:11px}
+ #koc-proportions .koc-round{font-size:14px}
+ #koc-proportions .koc-pace{font-size:11px}
+}
+</style>
+<div id="koc-proportions" data-layout="adjusted" data-courts="8" aria-label="Scoreboard proportions">
+ <div class="koc-window">
+  <header class="koc-top">
+   <div class="koc-brand"><div class="koc-logo"><img src="/icons/icon-192.png" alt="Padel Tournament Maker"></div><div><strong>Silver King of the Court</strong><small>Jungle Padel Sanur · Round 3 of 6</small></div></div>
+   <div class="koc-top-meta"><span data-count-label>16 teams · 8 courts</span><span class="koc-indicator">Paused</span></div>
+  </header>
+  <div class="koc-body">
+   <aside class="koc-panel koc-standings" aria-label="All team standings"><div class="koc-standing-head"><h2>Standings</h2><span>After round 2</span></div><div class="koc-ranks"></div></aside>
+   <main class="koc-main">
+    <section class="koc-panel koc-centre" aria-label="King's Court"></section>
+    <div class="koc-lower">
+     <div class="koc-courts" data-side="left"></div>
+     <section class="koc-panel koc-timer" aria-label="Round timer">
+      <div class="koc-timer-status">Paused</div><div class="koc-timer-caption">Time remaining</div>
+      <div class="koc-time">13:42</div><div class="koc-progress"><span></span></div>
+      <div class="koc-round">Round 3 <span>/ 6</span></div><div class="koc-pace">20 minute round</div>
+      <div class="koc-up-next">Up next<strong>Round 4</strong></div>
+     </section>
+     <div class="koc-courts" data-side="right"></div>
+    </div>
+   </main>
+  </div>
+  <footer class="koc-operator"><button type="button" data-time-delta="-60" aria-label="Subtract a minute">−1 min</button><button type="button" data-time-delta="60" aria-label="Add a minute">+1 min</button><button type="button" class="koc-resume">▶ Resume</button><span class="koc-preview-label">Design preview</span><button type="button" class="koc-end">End round →</button></footer>
+ </div>
+</div>
+<script>
+(() => {
+ const root = document.getElementById('koc-proportions');
+ const options = { layout: 'adjusted', courts: '8' };
+ const teams = [
+  ['The Smashers','Jon & Sven',10],['Espanas','Chris DH & William',8],
+  ['Ruloz','Dave G & Justin H',12],['Team Germany','Luke & Bart',0],
+  ['The Woowhoos','Jang & Rolan',14],['Net Positive','Antoine & Darren',6],
+  ['Pair 7','Mark B & Matthias',16],['Pair 8','Oli & Will',0],
+  ['Pair 9','Maxime & Jonas',18],['Pair 10','Andy S & Zach',4],
+  ['Pair 11','Wallace & Patrick',20],['Pair 12','Nikil & Ramon',2],
+  ['Pair 13','Jeroen & Alex',22],['Pair 14','Tom WH & David',0],
+  ['Court Crew','Arjun & Felix',24],['Bali Aces','Ben & Rafael',0]
+ ];
+ let remaining = 822, playing = false;
+ function pair(team) { return `<div class="koc-pair"><small>${team[0]}</small><strong>${team[1]}</strong></div>`; }
+ function row(team,score) { return `<div class="koc-match-row">${pair(team)}<div class="koc-score"><button type="button" data-score-delta="-1" aria-label="Reduce ${team[0]} score">−</button><strong>${score}</strong><button type="button" data-score-delta="1" aria-label="Increase ${team[0]} score">+</button></div></div>`; }
+ function court(number) { const a=teams[(number-1)*2],b=teams[(number-1)*2+1];return `<section class="koc-panel koc-court" aria-label="Court ${number}"><div class="koc-court-head"><h2>Court ${number}</h2><span><b>${number+2}</b> PTS</span></div>${row(a,7)}${row(b,5)}</section>`; }
+ function paintTime() { root.querySelector('.koc-time').textContent=`${String(Math.floor(remaining/60)).padStart(2,'0')}:${String(remaining%60).padStart(2,'0')}`;root.querySelector('.koc-progress>span').style.width=`${Math.min(100,remaining/1200*100)}%`; }
+ function render() {
+  const count=Number(options.courts);root.dataset.layout=options.layout;root.dataset.courts=options.courts;
+  root.querySelector('[data-count-label]').textContent=`${count*2} teams · ${count} courts`;
+  const active=teams.slice(0,count*2),ranked=[...active].sort((a,b)=>b[2]-a[2]);
+  root.querySelector('.koc-ranks').innerHTML=ranked.map((t,i)=>`<div class="koc-rank"><span>${i===0?'♛':i+1}</span><div class="koc-rank-name"><strong>${t[0]}</strong><small>${t[1]}</small></div><b>${t[2]}</b></div>`).join('');
+  const a=active.at(-2),b=active.at(-1);
+  root.querySelector('.koc-centre').innerHTML=`<div class="koc-centre-title"><div class="koc-crown"><i data-lucide="crown" aria-hidden="true"></i>KING’S COURT</div><h2>Centre Court</h2><small>${count+2} POINTS</small></div><div class="koc-feature-pair"><small>${a[0]}</small><strong>${a[1]}</strong></div><div class="koc-feature-score"><b>7</b><span>vs</span><b>5</b></div><div class="koc-feature-pair"><small>${b[0]}</small><strong>${b[1]}</strong></div>`;
+  const side=Array.from({length:count-1},(_,i)=>count-1-i),split=Math.ceil(side.length/2);
+  root.querySelector('[data-side=left]').innerHTML=side.slice(0,split).map(court).join('');
+  root.querySelector('[data-side=right]').innerHTML=side.slice(split).map(court).join('');
+  if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:18,height:18}});
+  paintTime();
+  root.dispatchEvent(new Event('preview:render'));
+ }
+ root.addEventListener('click',event=>{
+  const button=event.target.closest('button');if(!button)return;
+  if(button.dataset.scoreDelta){const score=button.parentElement.querySelector('strong');score.textContent=String(Math.max(0,Number(score.textContent)+Number(button.dataset.scoreDelta)));}
+  if(button.dataset.timeDelta){remaining=Math.max(0,remaining+Number(button.dataset.timeDelta));paintTime();}
+  if(button.classList.contains('koc-resume')){playing=!playing;button.textContent=playing?'Ⅱ Pause':'▶ Resume';root.querySelector('.koc-timer-status').textContent=playing?'Running':'Paused';root.querySelector('.koc-indicator').textContent=playing?'Running':'Paused';}
+  if(button.classList.contains('koc-end')){remaining=0;playing=false;paintTime();root.querySelector('.koc-timer-status').textContent='Round complete';root.querySelector('.koc-indicator').textContent='Round complete';root.querySelector('.koc-resume').textContent='▶ Resume';}
+ });
+ render();
+ root.preview = { setCourts(value) { options.courts = value; render(); } };
+ if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addSelect(options,'layout',{label:'Layout',options:[{label:'Adjusted — fuller width, larger timer',value:'adjusted'},{label:'Current proportions',value:'current'}]});tweak.addSelect(options,'courts',{label:'Courts',options:[{label:'3 courts · 6 teams',value:'3'},{label:'7 courts · 14 teams',value:'7'},{label:'8 courts · 16 teams',value:'8'}]});}
+})();
+</script>
+
+
+<link rel="stylesheet" href="./scoreboard-preview.css">
+<script src="./scoreboard-preview.js"></script>
+</body></html>
+

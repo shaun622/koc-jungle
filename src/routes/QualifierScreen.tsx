@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { eventRoute } from '@/lib/eventRoutes';
 import { useEventStore } from '@/store/eventStore';
-import { teamLabelShort } from '@/store/selectors';
 import { validateQualifierScore } from '@/logic/validation';
 import { Timer } from '@/components/Timer';
 import { useKeepAwake } from '@/hooks/useKeepAwake';
@@ -80,6 +79,10 @@ export function QualifierScreen() {
           const court = event.courts.find((c) => c.id === m.courtId);
           const teamA = event.teams.find((t) => t.id === m.teamAId);
           const teamB = event.teams.find((t) => t.id === m.teamBId);
+          const playersA = teamA?.players.map((player) => player.name.trim()).filter(Boolean).join(' & ') ?? '';
+          const playersB = teamB?.players.map((player) => player.name.trim()).filter(Boolean).join(' & ') ?? '';
+          const labelA = teamA?.name?.trim() || playersA || 'TBD';
+          const labelB = teamB?.name?.trim() || playersB || 'TBD';
           const sum = m.scoreA + m.scoreB;
           const valid = isTimed ? true : sum === target;
           const tooMuch = sum > target;
@@ -90,7 +93,10 @@ export function QualifierScreen() {
                 <span className="qual-match-court">{court?.name ?? ''}</span>
               </div>
               <div className="qual-row">
-                <div className="name">{teamA ? teamLabelShort(teamA) : 'TBD'}</div>
+                <div className="qual-team">
+                  <div className="name">{labelA}</div>
+                  {playersA && <div className="players">{playersA}</div>}
+                </div>
                 <QualifierScoreInput
                   value={m.scoreA}
                   max={isTimed ? 99 : target}
@@ -102,7 +108,10 @@ export function QualifierScreen() {
                 />
               </div>
               <div className="qual-row">
-                <div className="name">{teamB ? teamLabelShort(teamB) : 'TBD'}</div>
+                <div className="qual-team">
+                  <div className="name">{labelB}</div>
+                  {playersB && <div className="players">{playersB}</div>}
+                </div>
                 <QualifierScoreInput
                   value={m.scoreB}
                   max={isTimed ? 99 : target}

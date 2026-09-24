@@ -5,6 +5,8 @@ dist-ssr
 *.tsbuildinfo
 .vite
 supabase/.temp/
+.local-postgres/
+.release-*/
 
 # Editor
 .vscode/*

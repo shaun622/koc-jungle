@@ -11,7 +11,7 @@ import {
   templateToEventState,
   type Template,
 } from '@/store/templates';
-import { isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
+import { isFeatureLocked, isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
 import { useAuth } from '@/hooks/useAuth';
 import { isIAPAvailable } from '@/lib/iap';
 import { eventRouteForStatus } from '@/lib/eventRoutes';
@@ -22,11 +22,16 @@ import { PaywallModal } from '@/components/PaywallModal';
 import { FormatRulesModal } from '@/components/FormatRulesModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
-import type { EventState, EventStatus, TournamentFormatId } from '@/types/domain';
+import type { EventStatus, TournamentFormatId } from '@/types/domain';
+import type { VersionedEventState } from '@/logic/americanoV2/types';
+import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
 
 import { ArrowRight, CalendarDays, MapPin, Users, Search, MoreHorizontal, Link as LinkIcon } from 'lucide-react';
 import { getOwnedSignup, copySignupLink } from '@/lib/signups';
 import { DesignDialog } from '@/components/DesignDialog';
+import { ENABLE_AMERICANO_V2, ENABLE_TOURNAMENT_V1 } from '@/config/features';
+import type { PairingMode } from '@/logic/americanoV2/types';
+import { LOCAL_TOURNAMENT_OWNER, useTournamentStore } from '@/store/tournamentStore';
 
 
 const RUNNING_STATUSES = new Set<EventStatus>(['qualifier', 'seeding', 'round-in-progress', 'between-rounds']);
@@ -45,8 +50,11 @@ export function featuredLibraryEvent(events: EventCatalogMetadata[]): EventCatal
       .sort((a,b) => Date.parse(a.startsAt!) - Date.parse(b.startsAt!))[0]
     ?? available[0];
 }
-function formatName(format: TournamentFormatId): string {
-  return ({koc:'King of the Court', americano:'Team Americano', 'round-robin':'Round Robin', bracket:'Tournament', mexicano:'Mexicano'})[format];
+function formatName(event: EventCatalogMetadata): string {
+  if (event.format === 'americano' && event.americanoMode) {
+    return event.americanoMode === 'rotating' ? 'Americano · Rotating pairs' : 'Americano · Fixed pairs';
+  }
+  return ({koc:'King of the Court', americano:'Team Americano', 'round-robin':'Round Robin', bracket:'Tournament', mexicano:'Mexicano'})[event.format];
 }
 function statusSummary(event: EventCatalogMetadata): string {
   if (event.signupState === 'cancelled') return 'Sign-up cancelled';
@@ -67,11 +75,13 @@ function dateLabel(event: EventCatalogMetadata): string {
 
 export function HomeScreen() {
   const createEvent = useEventStore(s => s.createEvent);
+  const createAmericanoEvent = useEventStore(s => s.createAmericanoEvent);
   const loadEvent = useEventStore(s => s.loadEvent);
   const selectEvent = useEventStore(s => s.selectEventById);
   const archiveEvent = useEventStore(s => s.archiveLocalEvent);
   const deleteLocalEvent = useEventStore(s => s.deleteLocalEvent);
   const events = useEventCatalogStore(s => s.events);
+  const tournaments = useTournamentStore(s => s.records);
   const catalogError = useEventCatalogStore(s => s.lastError);
   const hydrated = useEventCatalogStore(s => s.hydrated);
   const navigate = useNavigate();
@@ -82,12 +92,14 @@ export function HomeScreen() {
   const [authOpen,setAuthOpen] = useState(false);
   const [paywall,setPaywall] = useState<{
     reason: string;
-    pendingEvent?: { name: string; format: TournamentFormatId };
+    pendingEvent?: { name: string; format: TournamentFormatId; pairingMode?: PairingMode };
+    pendingTournament?: boolean;
   }|null>(null);
   const [rulesForFormat,setRulesForFormat] = useState<TournamentFormatId|null>(null);
   const [deleteTarget,setDeleteTarget] = useState<EventCatalogMetadata|null>(null);
   const [deletingId,setDeletingId] = useState<string|null>(null);
   const [createOpen,setCreateOpen] = useState(false);
+  const [americanoChoice,setAmericanoChoice] = useState(false);
   const [templatesOpen,setTemplatesOpen] = useState(false);
   const [filter,setFilter] = useState<LibraryFilter>('upcoming');
   const [query,setQuery] = useState('');
@@ -97,6 +109,13 @@ export function HomeScreen() {
   // Refresh presentation labels when a scheduled event crosses its start time.
   const [,setMinute] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => setMinute(n => n + 1),60_000); return () => clearInterval(timer); },[]);
+  useEffect(() => {
+    if (auth.loading) return;
+    const store = useTournamentStore.getState();
+    if (auth.cloudEnabled && auth.user) {
+      if (!store.hydrated || store.ownerId !== auth.user.id) void store.hydrateConnected(auth.user.id);
+    } else if (!store.hydrated || store.ownerId !== LOCAL_TOURNAMENT_OWNER) void store.hydrate(LOCAL_TOURNAMENT_OWNER);
+  }, [auth.cloudEnabled, auth.loading, auth.user?.id]);
   const counts = useMemo(() => events.reduce((result,event) => {
     result[libraryFilterFor(event)]++; return result;
   },{upcoming:0,drafts:0,past:0,hidden:0}),[events]);
@@ -106,7 +125,7 @@ export function HomeScreen() {
   const firstName = fullName?.split(' ')[0];
   const initials = (firstName || 'Menu').slice(0,2).toUpperCase();
 
-  function openSelected(next: EventState | null) {
+  function openSelected(next: VersionedEventState | null) {
     if (next) navigate(eventRouteForStatus(next));
   }
 
@@ -144,9 +163,46 @@ export function HomeScreen() {
     openSelected(useEventStore.getState().event);
   }
 
+  function tryCreateAmericano(pairingMode: PairingMode) {
+    const displayName = pairingMode === 'rotating' ? 'Americano · Rotating pairs' : 'Americano · Fixed pairs';
+    setCreateOpen(false);
+    setAmericanoChoice(false);
+    if (isFormatLocked('americano')) {
+      setPaywall({
+        reason: `Pro includes ${displayName}. Activate access to continue creating your event.`,
+        pendingEvent: { name: 'Americano', format: 'americano', pairingMode },
+      });
+      return;
+    }
+    createAmericanoEvent('Americano', pairingMode);
+    openSelected(useEventStore.getState().event as VersionedEventState | null);
+  }
+
+  async function createFlexibleTournament() {
+    setCreateOpen(false);
+    if (isFeatureLocked()) { setPaywall({ reason: 'Pro includes the flexible tournament control desk.', pendingTournament: true }); return; }
+    if (!auth.cloudEnabled || !auth.user) { setAuthOpen(true); return; }
+    const record = await useTournamentStore.getState().createConnectedTournament({ title: 'Padel Tournament', courtCount: 4, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    navigate(`/tournaments/${record.tournamentId}/setup`);
+  }
+
+  async function createTournamentDemo() {
+    setCreateOpen(false);
+    const store = useTournamentStore.getState();
+    if (store.ownerId !== LOCAL_TOURNAMENT_OWNER) await store.hydrate(LOCAL_TOURNAMENT_OWNER);
+    const record = await useTournamentStore.getState().createTournament('Tournament demo');
+    navigate(`/tournament-demo/${record.tournamentId}/setup`);
+  }
+
   function closePaywall() {
+    const pendingTournament = paywall?.pendingTournament;
     const pending = paywall?.pendingEvent;
     setPaywall(null);
+    if (pendingTournament) {
+      if (isFeatureLocked()) { setCreateOpen(true); return; }
+      void createFlexibleTournament();
+      return;
+    }
     if (!pending) return;
     // Read the current entitlement: purchasing/restoring applies it before
     // closing the paywall. Cancelling must never create a locked event.
@@ -154,11 +210,19 @@ export function HomeScreen() {
       setCreateOpen(true);
       return;
     }
-    createEvent(pending.name, pending.format);
+    if (pending.format === 'americano' && pending.pairingMode) {
+      createAmericanoEvent(pending.name, pending.pairingMode);
+    } else {
+      createEvent(pending.name, pending.format);
+    }
     openSelected(useEventStore.getState().event);
   }
 
-  function loadAsNew(next: EventState) {
+  function loadAsNew(next: VersionedEventState) {
+    if (isAmericanoEventV2(next)) {
+      setMessage('This Americano template needs the new event flow, which is not enabled in this build.');
+      return;
+    }
     loadEvent(next);
     openSelected(useEventStore.getState().event);
   }
@@ -194,7 +258,7 @@ export function HomeScreen() {
         {featured && <article className="ed-feature">
           <div className="ed-feature-main"><p className="ed-feature-label">{RUNNING_STATUSES.has(featured.status) ? 'Event in progress' : 'Next event'}</p>
             <div className="ed-feature-grid"><div className="ed-date-tile" aria-hidden>{featured.startsAt && Number.isFinite(Date.parse(featured.startsAt)) ? <><span>{new Date(featured.startsAt).toLocaleDateString(undefined,{weekday:'short'})}</span><strong>{new Date(featured.startsAt).getDate()}</strong><span>{new Date(featured.startsAt).toLocaleDateString(undefined,{month:'short'})}</span></> : <CalendarDays size={40}/>}</div>
-              <div className="ed-feature-details"><h2>{featured.name}</h2><div className="ed-feature-meta"><span><CalendarDays />{dateLabel(featured)}</span>{featured.venue && <span><MapPin />{featured.venue}</span>}<span><Users />{featured.teamCount ?? 0} / {featured.teamCapacity ?? 0} teams</span></div><Capacity event={featured}/></div>
+              <div className="ed-feature-details"><h2>{featured.name}</h2><div className="ed-feature-meta"><span><CalendarDays />{dateLabel(featured)}</span>{featured.venue && <span><MapPin />{featured.venue}</span>}<span><Users />{featured.teamCount ?? 0} / {featured.teamCapacity ?? 0} {featured.rosterUnit ?? 'teams'}</span></div><Capacity event={featured}/></div>
               <div className="ed-feature-actions"><button className="btn primary" onClick={() => void openEvent(featured.id)}><ArrowRight />{cardActionLabel(featured.status)}</button>{featured.signupState !== 'unpublished' && <button className="btn" disabled={copying !== null} onClick={() => void copyLink(featured)}><LinkIcon />{copying === featured.id ? 'Copying…' : 'Copy sign-up link'}</button>}</div>
             </div>
           </div><div className="ed-court-photo" role="img" aria-label="Padel court" />
@@ -203,27 +267,43 @@ export function HomeScreen() {
           <div className="ed-toolbar"><div className="ed-tabs" role="tablist" aria-label="Event status">{([['upcoming','Upcoming'],['drafts','Drafts'],['past','Past'],['hidden','Hidden']] as const).map(([id,label]) => <button key={id} type="button" role="tab" aria-selected={filter === id} onClick={() => setFilter(id)}>{label}<span>{counts[id]}</span></button>)}</div><label className="ed-search"><Search /><input aria-label="Search events" placeholder="Search events…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>
           <div className="ed-table-head" aria-hidden><span>Event</span><span>Date & time</span><span>Venue</span><span>Teams</span><span>Status</span><span>Actions</span></div>
           <div className="ed-event-list">{shown.map(event => <article className="ed-event-row" key={event.id}>
-            <div className="ed-event-name"><div className="ed-event-icon" aria-hidden><Icons.Crown className="icon"/></div><div><h2>{event.name}</h2><span>{formatName(event.format)}</span></div></div>
+            <div className="ed-event-name"><div className="ed-event-icon" aria-hidden><Icons.Crown className="icon"/></div><div><h2>{event.name}</h2><span>{formatName(event)}</span></div></div>
             <div className="ed-event-date">{dateLabel(event)}</div><div className="ed-event-venue"><MapPin/>{event.venue || 'Venue not set'}</div><div className="ed-event-capacity"><span>{event.teamCount ?? 0} / {event.teamCapacity ?? 0}</span><Capacity event={event}/></div><span className={'ed-status ' + (RUNNING_STATUSES.has(event.status) ? 'live' : libraryFilterFor(event))}>{statusSummary(event)}</span>
             <div className="ed-row-actions"><button className="btn" onClick={() => void openEvent(event.id)}>{filter === 'hidden' ? 'Restore & open' : event.status === 'complete' ? 'Results' : 'View'}</button><details className="ed-row-menu" onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.open = false; }}><summary aria-label={`Options for ${event.name}`}><MoreHorizontal /></summary><div><button onClick={() => void openEvent(event.id)}>{cardActionLabel(event.status,filter === 'hidden')}</button>{event.signupState !== 'unpublished' && <button disabled={copying !== null} onClick={() => void copyLink(event)}>Copy sign-up link</button>}<button onClick={() => void setArchived(event.id,filter !== 'hidden')}>{filter === 'hidden' ? 'Restore' : 'Hide on this device'}</button><button className="ed-danger" onClick={() => setDeleteTarget(event)}>Delete competition</button></div></details></div>
           </article>)}</div>
           {shown.length === 0 && <div className="ed-empty"><h2>{!hydrated ? 'Loading your events…' : query ? 'No matching events' : events.length === 0 ? 'Your next great game starts here.' : `No ${filter} events`}</h2><p>{query ? 'Try a different name or venue.' : events.length === 0 ? 'Create a competition, share your sign-up link, and run it from your iPad.' : 'Choose another tab to see your other competitions.'}</p>{events.length === 0 && hydrated && <button className="btn primary" onClick={() => setCreateOpen(true)}>Create your first event</button>}</div>}
         </section>
+        {tournaments.length > 0 && <section className="ed-library tv1-home-library" aria-label="Flexible tournaments"><div className="ed-toolbar"><div><p className="eyebrow">FLEXIBLE TOURNAMENT DESK</p><h2>Tournaments</h2></div></div><div className="ed-event-list">{tournaments.map((record) => { const tournament = record.projected; const division = tournament.divisions[0]; const confirmed = tournament.entries.filter((entry) => entry.admission === 'confirmed').length; const base = record.mode === 'demo' ? '/tournament-demo' : '/tournaments'; return <article className="ed-event-row" key={record.tournamentId}><div className="ed-event-name"><div className="ed-event-icon"><Icons.Trophy className="icon"/></div><div><h2>{tournament.meta.title}</h2><span>{record.mode === 'demo' ? 'Local demo' : 'Flexible tournament'} · {tournament.lifecycle}</span></div></div><div className="ed-event-date">{tournament.meta.startsAt ? new Date(tournament.meta.startsAt).toLocaleString() : 'Date not set'}</div><div className="ed-event-venue"><MapPin/>{tournament.meta.venue || 'Venue not set'}</div><div className="ed-event-capacity"><span>{confirmed} / {division?.capacity ?? 0}</span></div><span className={`ed-status ${tournament.lifecycle === 'live' ? 'live' : 'drafts'}`}>{record.remoteStatus === 'conflict' ? 'Recovery needed' : tournament.lifecycle}</span><div className="ed-row-actions"><button className="btn" onClick={() => navigate(`${base}/${record.tournamentId}/${tournament.lifecycle === 'live' ? 'desk' : 'setup'}`)}>Open desk</button></div></article>; })}</div></section>}
         <footer className="ed-footer"><button onClick={() => navigate('/help')}>Help & guides</button><a href="/privacy/" target="_blank" rel="noreferrer">Privacy</a><a href="/terms/" target="_blank" rel="noreferrer">Terms</a><span>Score on iPad. Follow on TV.</span></footer>
       </div>
-      {createOpen && <DesignDialog title="Create an event" onClose={() => setCreateOpen(false)}>
+      {createOpen && <DesignDialog title={americanoChoice ? 'Choose Americano format' : 'Create an event'} onClose={() => { setCreateOpen(false); setAmericanoChoice(false); }}>
         <div className="ed-create">
-          <p className="ed-create-intro">Choose how you want to play.</p>
+          <p className="ed-create-intro">{americanoChoice ? 'Choose how partnerships and standings should work.' : 'Choose how you want to play.'}</p>
           {!pro && <div className="ed-create-trial">
             <strong>Try both formats free for 7 days.</strong>
             <p>For eligible new subscribers. Choose a plan next; a paid subscription starts after your free trial unless you cancel.</p>
           </div>}
           <div className="ed-create-formats">
-            <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
-            <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
+            {americanoChoice ? <>
+              <ModeCard name="Rotating pairs" blurb="Change partners each round. Points belong to each player." icon={<Icons.Rotate className="icon"/>} onPick={() => tryCreateAmericano('rotating')} onShowRules={() => {setCreateOpen(false);setAmericanoChoice(false);setRulesForFormat('americano');}}/>
+              <ModeCard name="Fixed pairs" blurb="Keep your partner. Points belong to your team." icon={<Users className="icon"/>} onPick={() => tryCreateAmericano('fixed')} onShowRules={() => {setCreateOpen(false);setAmericanoChoice(false);setRulesForFormat('americano');}}/>
+            </> : <>
+              <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
+              {ENABLE_AMERICANO_V2
+                ? <ModeCard name="Americano" blurb="Rotating or fixed pairs. Every rally point counts." icon={<Icons.Rotate className="icon"/>} onPick={() => setAmericanoChoice(true)} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
+                : <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>}
+              {ENABLE_TOURNAMENT_V1 && <ModeCard
+                name="Flexible Tournament"
+                blurb="Excel-like match control for groups, knockouts, changing courts and corrections."
+                icon={<Icons.Trophy className="icon"/>}
+                onPick={() => void createFlexibleTournament()}
+                onShowRules={() => { setCreateOpen(false); setRulesForFormat('bracket'); }}
+              />}
+            </>}
           </div>
           <div className="ed-create-footer">
             <button className="btn" onClick={() => {setCreateOpen(false);loadAsNew(buildDemoEvent());}}>Try a KoC demo</button>
+            {ENABLE_TOURNAMENT_V1 && <button className="btn" onClick={() => void createTournamentDemo()}>Try a Tournament demo</button>}
             <button className="btn" onClick={() => {setCreateOpen(false);setPaywall({reason:pro ? '' : 'Unlock the full toolkit.'});}}>{!nativeBilling ? 'Pro included' : pro ? 'Manage Pro' : 'View Pro plans'}</button>
           </div>
         </div>

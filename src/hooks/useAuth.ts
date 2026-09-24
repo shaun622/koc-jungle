@@ -9,6 +9,21 @@ import { useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { flushCloudSync } from '@/store/cloudSync';
+import { useTournamentStore } from '@/store/tournamentStore';
+
+let authSessionGeneration = 0;
+let authSessionFingerprint: string | null = null;
+
+function observeSession(session: Session | null): void {
+  const fingerprint = session ? `${session.user.id}:${session.access_token}` : null;
+  if (fingerprint !== authSessionFingerprint) {
+    authSessionFingerprint = fingerprint;
+    authSessionGeneration += 1;
+  }
+}
+
+export const getAuthSessionGeneration = () => authSessionGeneration;
+export const isAuthSessionGenerationCurrent = (generation: number) => generation === authSessionGeneration;
 
 export interface AuthState {
   user: User | null;
@@ -35,11 +50,13 @@ export function useAuth(): AuthState & {
     let cancelled = false;
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
+      observeSession(data.session);
       setUser(data.session?.user ?? null);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event, session: Session | null) => {
+        observeSession(session);
         setUser(session?.user ?? null);
       },
     );
@@ -81,6 +98,14 @@ export function useAuth(): AuthState & {
 
     async signOut() {
       if (!supabase) return {};
+      const tournament = useTournamentStore.getState();
+      if (tournament.pendingOperations.length) return { error: 'A Tournament operation still has an unknown outcome. Retry it before signing out.' };
+      if (tournament.active?.mode === 'connected' && tournament.active.outbox.length) {
+        const generation = getAuthSessionGeneration();
+        const result = await tournament.syncActive(generation, isAuthSessionGenerationCurrent);
+        if (result.status !== 'synced') return { error: 'Tournament changes are still waiting to sync. Retry, or export recovery data before signing out.' };
+      }
+      if (tournament.active?.mode === 'connected' && tournament.active.projected.lifecycle === 'live') return { error: 'Release or complete the live Tournament before signing out.' };
       const flushed = await flushCloudSync();
       if (!flushed.ok) {
         return { error: flushed.error || `${flushed.pendingEventIds.length} event change(s) are still waiting to sync.` };
@@ -91,6 +116,8 @@ export function useAuth(): AuthState & {
 
     async deleteAccount() {
       if (!supabase) return { error: 'Cloud sync not configured.' };
+      const tournament = useTournamentStore.getState();
+      if (tournament.pendingOperations.length || tournament.records.some((record) => record.mode === 'connected' && (record.outbox.length > 0 || record.projected.lifecycle === 'live'))) return { error: 'Resolve, release, or export your active Tournament work before deleting this account.' };
       // The anon key cannot delete its own auth.users row, so this calls a
       // SECURITY DEFINER Postgres function (see supabase/schema.sql) that
       // removes the signed-in user's events + auth record. Then we sign out

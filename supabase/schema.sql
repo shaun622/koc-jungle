@@ -11,12 +11,16 @@ create table if not exists public.events (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   state jsonb,
+  protocol_version smallint not null default 1,
+  revision bigint not null default 0,
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
   constraint events_state_matches_deletion_check check (
     (deleted_at is null and state is not null)
     or (deleted_at is not null and state is null)
-  )
+  ),
+  constraint events_protocol_version_check check (protocol_version in (1, 2)),
+  constraint events_revision_check check (revision >= 0)
 );
 
 create index if not exists events_user_idx on public.events (user_id);
