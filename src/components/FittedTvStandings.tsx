@@ -1,4 +1,3 @@
-import { FittedTvStandings } from './FittedTvStandings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventState } from '@/types/domain';
 import { leaderboard, rankMovements, teamNameFor, teamPlayersLabel } from '@/store/selectors';
@@ -7,7 +6,7 @@ import { RankMovement } from './RankMovement';
 import { GamesLine } from './GamesLine';
 
 /** Presentation only. The full ranking is derived from the existing selector. */
-function PagedTvStandings({ event, subtitle }: { event: EventState; subtitle: string }) {
+export function FittedTvStandings({ event, subtitle }: { event: EventState; subtitle: string }) {
   const rows = useMemo(() => leaderboard(event), [event]);
   const movements = useMemo(() => rankMovements(event), [event]);
   const list = useRef<HTMLDivElement>(null);
@@ -23,7 +22,10 @@ function PagedTvStandings({ event, subtitle }: { event: EventState; subtitle: st
       // Reserve the identity lines first; game statistics are optional in a
       // dense scoreboard, but both players must remain identifiable.
       const compact = rowHeight * scale < 64;
-      let fontSize = Math.min(Math.max(18, 16 / scale), (rowHeight - 6) * (compact ? .38 : .25));
+      const quiet = Boolean(element.closest('.tv-display--quiet'));
+      let fontSize = quiet
+        ? Math.min(Math.max(20, 18 / scale), (rowHeight - 6) * .46)
+        : Math.min(Math.max(18, 16 / scale), (rowHeight - 6) * (compact ? .38 : .25));
       const panel = element.closest<HTMLElement>('.tv-standings');
       // Long player names can wrap. Measure the complete identity, not just
       // the row count, before committing the shared standings font size.
@@ -87,9 +89,4 @@ function PagedTvStandings({ event, subtitle }: { event: EventState; subtitle: st
       </div>
     </section>
   );
-}
-
-/** Keep non-KoC pagination unchanged; only KoC uses the approved fitted board. */
-export function TvStandings(props: { event: EventState; subtitle: string }) {
-  return (props.event.format ?? 'koc') === 'koc' ? <FittedTvStandings {...props} /> : <PagedTvStandings {...props} />;
 }

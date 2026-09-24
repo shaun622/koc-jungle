@@ -20,6 +20,7 @@ import type { MainRound } from '@/types/domain';
 import '@/index.css';
 import '@/styles/event-design.css';
 import '@/styles/app-design.css';
+import '@/styles/scoreboard.css';
 
 const event=buildDemoEvent();
 event.name='Silver King of the Court';event.venue='Jungle Padel Sanur';event.status='setup';

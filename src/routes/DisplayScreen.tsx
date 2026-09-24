@@ -92,7 +92,8 @@ function LegacyDisplayScreen() {
       const w = shell?.clientWidth || window.innerWidth;
       const reserve = toolbar ? toolbar.getBoundingClientRect().height + 12 : 0;
       const h = Math.max(1, (shell?.clientHeight || window.innerHeight) - reserve);
-      const nextScale = Math.max(0.1, Math.min(w / 1920, h / 1080));
+      const fittedScoreboard = (event?.format ?? 'koc') === 'koc' && event?.status !== 'complete';
+      const nextScale = Math.max(0.1, fittedScoreboard ? w / 1920 : Math.min(w / 1920, h / 1080));
       setCanvasSize({ scale: nextScale, canvasHeight: h / nextScale });
     }
     recalc();
@@ -101,7 +102,7 @@ function LegacyDisplayScreen() {
     if (toolbar) observer?.observe(toolbar);
     window.addEventListener('resize', recalc);
     return () => { observer?.disconnect(); window.removeEventListener('resize', recalc); };
-  }, [event?.status, isMobile]);
+  }, [event?.status, event?.format, isMobile]);
 
   // Close the menu on Escape, also reachable for keyboard users
   useEffect(() => {
@@ -810,7 +811,7 @@ function TvLiveCanvas({
   const completed = event.rounds.filter((r) => r.completedAt).length;
   // King-of-the-Court chrome (crown, "King's Court", climb/drop, King stat)
   // only makes sense for KoC. Other formats show a neutral label.
-  const isKoc = event.format === 'koc';
+  const isKoc = (event.format ?? 'koc') === 'koc';
   const isBracket = event.format === 'bracket';
   const featureLabel = isBracket
     ? bracketRoundName(roundIndex, totalRounds)
@@ -819,7 +820,7 @@ function TvLiveCanvas({
       : (centre?.name ?? 'Featured court');
 
   return (
-    <div className="tv-display">
+    <div className={'tv-display' + (isKoc ? ' tv-display--quiet' : '')}>
       <div className="tv-header">
         <div className="tv-header-brand">
           <div className="brand-mark lg"><BrandLogo /></div>
@@ -869,6 +870,7 @@ function TvLiveCanvas({
             </div>
             <div className="tv-centre-scores">
               <CentreScore
+                label={centreA ? teamPlayersLabel(centreA) : 'Team A'}
                 value={centreMatch?.scoreA ?? 0}
                 isWinner={
                   centreMatch
@@ -883,6 +885,7 @@ function TvLiveCanvas({
               />
               <div className="tv-centre-vs">VS</div>
               <CentreScore
+                label={centreB ? teamPlayersLabel(centreB) : 'Team B'}
                 value={centreMatch?.scoreB ?? 0}
                 isWinner={
                   centreMatch
@@ -990,11 +993,13 @@ function TvLiveCanvas({
 }
 
 function CentreScore({
+  label,
   value,
   isWinner,
   showControls,
   onIncrement,
 }: {
+  label: string;
   value: number;
   isWinner: boolean;
   showControls: boolean;
@@ -1011,7 +1016,7 @@ function CentreScore({
     <div className="tv-centre-score-group">
       <button
         className="tv-score-btn tv-score-btn--minus"
-        aria-label="Decrease"
+        aria-label={`Decrease ${label} score`}
         onClick={() => onIncrement(-1)}
       >
         <Icons.Minus className="icon" />
@@ -1021,7 +1026,7 @@ function CentreScore({
       </div>
       <button
         className="tv-score-btn tv-score-btn--plus"
-        aria-label="Increase"
+        aria-label={`Increase ${label} score`}
         onClick={() => onIncrement(1)}
       >
         <Icons.Plus className="icon" />
@@ -1123,6 +1128,7 @@ function TvCourtCard({
           <CourtTeamText team={teamA} />
         </div>
         <ScoreCell
+          label={teamA ? teamPlayersLabel(teamA) : 'Team A'}
           value={match.scoreA}
           winner={aWin}
           tied={tied && !result?.winnerId}
@@ -1136,6 +1142,7 @@ function TvCourtCard({
           <CourtTeamText team={teamB} />
         </div>
         <ScoreCell
+          label={teamB ? teamPlayersLabel(teamB) : 'Team B'}
           value={match.scoreB}
           winner={bWin}
           tied={tied && !result?.winnerId}
@@ -1169,12 +1176,14 @@ function TvCourtCard({
 }
 
 function ScoreCell({
+  label,
   value,
   winner,
   tied,
   showControls,
   onIncrement,
 }: {
+  label: string;
   value: number;
   winner: boolean;
   tied: boolean;
@@ -1192,7 +1201,7 @@ function ScoreCell({
     <div className="tv-court-score-group">
       <button
         className="tv-score-btn tv-score-btn--minus"
-        aria-label="Decrease"
+        aria-label={`Decrease ${label} score`}
         onClick={() => onIncrement(-1)}
       >
         <Icons.Minus className="icon" />
@@ -1202,7 +1211,7 @@ function ScoreCell({
       </div>
       <button
         className="tv-score-btn tv-score-btn--plus"
-        aria-label="Increase"
+        aria-label={`Increase ${label} score`}
         onClick={() => onIncrement(1)}
       >
         <Icons.Plus className="icon" />
@@ -1282,7 +1291,7 @@ function TvBetweenCanvas({
     ? teamNameFor(event, king.teamId).split(' & ')[0].slice(0, 8)
     : 'TBD';
 
-  const isKoc = event.format === 'koc';
+  const isKoc = (event.format ?? 'koc') === 'koc';
   const isBracket = event.format === 'bracket';
   const featureLabel = isBracket
     ? bracketRoundName(nextRoundIndex, totalRounds)
@@ -1291,7 +1300,7 @@ function TvBetweenCanvas({
       : (centre?.name ?? 'Featured court');
 
   return (
-    <div className="tv-display tv-display--between">
+    <div className={'tv-display tv-display--between' + (isKoc ? ' tv-display--quiet' : '')}>
       <div className="tv-header">
         <div className="tv-header-brand">
           <div className="brand-mark lg"><BrandLogo /></div>

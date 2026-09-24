@@ -104,6 +104,14 @@ body{font-size:16px}button,input,select,textarea{font-family:var(--font-body)}
 .ed-create-footer .btn{flex:1;padding:10px 12px;white-space:nowrap}
 @media(max-width:600px){.ed-create-trial{padding:14px}.ed-format-card{padding:16px}.ed-dialog .ed-format-heading h3{font-size:20px}.ed-format-actions .btn{flex:1}.ed-format-actions{gap:8px}.ed-format-rules{padding-inline:4px}}
 /* Event night keeps the original court geometry and existing canvas sizing. */
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)){grid-auto-rows:minmax(calc(148px / var(--display-scale,1)),1fr)}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court{padding:8px 14px;row-gap:2px}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-head{padding-bottom:4px}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-row{padding-top:2px}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-name{font-size:max(24px,var(--tv-min-font,16px))}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-team-label{display:block!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-team-name{font-size:max(22px,var(--tv-min-font,16px));line-height:1.15}
+.tv-display:not(.tv-display--quiet) .tv-courts-col:has(.tv-court:nth-child(3)) .tv-court-score{font-size:48px}
 .display-canvas{--tv-min-font:max(16px,calc(16px / var(--display-scale,1)));--tv-touch:max(44px,calc(44px / var(--display-scale,1)))}
 .tv-complete :is(.rank,.tv-lb-games,.wl,.tv-complete-footnote){font-size:max(16px,var(--tv-min-font,16px))}
 .tv-complete-headline{color:var(--text-0);text-shadow:none;animation:none;letter-spacing:-1.5px}

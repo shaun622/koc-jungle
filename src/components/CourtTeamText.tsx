@@ -12,16 +12,26 @@ export function CourtTeamText({ team }: { team: Team | undefined }) {
     const row = text?.closest<HTMLElement>('.tv-court-row');
     const playerLine = text?.querySelector<HTMLElement>('.tv-court-team-name');
     if (!text || !row || !playerLine) return;
+    if (!text.closest('.tv-display--quiet')) return;
     const fit = () => {
       if (!row.clientHeight) return;
       playerLine.style.fontSize = '';
       const style = getComputedStyle(row);
       const available = row.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - 6;
       if (available <= 0) return;
-      let font = parseFloat(getComputedStyle(playerLine).fontSize);
-      for (let attempt = 0; attempt < 10 && text.scrollHeight > available; attempt++) {
-        font *= Math.min(.9, available / text.scrollHeight);
-        playerLine.style.fontSize = `${font}px`;
+      const font = parseFloat(getComputedStyle(playerLine).fontSize);
+      if (text.scrollHeight > available) {
+        // Wrapping is discontinuous: a height ratio can shrink past the
+        // largest readable size. Search within the existing CSS size instead.
+        let low = 0;
+        let high = font;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const size = (low + high) / 2;
+          playerLine.style.fontSize = `${size}px`;
+          if (text.scrollHeight <= available) low = size;
+          else high = size;
+        }
+        playerLine.style.fontSize = `${low}px`;
       }
     };
     fit();

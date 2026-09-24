@@ -61,6 +61,47 @@ describe('approved appearance and event-night presentation', () => {
     expect([...document.querySelectorAll('.tv-lb-name-col>span:first-child')].map(node => node.textContent)).toEqual(before);
     expect(screen.getByText('14 teams')).toBeInTheDocument();
   });
+  it('uses the fitted KoC standings for old events with no format field', () => {
+    const event = buildDemoEvent();
+    delete event.format;
+    event.teams[0].name = 'Legacy Centre Crew';
+    const snapshot = JSON.stringify(event);
+    const { container } = render(<TvStandings event={event} subtitle="Pre-round" />);
+    expect(container.querySelector('.tv-standings')).toHaveClass('tv-standings--fit');
+    expect(container.querySelectorAll('.tv-lb-row')).toHaveLength(event.teams.length);
+    expect(screen.getByText('Legacy Centre Crew')).toBeInTheDocument();
+    expect(screen.getByText('Jon & Sven')).toHaveClass('tv-lb-players');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(event).not.toHaveProperty('format');
+    expect(JSON.stringify(event)).toBe(snapshot);
+  });
+  it.each([32, 64])('preserves paginated, rotating and pausable Americano standings for %i teams', (count) => {
+    const event = buildDemoEvent();
+    event.format = 'americano';
+    event.teams = Array.from({ length: count }, (_, index) => ({
+      ...event.teams[index % 14], id: `americano-team-${index}`, name: `Pair ${index + 1}`,
+    }));
+    const snapshot = JSON.stringify(event);
+    const { container } = render(<TvStandings event={event} subtitle="Pre-round" />);
+    expect(container.querySelector('.tv-standings')).not.toHaveClass('tv-standings--fit');
+    expect(screen.getByText(`1–8 of ${count} teams`)).toBeInTheDocument();
+    const names = new Set<string | null>();
+    for (let page = 0; page < count / 8; page += 1) {
+      const visible = [...container.querySelectorAll('.tv-lb-name-col>span:first-child')];
+      expect(visible).toHaveLength(8);
+      visible.forEach(node => names.add(node.textContent));
+      fireEvent.click(screen.getByRole('button', { name: 'Next standings page' }));
+    }
+    expect(names.size).toBe(count);
+    expect(screen.getByText(`1–8 of ${count} teams`)).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(8000));
+    expect(screen.getByText(`9–16 of ${count} teams`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause standings rotation' }));
+    act(() => vi.advanceTimersByTime(24000));
+    expect(screen.getByText(`9–16 of ${count} teams`)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume standings rotation' })).toHaveAttribute('aria-pressed', 'true');
+    expect(JSON.stringify(event)).toBe(snapshot);
+  });
   it('shows both full player names on the second identity line for a custom team name', () => {
     const event = buildDemoEvent();
     event.teams = [event.teams[0]];
