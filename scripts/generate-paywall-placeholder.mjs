@@ -88,7 +88,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <!-- CTA button -->
   <g transform="translate(48 600)">
     <rect width="${W - 96}" height="64" rx="14" fill="#c6f84e"/>
-    <text x="${(W - 96) / 2}" y="42" font-family="Helvetica" font-size="20" font-weight="800" fill="#0e1219" text-anchor="middle">Start 7-day free trial</text>
+    <text x="${(W - 96) / 2}" y="42" font-family="Helvetica" font-size="20" font-weight="800" fill="#0e1219" text-anchor="middle">See Pro plans</text>
   </g>
 
   <!-- Plans -->

@@ -81,7 +81,8 @@ export function HomeScreen() {
   const archiveEvent = useEventStore(s => s.archiveLocalEvent);
   const deleteLocalEvent = useEventStore(s => s.deleteLocalEvent);
   const events = useEventCatalogStore(s => s.events);
-  const tournaments = useTournamentStore(s => s.records);
+  const tournamentRecords = useTournamentStore(s => s.records);
+  const tournaments = ENABLE_TOURNAMENT_V1 ? tournamentRecords : [];
   const catalogError = useEventCatalogStore(s => s.lastError);
   const hydrated = useEventCatalogStore(s => s.hydrated);
   const navigate = useNavigate();
@@ -110,7 +111,7 @@ export function HomeScreen() {
   const [,setMinute] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => setMinute(n => n + 1),60_000); return () => clearInterval(timer); },[]);
   useEffect(() => {
-    if (auth.loading) return;
+    if (!ENABLE_TOURNAMENT_V1 || auth.loading) return;
     const store = useTournamentStore.getState();
     if (auth.cloudEnabled && auth.user) {
       if (!store.hydrated || store.ownerId !== auth.user.id) void store.hydrateConnected(auth.user.id);
@@ -164,6 +165,7 @@ export function HomeScreen() {
   }
 
   function tryCreateAmericano(pairingMode: PairingMode) {
+    if (!ENABLE_AMERICANO_V2) return;
     const displayName = pairingMode === 'rotating' ? 'Americano · Rotating pairs' : 'Americano · Fixed pairs';
     setCreateOpen(false);
     setAmericanoChoice(false);
@@ -179,6 +181,7 @@ export function HomeScreen() {
   }
 
   async function createFlexibleTournament() {
+    if (!ENABLE_TOURNAMENT_V1) return;
     setCreateOpen(false);
     if (isFeatureLocked()) { setPaywall({ reason: 'Pro includes the flexible tournament control desk.', pendingTournament: true }); return; }
     if (!auth.cloudEnabled || !auth.user) { setAuthOpen(true); return; }
@@ -187,6 +190,7 @@ export function HomeScreen() {
   }
 
   async function createTournamentDemo() {
+    if (!ENABLE_TOURNAMENT_V1) return;
     setCreateOpen(false);
     const store = useTournamentStore.getState();
     if (store.ownerId !== LOCAL_TOURNAMENT_OWNER) await store.hydrate(LOCAL_TOURNAMENT_OWNER);
@@ -219,6 +223,10 @@ export function HomeScreen() {
   }
 
   function loadAsNew(next: VersionedEventState) {
+    if (next.format === 'americano' && !ENABLE_AMERICANO_V2) {
+      setMessage('Americano is coming soon. You can still open existing events.');
+      return;
+    }
     if (isAmericanoEventV2(next)) {
       setMessage('This Americano template needs the new event flow, which is not enabled in this build.');
       return;
@@ -280,8 +288,8 @@ export function HomeScreen() {
         <div className="ed-create">
           <p className="ed-create-intro">{americanoChoice ? 'Choose how partnerships and standings should work.' : 'Choose how you want to play.'}</p>
           {!pro && <div className="ed-create-trial">
-            <strong>Try both formats free for 7 days.</strong>
-            <p>For eligible new subscribers. Choose a plan next; a paid subscription starts after your free trial unless you cancel.</p>
+            <strong>{nativeBilling ? 'Get started with Pro.' : 'Try Pro free for 30 days.'}</strong>
+            <p>{nativeBilling ? 'Choose a plan next to see current prices and any free trial available to you.' : 'A one-time 30-day trial. No payment is taken in this web preview.'}</p>
           </div>}
           <div className="ed-create-formats">
             {americanoChoice ? <>
@@ -291,14 +299,15 @@ export function HomeScreen() {
               <ModeCard name="King of the Court" blurb="Fixed pairs. Win your court and work your way to the top." icon={<Icons.Crown className="icon"/>} onPick={() => tryCreate('Padel Night','koc','King of the Court')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('koc');}}/>
               {ENABLE_AMERICANO_V2
                 ? <ModeCard name="Americano" blurb="Rotating or fixed pairs. Every rally point counts." icon={<Icons.Rotate className="icon"/>} onPick={() => setAmericanoChoice(true)} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>
-                : <ModeCard name="Team Americano" blurb="Fixed pairs. Different opponents, balanced court time." icon={<Icons.Rotate className="icon"/>} onPick={() => tryCreate('Team Americano','americano','Team Americano')} onShowRules={() => {setCreateOpen(false);setRulesForFormat('americano');}}/>}
-              {ENABLE_TOURNAMENT_V1 && <ModeCard
-                name="Flexible Tournament"
+                : <ModeCard name="Americano" blurb="Rotating or fixed pairs. Every rally point counts." icon={<Icons.Rotate className="icon"/>} disabled/>}
+              <ModeCard
+                disabled={!ENABLE_TOURNAMENT_V1}
+                name="Tournament"
                 blurb="Excel-like match control for groups, knockouts, changing courts and corrections."
                 icon={<Icons.Trophy className="icon"/>}
                 onPick={() => void createFlexibleTournament()}
                 onShowRules={() => { setCreateOpen(false); setRulesForFormat('bracket'); }}
-              />}
+              />
             </>}
           </div>
           <div className="ed-create-footer">
@@ -350,25 +359,27 @@ function ModeCard({
   icon,
   onPick,
   onShowRules,
+  disabled = false,
 }: {
   name: string;
   blurb: string;
   icon: ReactNode;
-  onPick: () => void;
-  onShowRules: () => void;
+  onPick?: () => void;
+  onShowRules?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <article className="ed-format-card">
+    <article className={`ed-format-card${disabled ? ' ed-format-card--unavailable' : ''}`}>
       <div className="ed-format-heading">
         <span className="ed-format-icon" aria-hidden>{icon}</span>
         <h3>{name}</h3>
       </div>
       <p>{blurb}</p>
       <div className="ed-format-actions">
-        <button type="button" className="btn primary" onClick={onPick} aria-label={`Choose format: ${name}`}>
-          Choose format <ArrowRight size={18} aria-hidden />
+        <button type="button" className="btn primary" disabled={disabled} onClick={onPick} aria-label={disabled ? `${name}: coming soon` : `Choose format: ${name}`}>
+          {disabled ? 'Coming soon' : <>Choose format <ArrowRight size={18} aria-hidden /></>}
         </button>
-        <button type="button" className="ed-format-rules" onClick={onShowRules} aria-label={`View rules for ${name}`}>View rules</button>
+        {!disabled && <button type="button" className="ed-format-rules" onClick={onShowRules} aria-label={`View rules for ${name}`}>View rules</button>}
       </div>
     </article>
   );

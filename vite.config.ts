@@ -50,6 +50,7 @@ export default defineConfig({
   // a blank screen. Capacitor serves the bundle from its own origin root too.
   base: '/',
   test: {
+    include: ['src/tests/**/*.test.{ts,tsx}'],
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/tests/setup.ts',

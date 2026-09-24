@@ -34,6 +34,7 @@ import { isPublicSignupPath } from '@/lib/signups';
 import { useEntitlementsStore } from '@/store/entitlements';
 import { eventIdFromPath, eventRoute, eventRouteForStatus, routeNameForStatus } from '@/lib/eventRoutes';
 import { TournamentShell } from '@/components/tournament/TournamentShell';
+import { ENABLE_TOURNAMENT_V1 } from '@/config/features';
 import { TournamentSetup } from '@/routes/tournament/TournamentSetup';
 import { TournamentEntries } from '@/routes/tournament/TournamentEntries';
 import { TournamentDraw } from '@/routes/tournament/TournamentDraw';
@@ -172,7 +173,7 @@ export function App() {
   const catalogHydrated = useEventCatalogStore((s) => s.hydrated);
   useApplyTheme();
 
-  // Keep the local seven-day trial honest. Check at launch, once a minute
+  // Keep the local trial honest. Check at launch, once a minute
   // while the app is open, and whenever it returns to the foreground.
   useEffect(() => {
     const tickTrial = () => useEntitlementsStore.getState().tickTrial();
@@ -208,12 +209,12 @@ export function App() {
       <Routes>
         <Route path="/signup/:accountSlug/:slug" element={<PublicSignupScreen />} />
         <Route path="/signup/:slug" element={<PublicSignupScreen />} />
-        <Route path="/t/:publicSlug/signup" element={<TournamentPublicSignup />} />
-        <Route path="/t/:publicSlug/display" element={<TournamentDisplay />} />
+        <Route path="/t/:publicSlug/signup" element={ENABLE_TOURNAMENT_V1 ? <TournamentPublicSignup /> : <Navigate to="/home" replace />} />
+        <Route path="/t/:publicSlug/display" element={ENABLE_TOURNAMENT_V1 ? <TournamentDisplay /> : <Navigate to="/home" replace />} />
         <Route path="/auth/recovery" element={<PasswordRecoveryScreen />} />
         <Route path="/home" element={<HomeScreen />} />
         <Route path="/help" element={<HelpScreen />} />
-        <Route path="/tournaments/:tournamentId" element={<TournamentShell mode="connected" />}>
+        <Route path="/tournaments/:tournamentId" element={ENABLE_TOURNAMENT_V1 ? <TournamentShell mode="connected" /> : <Navigate to="/home" replace />}>
           <Route index element={<Navigate to="setup" replace />} />
           <Route path="setup" element={<TournamentSetup />} />
           <Route path="entries" element={<TournamentEntries />} />
@@ -222,7 +223,7 @@ export function App() {
           <Route path="courts" element={<TournamentCourts />} />
           <Route path="history" element={<TournamentHistory />} />
         </Route>
-        <Route path="/tournament-demo/:tournamentId" element={<TournamentShell mode="demo" />}>
+        <Route path="/tournament-demo/:tournamentId" element={ENABLE_TOURNAMENT_V1 ? <TournamentShell mode="demo" /> : <Navigate to="/home" replace />}>
           <Route index element={<Navigate to="setup" replace />} />
           <Route path="setup" element={<TournamentSetup />} />
           <Route path="entries" element={<TournamentEntries />} />

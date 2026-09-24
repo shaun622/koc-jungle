@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { isFormatLocked, useEntitlementsStore } from '@/store/entitlements';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isFormatLocked, useEntitlementsStore, trialDaysRemaining } from '@/store/entitlements';
 import { initIAP, isIAPAvailable } from '@/lib/iap';
 
 describe('trial entitlements', () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     localStorage.clear();
     useEntitlementsStore.setState({
@@ -13,13 +14,31 @@ describe('trial entitlements', () => {
     });
   });
 
-  it('unlocks every format when the seven-day trial starts', () => {
+  it('starts a 30-day trial and expires at the exact boundary', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-24T00:00:00Z'));
     useEntitlementsStore.getState().startTrial();
 
     expect(useEntitlementsStore.getState().pro).toBe(true);
     expect(useEntitlementsStore.getState().trialUsed).toBe(true);
     expect(isFormatLocked('koc')).toBe(false);
     expect(isFormatLocked('americano')).toBe(false);
+    const end = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    expect(useEntitlementsStore.getState().trialEndsAt).toBe(end);
+    expect(trialDaysRemaining()).toBe(30);
+    vi.setSystemTime(end - 1);
+    useEntitlementsStore.getState().tickTrial();
+    expect(useEntitlementsStore.getState().pro).toBe(true);
+    vi.setSystemTime(end);
+    useEntitlementsStore.getState().tickTrial();
+    expect(useEntitlementsStore.getState().pro).toBe(false);
+  });
+
+  it('does not restart or silently extend an existing trial', () => {
+    const previousEnd = Date.now() + 2 * 24 * 60 * 60 * 1000;
+    useEntitlementsStore.setState({ pro: true, trialUsed: true, trialEndsAt: previousEnd });
+    useEntitlementsStore.getState().startTrial();
+    expect(useEntitlementsStore.getState().trialEndsAt).toBe(previousEnd);
   });
 
   it('returns to the Pro paywall after the trial expires', () => {

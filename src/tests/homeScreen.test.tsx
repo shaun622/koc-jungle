@@ -4,11 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(), archive: vi.fn(), deleteLocal: vi.fn(), deleteCloud: vi.fn(), create: vi.fn(),
-  getSignup: vi.fn(), copyLink: vi.fn(),
+  getSignup: vi.fn(), copyLink: vi.fn(), hydrateTournament: vi.fn(),
   fetchOfferings: vi.fn(), purchase: vi.fn(), restore: vi.fn(),
 }));
 vi.mock('@/hooks/useAuth', () => ({useAuth: () => ({ user: {id:'owner-1',email:'organiser@example.com'},cloudEnabled:true })}));
 vi.mock('@/store/cloudSync', () => ({deleteCloudEvent:mocks.deleteCloud}));
+vi.mock('@/config/features', () => ({ ENABLE_AMERICANO_V2: false, ENABLE_TOURNAMENT_V1: false }));
+vi.mock('@/store/tournamentStore', () => ({
+  LOCAL_TOURNAMENT_OWNER: 'local',
+  useTournamentStore: Object.assign((selector: (state: { records: never[] }) => unknown) => selector({ records: [] }), {
+    getState: () => ({ hydrated: false, hydrate: mocks.hydrateTournament, hydrateConnected: mocks.hydrateTournament }),
+  }),
+}));
 vi.mock('@/components/AppMenu', () => ({AppMenu: ({onCreate}:{onCreate:()=>void}) => <button onClick={onCreate}>Menu create event</button>}));
 vi.mock('@/lib/signups', () => ({getOwnedSignup:mocks.getSignup,copySignupLink:mocks.copyLink}));
 vi.mock('@/lib/iap', () => ({
@@ -46,6 +53,31 @@ beforeEach(() => {
 });
 
 describe('event library presentation', () => {
+  it('shows unavailable formats without starting them or contacting the tournament backend', () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    for (const format of ['Americano', 'Tournament']) {
+      const button = screen.getByRole('button', { name: `${format}: coming soon` });
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+    }
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.hydrateTournament).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Choose format: Team Americano' })).not.toBeInTheDocument();
+  });
+  it('shows the live store trial for each plan instead of a hardcoded duration', async () => {
+    useEntitlementsStore.setState({ pro: false });
+    mocks.fetchOfferings.mockResolvedValue({
+      monthly: { product: { priceString: '$9.99', introPrice: { price: 0, periodUnit: 'MONTH', periodNumberOfUnits: 1, cycles: 1 } } },
+      annual: { product: { priceString: '$79.99', introPrice: null } },
+    });
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose format: King of the Court' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Pro Monthly/ })).toHaveTextContent('1 month free if eligible'));
+    expect(screen.getByRole('button', { name: /Pro Annual/ })).not.toHaveTextContent('free');
+    expect(screen.queryByText(/7 days/)).not.toBeInTheDocument();
+  });
   it('keeps hidden, cancelled and complete events out of upcoming', () => {
     expect(events.map(libraryFilterFor)).toEqual(['upcoming','upcoming','drafts','past','hidden','past']);
     expect(featuredLibraryEvent(events)?.id).toBe('Sooner');
@@ -88,17 +120,17 @@ describe('event library presentation', () => {
     fireEvent.click(within(dialog).getByRole('button',{name:'Choose format: King of the Court'}));
     expect(mocks.create).toHaveBeenCalledWith('Padel Night','koc');
   });
-  it.each(['King of the Court', 'Team Americano'])('replaces the format chooser with a clear trial offer for %s', async (format) => {
+  it.each(['King of the Court'])('replaces the format chooser with a clear Pro offer for %s', async (format) => {
     useEntitlementsStore.setState({pro:false});
     show();
     fireEvent.click(screen.getByRole('button',{name:'Create event'}));
     const chooser=screen.getByRole('dialog',{name:'Create an event'});
-    expect(within(chooser).getByText('Try both formats free for 7 days.')).toBeVisible();
+    expect(within(chooser).getByText('Get started with Pro.')).toBeVisible();
     expect(within(chooser).queryByText('Trial / Pro')).not.toBeInTheDocument();
     fireEvent.click(within(chooser).getByRole('button',{name:`Choose format: ${format}`}));
     expect(screen.queryByRole('dialog',{name:'Create an event'})).not.toBeInTheDocument();
     expect(document.querySelector('dialog')).toBeNull();
-    const offer=screen.getByRole('dialog',{name:'Try Pro free for 7 days'});
+    const offer=screen.getByRole('dialog',{name:'Unlock Pro'});
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(within(offer).getByText(/The App Store confirms your eligibility/)).toBeVisible();
     await waitFor(() => expect(within(offer).getByRole('button',{name:/Pro Monthly/})).toHaveTextContent('$9.99 / month'));
@@ -107,12 +139,12 @@ describe('event library presentation', () => {
     expect(useEntitlementsStore.getState().pro).toBe(false);
     fireEvent.click(within(offer).getByRole('button',{name:'Not now'}));
     expect(screen.getByRole('dialog',{name:'Create an event'})).toBeVisible();
-    expect(screen.queryByRole('dialog',{name:'Try Pro free for 7 days'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog',{name:'Unlock Pro'})).not.toBeInTheDocument();
     expect(mocks.create).not.toHaveBeenCalled();
   });
   it.each([
     ['King of the Court','Padel Night','koc','monthly'],
-    ['Team Americano','Team Americano','americano','annual'],
+    ['King of the Court','Padel Night','koc','annual'],
   ])('continues creating %s only after store activation', async (format,name,id,plan) => {
     useEntitlementsStore.setState({pro:false});
     mocks.purchase.mockImplementation(async () => {
@@ -136,7 +168,7 @@ describe('event library presentation', () => {
     fireEvent.click(screen.getByRole('button',{name:'Create event'}));
     fireEvent.click(screen.getByRole('button',{name:'Choose format: King of the Court'}));
     await act(async () => fireEvent.click(screen.getByRole('button',{name:/Pro Monthly/})));
-    expect(screen.getByRole('dialog',{name:'Try Pro free for 7 days'})).toHaveTextContent('Purchase cancelled.');
+    expect(screen.getByRole('dialog',{name:'Unlock Pro'})).toHaveTextContent('Purchase cancelled.');
     expect(document.querySelector('dialog')).toBeNull();
     expect(mocks.create).not.toHaveBeenCalled();
   });
@@ -148,10 +180,10 @@ describe('event library presentation', () => {
     });
     show();
     fireEvent.click(screen.getByRole('button',{name:'Create event'}));
-    fireEvent.click(screen.getByRole('button',{name:'Choose format: Team Americano'}));
+    fireEvent.click(screen.getByRole('button',{name:'Choose format: King of the Court'}));
     await act(async () => fireEvent.click(screen.getByRole('button',{name:'Restore purchases'})));
     if (active) {
-      expect(mocks.create).toHaveBeenCalledWith('Team Americano','americano');
+      expect(mocks.create).toHaveBeenCalledWith('Padel Night','koc');
       expect(mocks.create).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     } else {

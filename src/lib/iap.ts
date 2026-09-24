@@ -5,7 +5,7 @@
  *  - Web (PWA, including koc-jungle.pages.dev): Pro is temporarily
  *    included at no charge while the native store release is prepared.
  *  - Native (Capacitor iOS / Android): wires through RevenueCat which
- *    talks to StoreKit / Google Billing. The seven-day trial is the
+ *    talks to StoreKit / Google Billing. The free trial is the
  *    store-managed introductory offer, never a local entitlement.
  *
  * Architecture detail: the platform-specific imports are dynamic so
@@ -19,6 +19,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { useEntitlementsStore } from '@/store/entitlements';
+import type { IntroductoryPrice } from '@/lib/subscriptionTrial';
 
 /** Whether the runtime can perform real in-app purchases. */
 export function isIAPAvailable(): boolean {
@@ -42,6 +43,7 @@ interface RevenueCatPackage {
     identifier: string;
     priceString: string;
     title: string;
+    introPrice?: IntroductoryPrice | null;
   };
 }
 

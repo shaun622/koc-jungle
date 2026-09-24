@@ -2,11 +2,11 @@
  * Entitlements store (Stage 2.5 — subscription paywall).
  *
  * Tracks whether the user has the "Pro" entitlement that unlocks:
- *   - King of the Court and Americano during the trial or with Pro
+ *   - King of the Court during the trial or with Pro
  *   - The future Tournament mode when it launches
  *   - Cloud sync (Stage 2.4)
  *
- * No format is permanently free. A new user gets a one-time seven-day
+ * No format is permanently free. A new web-preview user gets a one-time 30-day
  * trial; after it expires an active Pro subscription is required.
  *
  * Trial model: native builds use the App Store / Play introductory offer
@@ -21,14 +21,14 @@
  * layer calls when entitlements change.
  *
  * When no IAP layer is configured (no env var, dev mode), `pro` stays
- * whatever the user last set locally — including the 7-day trial flag.
+ * whatever the user last set locally — including the trial flag.
  * This keeps the operator's PWA usable while we wire native billing.
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-const TRIAL_LENGTH_MS = 7 * 24 * 60 * 60 * 1000;
+export const TRIAL_LENGTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface EntitlementsState {
   /** Final yes/no for whether the user has Pro right now. */
@@ -37,12 +37,12 @@ export interface EntitlementsState {
   loading: boolean;
   /** ms epoch when the active trial ends. Undefined if no trial. */
   trialEndsAt: number | undefined;
-  /** Has this device ever started the 7-day trial? One per device. */
+  /** Has this device ever started a trial? One per device. */
   trialUsed: boolean;
 }
 
 interface Actions {
-  /** Start the one-time 7-day free trial. No-op if already used. */
+  /** Start the one-time 30-day free trial. No-op if already used. */
   startTrial: () => void;
   /** Set Pro entitlement directly. Called by the IAP layer on entitlement change. */
   setPro: (pro: boolean, trialEndsAt?: number) => void;
@@ -89,7 +89,7 @@ export function isFeatureLocked(): boolean {
   return !useEntitlementsStore.getState().pro;
 }
 
-/** No format is free under the current pricing model. Users get a 7-day
+/** No format is free under the current pricing model. Web-preview users get a 30-day
  *  trial to evaluate everything; after that they need an active sub. */
 export const FREE_FORMATS = new Set<string>();
 

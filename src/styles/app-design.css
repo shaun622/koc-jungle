@@ -91,6 +91,8 @@ body{font-size:16px}button,input,select,textarea{font-family:var(--font-body)}
 .ed-dialog .ed-create-trial p{margin:8px 0 0;color:var(--text-0);font-size:16px;line-height:1.5}
 .ed-create-formats{display:grid;gap:14px}
 .ed-format-card{padding:18px;background:var(--bg-1);border:1px solid var(--line);border-radius:12px}
+.ed-format-card--unavailable{opacity:.55}
+.ed-format-card--unavailable .btn:disabled{cursor:not-allowed;background:var(--bg-2);color:var(--text-2);border-color:var(--line);opacity:1}
 .ed-format-heading{display:flex;align-items:center;gap:12px}
 .ed-format-icon{display:grid;place-items:center;width:40px;height:40px;flex-shrink:0;border-radius:10px;background:var(--bg-3);color:var(--lime)}
 .ed-format-icon .icon{width:23px;height:23px}

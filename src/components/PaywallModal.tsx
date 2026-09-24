@@ -1,8 +1,8 @@
 /**
- * PaywallModal: pitches Pro and starts the 7-day trial or initiates
+ * PaywallModal: pitches Pro and starts the 30-day web trial or initiates
  * a subscription purchase.
  *
- * On native builds the seven-day trial is Apple's approved introductory
+ * On native builds any free trial is the store-provided introductory
  * offer and starts through StoreKit with the selected subscription. The
  * local-device trial remains available only in the web preview.
  */
@@ -19,13 +19,13 @@ import {
 import { openUrl } from '@/lib/browser';
 import { useEffect, useState } from 'react';
 import { Portal } from './Portal';
+import { freeTrialLabel } from '@/lib/subscriptionTrial';
 
 const TERMS_URL = 'https://koc-jungle.pages.dev/terms/';
 const PRIVACY_URL = 'https://koc-jungle.pages.dev/privacy/';
 
 const FEATURES = [
   'King of the Court: winners climb, losers drop',
-  'Americano: automatic rotations and live points',
   'Courtside score entry designed for iPad',
   'TV-ready scoreboard, timer and standings',
   'Cloud sync: events across all your devices',
@@ -45,6 +45,7 @@ export function PaywallModal({
   const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | 'redeem' | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [prices, setPrices] = useState<{ monthly?: string; annual?: string }>({});
+  const [trials, setTrials] = useState<{ monthly?: string; annual?: string }>({});
   const [offerStatus, setOfferStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     isIAPAvailable() ? 'loading' : 'idle',
   );
@@ -62,6 +63,7 @@ export function PaywallModal({
             monthly: o.monthly?.product.priceString,
             annual: o.annual?.product.priceString,
           });
+          setTrials({ monthly: freeTrialLabel(o.monthly?.product), annual: freeTrialLabel(o.annual?.product) });
           setOfferStatus('ready');
         } else {
           setOfferStatus('error');
@@ -129,8 +131,8 @@ export function PaywallModal({
           )}
           <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
             {nativeBilling
-              ? 'King of the Court, Americano and cloud sync are unlocked.'
-              : 'Pro is currently included free in the PWA. King of the Court, Americano and cloud sync are unlocked.'}
+              ? 'King of the Court and cloud sync are unlocked.'
+              : 'Pro is currently included free in the PWA. King of the Court and cloud sync are unlocked.'}
           </p>
           <div className="modal-actions">
             <button className="btn primary" onClick={onClose}>
@@ -147,10 +149,10 @@ export function PaywallModal({
     <Portal>
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal paywall-modal" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
-        <h2 id="paywall-title">{nativeBilling || !trialUsed ? 'Try Pro free for 7 days' : 'Unlock everything with Pro'}</h2>
+        <h2 id="paywall-title">{nativeBilling ? 'Unlock Pro' : !trialUsed ? 'Try Pro free for 30 days' : 'Unlock everything with Pro'}</h2>
         {nativeBilling && <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
-          Eligible new subscribers get 7 days free, including King of the Court and Americano.
-          Choose a plan below to start. Your subscription becomes paid after the trial unless you cancel.
+          Choose a plan below to see its price and any free trial for eligible new subscribers.
+          Your subscription becomes paid after any trial unless you cancel.
           The App Store confirms your eligibility, price and first payment date before you approve.
         </p>}
         {reason && (
@@ -174,7 +176,7 @@ export function PaywallModal({
                 onClose();
               }}
             >
-              Start 7-day free trial
+              Start 30-day free trial
             </button>
           ) : (
             <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.5, textAlign: 'center' }}>
@@ -195,7 +197,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Monthly
-              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? 'Start free trial if eligible · then renews monthly' : 'Auto-renews monthly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling && trials.monthly ? `${trials.monthly} if eligible · then renews monthly` : 'Auto-renews monthly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('monthly')}</span>
           </button>
@@ -206,7 +208,7 @@ export function PaywallModal({
           >
             <span className="paywall-plan-name">
               Pro Annual <span className="paywall-plan-badge">save 33%</span>
-              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling ? 'Start free trial if eligible · then renews yearly' : 'Auto-renews yearly'}</span>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 400, color: 'var(--text-2)', letterSpacing: '0.02em', marginTop: 3 }}>{nativeBilling && trials.annual ? `${trials.annual} if eligible · then renews yearly` : 'Auto-renews yearly'}</span>
             </span>
             <span className="paywall-plan-price">{priceLabel('annual')}</span>
           </button>
@@ -246,7 +248,7 @@ export function PaywallModal({
             lineHeight: 1.5,
           }}
         >
-          Eligible new subscribers receive a 7-day free trial. Pro Monthly and
+          Free-trial eligibility and duration are determined by the store. Pro Monthly and
           Pro Annual are auto-renewable subscriptions. If eligible, payment starts
           after your free trial; otherwise, payment is charged to your Apple ID
           at confirmation of purchase. Each renews

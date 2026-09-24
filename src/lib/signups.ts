@@ -753,10 +753,17 @@ export async function deleteOrganizerRegistrationIfStatus(
 
 export async function getPublicSignup(publicSlug: string, accountSlug?: string): Promise<PublicSignup> {
   const client = requirePublicSupabase();
-  const { data, error } = await client.rpc('get_public_signup_v3', {
+  const args = {
     p_account_slug: accountSlug || null,
     p_event_slug: publicSlug,
-  });
+  };
+  let { data, error } = await client.rpc('get_public_signup_v3', args);
+  // Existing deployments need no Americano migration to keep KoC signups
+  // working. Fall back only when the new reader is genuinely unavailable,
+  // never for auth, network or event validation failures.
+  if (error?.code === 'PGRST202' || error?.code === '42883') {
+    ({ data, error } = await client.rpc('get_public_signup_v2', args));
+  }
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
   const value = data as PublicSignup;
