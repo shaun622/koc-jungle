@@ -20,6 +20,10 @@ $$;
 create schema public;
 grant usage on schema public to anon, authenticated, service_role;
 
+-- Match hosted Supabase: pgcrypto is not installed into public.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+
 create schema auth;
 create table auth.users (
   id uuid primary key,

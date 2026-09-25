@@ -4,12 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(), archive: vi.fn(), deleteLocal: vi.fn(), deleteCloud: vi.fn(), create: vi.fn(),
-  getSignup: vi.fn(), copyLink: vi.fn(), hydrateTournament: vi.fn(),
+  getSignup: vi.fn(), copyLink: vi.fn(), hydrateTournament: vi.fn(), createAmericano: vi.fn(),
+  flags: { ENABLE_AMERICANO_V2: false, ENABLE_TOURNAMENT_V1: false },
   fetchOfferings: vi.fn(), purchase: vi.fn(), restore: vi.fn(),
 }));
 vi.mock('@/hooks/useAuth', () => ({useAuth: () => ({ user: {id:'owner-1',email:'organiser@example.com'},cloudEnabled:true })}));
 vi.mock('@/store/cloudSync', () => ({deleteCloudEvent:mocks.deleteCloud}));
-vi.mock('@/config/features', () => ({ ENABLE_AMERICANO_V2: false, ENABLE_TOURNAMENT_V1: false }));
+vi.mock('@/config/features', () => mocks.flags);
 vi.mock('@/store/tournamentStore', () => ({
   LOCAL_TOURNAMENT_OWNER: 'local',
   useTournamentStore: Object.assign((selector: (state: { records: never[] }) => unknown) => selector({ records: [] }), {
@@ -42,6 +43,7 @@ function show(){return render(<MemoryRouter><HomeScreen/></MemoryRouter>)}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.flags.ENABLE_AMERICANO_V2 = false;
   useEntitlementsStore.setState({pro:true,trialUsed:false,trialEndsAt:undefined});
   mocks.fetchOfferings.mockResolvedValue({
     monthly: {product:{priceString:'$9.99'}},
@@ -49,10 +51,20 @@ beforeEach(() => {
   });
   mocks.select.mockResolvedValue(null);mocks.archive.mockResolvedValue(undefined);mocks.deleteLocal.mockResolvedValue(undefined);
   useEventCatalogStore.setState({events,hydrated:true,lastError:null});
-  useEventStore.setState({event:null,selectEventById:mocks.select,archiveLocalEvent:mocks.archive,deleteLocalEvent:mocks.deleteLocal,createEvent:mocks.create});
+  useEventStore.setState({event:null,selectEventById:mocks.select,archiveLocalEvent:mocks.archive,deleteLocalEvent:mocks.deleteLocal,createEvent:mocks.create,createAmericanoEvent:mocks.createAmericano});
 });
 
 describe('event library presentation', () => {
+  it.each(['Rotating pairs', 'Fixed pairs'])('creates %s when web Americano is enabled, leaving Tournament locked', (label) => {
+    mocks.flags.ENABLE_AMERICANO_V2 = true;
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(screen.getByRole('button', { name: 'Tournament: coming soon' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose format: Americano' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose format: ' + label }));
+    expect(mocks.createAmericano).toHaveBeenCalledWith(expect.any(String), label === 'Fixed pairs' ? 'fixed' : 'rotating');
+    expect(mocks.hydrateTournament).not.toHaveBeenCalled();
+  });
   it('shows unavailable formats without starting them or contacting the tournament backend', () => {
     show();
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));

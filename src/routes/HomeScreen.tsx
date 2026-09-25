@@ -24,7 +24,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Icons } from '@/components/Icons';
 import type { EventStatus, TournamentFormatId } from '@/types/domain';
 import type { VersionedEventState } from '@/logic/americanoV2/types';
-import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
 
 import { ArrowRight, CalendarDays, MapPin, Users, Search, MoreHorizontal, Link as LinkIcon } from 'lucide-react';
 import { getOwnedSignup, copySignupLink } from '@/lib/signups';
@@ -225,10 +224,6 @@ export function HomeScreen() {
   function loadAsNew(next: VersionedEventState) {
     if (next.format === 'americano' && !ENABLE_AMERICANO_V2) {
       setMessage('Americano is coming soon. You can still open existing events.');
-      return;
-    }
-    if (isAmericanoEventV2(next)) {
-      setMessage('This Americano template needs the new event flow, which is not enabled in this build.');
       return;
     }
     loadEvent(next);

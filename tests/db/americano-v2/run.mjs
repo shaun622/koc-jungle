@@ -38,6 +38,8 @@ const psql = process.env.KOC_TEST_PSQL_PATH || (existsSync(localPsql) ? localPsq
 const migrationDirectory = join(repositoryRoot, 'supabase', 'migrations');
 const migrations = readdirSync(migrationDirectory)
   .filter((name) => name.endsWith('.sql'))
+  // Rehearse the exact Americano-only production release without Tournament.
+  .filter((name) => !process.argv.includes('--americano-only') || !name.includes('tournament'))
   .sort();
 const firstAmericanoMigration = migrations.findIndex((name) => name.startsWith('20260911'));
 if (firstAmericanoMigration < 0) fail('Americano v2 migrations are missing from the test target.');

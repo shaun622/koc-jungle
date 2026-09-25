@@ -104,6 +104,11 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
   const previewSectionRef = useRef<HTMLElement>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [signup, setSignup] = useState<SignupSnapshotV3 | null>(null);
+  const [signupReadFailed, setSignupReadFailed] = useState(false);
+  const signupSnapshotRef = useRef<SignupSnapshotV3 | null>(null);
+  const signupEpochRef = useRef(0);
+  const retrySignupRef = useRef<(() => Promise<void>) | null>(null);
+  const metadataDirtyRef = useRef(false);
   const [contacts, setContacts] = useState<Record<string, string>>({});
   const [teamName, setTeamName] = useState('');
   const [playerOne, setPlayerOne] = useState('');
@@ -123,7 +128,7 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
   const [conflictSnapshot, setConflictSnapshot] = useState<OwnerSnapshotV2 | null>(null);
   const publishPendingRef = useRef<ReturnType<typeof sealPendingAmericanoRequest> | null>(null);
   const startPendingRef = useRef<ReturnType<typeof sealPendingAmericanoRequest> | null>(null);
-  const [metadata, setMetadata] = useState(() => ({
+  const [metadata, setMetadataState] = useState(() => ({
     title: event.name,
     venue: event.venue ?? '',
     startsAt: '',
@@ -134,6 +139,44 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
     publicContactMethod: '' as '' | 'whatsapp' | 'email',
     publicContactValue: '',
   }));
+
+  function setMetadata(next: typeof metadata | ((current: typeof metadata) => typeof metadata)) {
+    metadataDirtyRef.current = true;
+    setMetadataState(next);
+  }
+
+  function acceptSignup(next: SignupSnapshotV3 | null, resetMetadata = false) {
+    const previous = signupSnapshotRef.current;
+    if (next && previous?.id === next.id && (
+      BigInt(next.capacityRevision ?? '0') < BigInt(previous.capacityRevision ?? '0')
+      || BigInt(next.rosterRevision ?? '0') < BigInt(previous.rosterRevision ?? '0')
+    )) return;
+    signupSnapshotRef.current = next;
+    setSignup(next);
+    setSignupReadFailed(false);
+    if (next && (!metadataDirtyRef.current || resetMetadata)) {
+      metadataDirtyRef.current = false;
+      setMetadataState({
+        title: next.title, venue: next.venue,
+        startsAt: dateTimeLocal(next.startsAt), endsAt: dateTimeLocal(next.endsAt),
+        details: next.details, prizes: next.prizes, organizerName: next.organizerName,
+        publicContactMethod: next.publicContactMethod ?? '', publicContactValue: next.publicContactValue,
+      });
+    }
+  }
+
+  const signupReady = !event.settings.publishedSignupId
+    || (signup?.id === event.settings.publishedSignupId && !signupReadFailed);
+
+  useEffect(() => {
+    signupEpochRef.current += 1;
+    signupSnapshotRef.current = null;
+    metadataDirtyRef.current = false;
+    setSignup(null);
+    setSignupReadFailed(false);
+    setMetadataState({ title: event.name, venue: event.venue ?? '', startsAt: '', endsAt: '',
+      details: '', prizes: '', organizerName: '', publicContactMethod: '', publicContactValue: '' });
+  }, [event.id]);
 
   const mode = event.formatConfig.pairingMode;
   // "fixed" is a Tailwind positioning utility, not a pairing-mode CSS modifier.
@@ -175,34 +218,30 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
     const signupId = event.settings.publishedSignupId;
     if (!signupId || !auth.user) {
       setSignup(null);
+      signupSnapshotRef.current = null;
+      retrySignupRef.current = null;
       return;
     }
     let cancelled = false;
     const refresh = async () => {
+      const epoch = signupEpochRef.current;
       try {
         const next = await getOrganizerSignupV3(signupId);
-        if (!cancelled) {
-          setSignup(next);
-          setMetadata({
-            title: next.title,
-            venue: next.venue,
-            startsAt: dateTimeLocal(next.startsAt),
-            endsAt: dateTimeLocal(next.endsAt),
-            details: next.details,
-            prizes: next.prizes,
-            organizerName: next.organizerName,
-            publicContactMethod: next.publicContactMethod ?? '',
-            publicContactValue: next.publicContactValue,
-          });
+        if (!cancelled && epoch === signupEpochRef.current) {
+          acceptSignup(next);
         }
       } catch (error) {
-        if (!cancelled) setMessage((error as Error).message);
+        if (!cancelled && epoch === signupEpochRef.current) {
+          setSignupReadFailed(true);
+          setMessage((error as Error).message);
+        }
       }
     };
+    retrySignupRef.current = refresh;
     void refresh();
     const timer = window.setInterval(() => void refresh(), 8_000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [auth.user, event.settings.publishedSignupId]);
+    return () => { cancelled = true; retrySignupRef.current = null; window.clearInterval(timer); };
+  }, [auth.user, event.id, event.settings.publishedSignupId]);
 
   function commitLocal(next: AmericanoEventStateV2) {
     loadEvent(next);
@@ -226,6 +265,7 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
 
   async function applyOwner(reply: OwnerReplyV2) {
     const snapshot = replySnapshot(reply);
+    signupEpochRef.current += 1;
     await saveEventToLocalCatalog(snapshot.event, {
       updatedAt: Number.isFinite(Date.parse(snapshot.updatedAt))
         ? Date.parse(snapshot.updatedAt)
@@ -233,11 +273,28 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
       makeActive: true,
     });
     applyExternalEventToActiveFacade(snapshot.event);
-    setSignup(snapshot.signup);
+    acceptSignup(snapshot.signup);
     return snapshot;
   }
 
+  async function reloadConflict() {
+    if (!conflictSnapshot) return;
+    setBusy(true);
+    signupEpochRef.current += 1;
+    try {
+      await saveEventToLocalCatalog(conflictSnapshot.event.state, {
+        updatedAt: Date.parse(conflictSnapshot.event.updatedAt), makeActive: true,
+      });
+      applyExternalEventToActiveFacade(conflictSnapshot.event.state);
+      acceptSignup(conflictSnapshot.signup, true);
+      setConflictSnapshot(null);
+      setMessage('Latest server version loaded.');
+    } catch (error) { handleError(error); }
+    finally { setBusy(false); }
+  }
+
   async function configurePublished(next: AmericanoEventStateV2) {
+    if (!signupReady) return;
     if (!signup) return commitLocal(next);
     setBusy(true);
     try {
@@ -444,6 +501,7 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
   }
 
   async function createPreview(options: { uneven?: boolean; repeat?: boolean; reshuffle?: boolean } = {}) {
+    if (!signupReady) return;
     if (pointsError) { pointsInputRef.current?.focus(); return; }
     setBusy(true); setMessage('');
     try {
@@ -461,6 +519,7 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
   }
 
   async function reviewAndStart() {
+    if (!signupReady) return;
     if (pointsError) { pointsInputRef.current?.focus(); return; }
     if (!schedule && !await createPreview()) return;
     previewSectionRef.current?.scrollIntoView({ block: 'start' });
@@ -468,6 +527,7 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
   }
 
   async function publish() {
+    if (!signupReady) return;
     if (pointsError) { pointsInputRef.current?.focus(); return; }
     if (!auth.user) { setAuthOpen(true); return; }
     setBusy(true); setMessage('');
@@ -529,12 +589,14 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
         await deletePrivateEntryDraftsForEvent(event.id);
         setContacts({});
       }
+      acceptSignup(snapshot.signup, true);
       setMessage(signup ? 'Sign-up page updated.' : 'Sign-up page published.');
     } catch (error) { handleError(error); }
     finally { setBusy(false); }
   }
 
   async function start() {
+    if (!signupReady) return;
     if (pointsError) { pointsInputRef.current?.focus(); return; }
     setBusy(true); setMessage('');
     try {
@@ -600,6 +662,11 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
         </div>
       </header>
 
+      {!signupReady && <div className="signup-message error" role="alert">
+        Load the published signup before changing this event or starting play.
+        <button className="btn" onClick={() => auth.user ? void retrySignupRef.current?.() : setAuthOpen(true)}>{auth.user ? 'Retry signup' : 'Sign in'}</button>
+      </div>}
+      <fieldset disabled={busy || !signupReady} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="americano-setup-columns">
       <div className="americano-setup-settings">
         <div className="setup-panel americano-config-card">
@@ -709,11 +776,12 @@ export function AmericanoSetup({ event }: { event: AmericanoEventStateV2 }) {
       </div>
       </div>
 
+      </fieldset>
+
       {message && <div className="signup-message error" role="alert">{message}</div>}
-      {conflictSnapshot && <div className="setup-panel americano-conflict-actions"><strong>Choose what to do with this conflict</strong><div className="button-row"><button className="btn" onClick={downloadLocalDraft}>Download my local draft</button><button className="btn primary" onClick={() => { void saveEventToLocalCatalog(conflictSnapshot.event.state, { updatedAt: Date.parse(conflictSnapshot.event.updatedAt), makeActive: true }).then(() => { applyExternalEventToActiveFacade(conflictSnapshot.event.state); setSignup(conflictSnapshot.signup); setConflictSnapshot(null); setMessage('Latest server version loaded.'); }); }}>Reload server version</button></div></div>}
       {conflictSnapshot && <div className="setup-panel americano-conflict-card" role="alert">
         <div><strong>Another device saved a newer version.</strong><p>Your form is still on this screen. Download it before replacing it if you need a copy.</p></div>
-        <div className="button-row"><button className="btn" onClick={downloadLocalDraft}>Download local draft</button><button className="btn primary" onClick={() => { applyExternalEventToActiveFacade(conflictSnapshot.event.state); setSignup(conflictSnapshot.signup); setConflictSnapshot(null); setMessage('Latest server version loaded.'); }}>Reload server version</button></div>
+        <div className="button-row"><button className="btn" onClick={downloadLocalDraft}>Download local draft</button><button className="btn primary" disabled={busy} onClick={() => void reloadConflict()}>Reload server version</button></div>
       </div>}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {shareOpen && <RosterShareModal title={signup?.title ?? event.name} text={buildRosterShareText({ event, signup, registrations: signup?.registrations })} onClose={() => setShareOpen(false)} />}

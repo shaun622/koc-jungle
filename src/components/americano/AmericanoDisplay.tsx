@@ -54,7 +54,10 @@ export function AmericanoDisplay({ event }: { event: AmericanoEventStateV2 }) {
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const lastSpokenRound = useRef<string | null>(null);
-  const readOnly = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tv') === '1';
+  const readOnly = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('tv') === '1'
+    || new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tv') === '1'
+  );
   const round = currentRound(event);
   const standings = useMemo(() => computeAmericanoStandings(event), [event]);
   const completedRounds = event.rounds.filter((candidate) => candidate.completedAt && !candidate.excludedReason).length;
@@ -116,7 +119,7 @@ export function AmericanoDisplay({ event }: { event: AmericanoEventStateV2 }) {
   const clock = remainingMs(event, now);
   return (
     <main className="americano-night">
-      <header className="americano-night-header"><div><span>AMERICANO · {event.formatConfig.pairingMode === 'rotating' ? 'ROTATING PAIRS' : 'FIXED PAIRS'}</span><h1>{event.name}</h1></div><div className="americano-night-tools"><strong>Round {round.index} of {event.americanoSchedule?.rounds.length ?? event.settings.roundsTotal}</strong><ThemeSwitch />{!readOnly && <button className="btn" onClick={() => window.open(`${window.location.href.split('?')[0]}?tv=1`, '_blank', 'noopener,noreferrer')}>Open read-only TV</button>}</div></header>
+      <header className="americano-night-header"><div><span>AMERICANO · {event.formatConfig.pairingMode === 'rotating' ? 'ROTATING PAIRS' : 'FIXED PAIRS'}</span><h1>{event.name}</h1></div><div className="americano-night-tools"><strong>Round {round.index} of {event.americanoSchedule?.rounds.length ?? event.settings.roundsTotal}</strong><ThemeSwitch />{!readOnly && <button className="btn" onClick={() => (() => { const url = new URL(window.location.href); url.searchParams.set('tv', '1'); window.open(url.toString(), '_blank', 'noopener,noreferrer'); })()}>Open read-only TV</button>}</div></header>
       <div className="americano-night-grid">
         <AmericanoStandings event={event} rows={standings} onOpen={setHistoryFor} />
         <section className="americano-courts-live">

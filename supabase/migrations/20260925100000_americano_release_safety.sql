@@ -1,78 +1,10 @@
--- Americano v2 validation, owner snapshots, idempotent event save and setup config.
+-- Americano release corrections (AM-01, AM-02, AM-05).
+-- Function-only migration: no event, roster, score or signup data is rewritten.
+-- Existing function ACLs are retained by CREATE OR REPLACE.
+-- Lock order remains event -> signup -> registration throughout.
 
-create or replace function public.americano_v2_canonical_json(p_value jsonb)
-returns text
-language plpgsql
-immutable
-set search_path = public, pg_temp
-as $$
-declare result text;
-begin
-  case jsonb_typeof(p_value)
-    when 'object' then
-      select '{' || coalesce(string_agg(to_jsonb(key)::text || ':' || public.americano_v2_canonical_json(value), ',' order by key), '') || '}'
-        into result from jsonb_each(p_value);
-    when 'array' then
-      select '[' || coalesce(string_agg(public.americano_v2_canonical_json(value), ',' order by ordinal), '') || ']'
-        into result from jsonb_array_elements(p_value) with ordinality item(value, ordinal);
-    else result := p_value::text;
-  end case;
-  return result;
-end;
-$$;
-
-create or replace function public.americano_v2_schedule_fingerprint(p_state jsonb)
-returns text
-language plpgsql
-immutable
-set search_path = public, pg_temp
-as $$
-declare
-  schedule jsonb := p_state -> 'americanoSchedule';
-  membership jsonb := 'null'::jsonb;
-  fixtures jsonb := '[]'::jsonb;
-  payload jsonb;
-begin
-  if p_state #>> '{formatConfig,pairingMode}' = 'fixed' then
-    select coalesce(jsonb_agg(jsonb_build_object(
-      'teamId', team ->> 'id',
-      'playerIds', jsonb_build_array(team #>> '{players,0,id}', team #>> '{players,1,id}')
-    ) order by ordinal), '[]'::jsonb) into membership
-    from jsonb_array_elements(p_state -> 'teams') with ordinality item(team, ordinal)
-    where coalesce((team ->> 'active')::boolean, false);
-  end if;
-
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'matches', (select coalesce(jsonb_agg(jsonb_build_object(
-      'courtId', match ->> 'courtId', 'sideA', match -> 'sideA', 'sideB', match -> 'sideB'
-    ) order by match_ordinal), '[]'::jsonb)
-      from jsonb_array_elements(round_value -> 'matches') with ordinality match_item(match, match_ordinal)),
-    'rests', round_value -> 'restingEntrantIds'
-  ) order by round_ordinal), '[]'::jsonb) into fixtures
-  from jsonb_array_elements(schedule -> 'rounds') with ordinality round_item(round_value, round_ordinal);
-
-  payload := jsonb_build_object(
-    'algorithmVersion', schedule -> 'algorithmVersion',
-    'pairingMode', p_state #> '{formatConfig,pairingMode}',
-    'pointsPerMatch', p_state #> '{formatConfig,pointsPerMatch}',
-    'scheduleKind', p_state #> '{formatConfig,scheduleKind}',
-    'customRounds', coalesce(p_state #> '{formatConfig,customRounds}', 'null'::jsonb),
-    'paceMinutes', p_state #> '{formatConfig,paceMinutes}',
-    'paceClockEnabled', p_state #> '{formatConfig,paceClockEnabled}',
-    'seed', schedule -> 'seed',
-    'orderedEntrantIds', schedule -> 'orderedEntrantIds',
-    'membership', membership,
-    'courtIds', schedule -> 'courtIds',
-    'rosterRevision', schedule -> 'rosterRevision',
-    'fixtures', fixtures,
-    'metrics', schedule -> 'metrics'
-  );
-  return encode(pg_catalog.sha256(convert_to(public.americano_v2_canonical_json(payload), 'UTF8')), 'hex');
-exception when others then
-  return null;
-end;
-$$;
-
+-- Setup previews are saved by cloud sync too: validate their complete schedule
+-- without requiring a started round. Only Start freezes the preview.
 create or replace function public.americano_v2_state_error(p_state jsonb)
 returns text
 language plpgsql
@@ -176,8 +108,8 @@ begin
       where coalesce((item ->> 'active')::boolean, false);
   end if;
 
-  if p_state ->> 'status' = 'setup' and (jsonb_array_length(p_state -> 'rounds') <> 0 or p_state ? 'americanoSchedule') then return 'INVALID_SCHEDULE'; end if;
-  if p_state ->> 'status' <> 'setup' then
+  if p_state ->> 'status' = 'setup' and jsonb_array_length(p_state -> 'rounds') <> 0 then return 'INVALID_SCHEDULE'; end if;
+  if p_state ->> 'status' <> 'setup' or p_state ? 'americanoSchedule' then
     if entrant_count < (case when mode = 'rotating' then 4 else 2 end) then return 'INVALID_SCHEDULE'; end if;
     if jsonb_typeof(p_state -> 'americanoSchedule') <> 'object' then return 'INVALID_SCHEDULE'; end if;
     if p_state #>> '{americanoSchedule,algorithmVersion}' <> 'americano-v2.1' then return 'INVALID_SCHEDULE'; end if;
@@ -379,108 +311,6 @@ exception when others then
 end;
 $$;
 
-create or replace function public.americano_v2_payload_hash(p_operation text, p_payload jsonb)
-returns text
-language sql
-immutable
-set search_path = public, pg_temp
-as $$
-  select encode(pg_catalog.sha256(convert_to(jsonb_build_object('operation', p_operation, 'payload', p_payload)::text, 'UTF8')), 'hex')
-$$;
-
-create or replace function public.organizer_signup_snapshot_v3_internal(p_signup_event_id uuid)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select case when event.id is null then null else jsonb_build_object(
-    'id', event.id,
-    'sourceEventId', event.source_event_id,
-    'publicSlug', event.public_slug,
-    'accountSlug', event.account_slug,
-    'eventSlug', event.event_slug,
-    'title', event.title,
-    'venue', event.venue,
-    'startsAt', event.starts_at,
-    'endsAt', event.ends_at,
-    'details', event.details,
-    'prizes', event.prizes,
-    'isOpen', event.is_open,
-    'cancelledAt', event.cancelled_at,
-    'cancellationMessage', coalesce(event.cancellation_message, ''),
-    'timeZone', event.time_zone,
-    'organizerName', coalesce(event.organizer_name, ''),
-    'publicContactMethod', event.public_contact_method,
-    'publicContactValue', coalesce(event.public_contact_value, ''),
-    'protocolVersion', event.protocol_version,
-    'entryMode', event.entry_mode,
-    'capacity', case when event.entry_mode = 'individual'
-      then jsonb_build_object('unit','players','value',event.capacity_players)
-      else jsonb_build_object('unit','teams','value',event.capacity_teams) end,
-    'capacityRevision', event.capacity_revision::text,
-    'rosterRevision', event.roster_revision::text,
-    'rosterSeededAt', event.roster_seeded_at,
-    'rosterLockedAt', event.roster_locked_at,
-    'registrations', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', registration.id,
-        'teamName', registration.team_name,
-        'playerOne', registration.player_one,
-        'playerTwo', registration.player_two,
-        'contact', registration.contact,
-        'playerTwoContact', registration.player_two_contact,
-        'status', registration.status,
-        'entryMode', registration.entry_mode,
-        'organizerRank', registration.organizer_rank,
-        'pairCompletedAt', registration.pair_completed_at,
-        'createdAt', registration.created_at,
-        'updatedAt', registration.updated_at
-      ) order by case registration.status when 'confirmed' then 0 when 'looking' then 1 when 'waitlisted' then 2 else 3 end,
-        registration.organizer_rank nulls last, registration.created_at, registration.id)
-      from public.signup_registrations as registration
-      where registration.signup_event_id = event.id
-    ), '[]'::jsonb)
-  ) end
-  from public.signup_events as event
-  where event.id = p_signup_event_id
-$$;
-
-create or replace function public.owner_event_snapshot_v2_internal(p_event_id uuid, p_owner_id uuid)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select jsonb_build_object(
-    'event', jsonb_build_object(
-      'id', event.id,
-      'protocolVersion', event.protocol_version,
-      'revision', event.revision::text,
-      'updatedAt', event.updated_at,
-      'state', event.state
-    ),
-    'signup', public.organizer_signup_snapshot_v3_internal(signup.id)
-  )
-  from public.events as event
-  left join public.signup_events as signup
-    on signup.source_event_uuid = event.id and signup.owner_user_id = event.user_id
-  where event.id = p_event_id and event.user_id = p_owner_id and event.deleted_at is null
-$$;
-
-create or replace function public.americano_v2_rejected(p_request_id uuid, p_code text, p_message text, p_field text default null)
-returns jsonb
-language sql
-immutable
-set search_path = public, pg_temp
-as $$
-  select jsonb_strip_nulls(jsonb_build_object(
-    'status','rejected','requestId',p_request_id,'code',p_code,'message',p_message,'field',p_field
-  ))
-$$;
-
 create or replace function public.organizer_save_event_v2(
   p_event_id uuid, p_base_event_revision bigint,
   p_request_id uuid, p_state jsonb
@@ -531,6 +361,9 @@ begin
     end if;
     select signup.id into signup_id from public.signup_events as signup
       where signup.source_event_uuid = p_event_id and signup.owner_user_id = owner_id;
+    if signup_id is not null and existing.state->>'status'='setup' and p_state->>'status'<>'setup' then
+      return public.americano_v2_rejected(p_request_id,'START_REQUIRED','Use Start event to close registration and freeze the roster.');
+    end if;
     if signup_id is not null and (
       existing.state -> 'courts' is distinct from p_state -> 'courts'
       or existing.state -> 'teams' is distinct from p_state -> 'teams'
@@ -542,7 +375,7 @@ begin
     if existing.state ->> 'status' <> 'setup' and p_state ->> 'status' = 'setup' then
       return public.americano_v2_rejected(p_request_id,'MODE_LOCKED','A started event cannot be reset to setup.');
     end if;
-    if existing.state -> 'americanoSchedule' is not null
+    if existing.state ->> 'status' <> 'setup' and existing.state -> 'americanoSchedule' is not null
        and existing.state -> 'americanoSchedule' is distinct from p_state -> 'americanoSchedule' then
       return public.americano_v2_rejected(p_request_id,'INVALID_SCHEDULE','A frozen schedule cannot be replaced.');
     end if;
@@ -641,6 +474,14 @@ begin
   if event_row.revision <> p_base_event_revision then
     return jsonb_build_object('status','conflict','requestId',p_request_id,'code','EVENT_REVISION_CONFLICT','snapshot',public.owner_event_snapshot_v2_internal(p_event_id,owner_id));
   end if;
+  -- Resolve the authoritative linkage, never treating a missing client snapshot
+  -- as an unpublished event. Preserve the event -> signup lock order.
+  select * into signup from public.signup_events as linked
+    where linked.source_event_uuid = p_event_id and linked.owner_user_id = owner_id
+    for update;
+  if signup.id is distinct from p_signup_event_id then
+    return public.americano_v2_rejected(p_request_id,'SIGNUP_REQUIRED','Reload the published signup before continuing.');
+  end if;
   if p_signup_event_id is not null then
     select * into signup from public.signup_events as row
       where row.id=p_signup_event_id and row.source_event_uuid=p_event_id and row.owner_user_id=owner_id for update;
@@ -670,7 +511,10 @@ begin
     perform public.rebalance_signup_event(signup.id);
   end if;
   next_revision := event_row.revision + 1;
-  next_state := jsonb_set(jsonb_set(jsonb_set(event_row.state,'{courts}',p_courts,true),'{formatConfig}',p_format_config,true),'{revision}',to_jsonb(next_revision::text),true);
+  next_state := case when signup.id is not null
+    then public.americano_v2_project_roster(p_event_id,signup.id)
+    else event_row.state end;
+  next_state := jsonb_set(jsonb_set(jsonb_set(next_state - 'americanoSchedule','{courts}',p_courts,true),'{formatConfig}',p_format_config,true),'{revision}',to_jsonb(next_revision::text),true);
   update public.events as row set state=next_state, revision=next_revision, updated_at=clock_timestamp() where row.id=p_event_id;
   insert into public.event_v2_requests(event_id,request_id,operation,payload_sha256,applied_revision,result_ids)
     values(p_event_id,p_request_id,'organizer_save_americano_config_v2',payload_hash,next_revision,'{}');
@@ -679,14 +523,241 @@ begin
 end;
 $$;
 
-revoke all on function public.americano_v2_state_error(jsonb) from public, anon, authenticated;
-revoke all on function public.americano_v2_canonical_json(jsonb) from public, anon, authenticated;
-revoke all on function public.americano_v2_schedule_fingerprint(jsonb) from public, anon, authenticated;
-revoke all on function public.americano_v2_payload_hash(text,jsonb) from public, anon, authenticated;
-revoke all on function public.organizer_signup_snapshot_v3_internal(uuid) from public, anon, authenticated;
-revoke all on function public.owner_event_snapshot_v2_internal(uuid,uuid) from public, anon, authenticated;
-revoke all on function public.americano_v2_rejected(uuid,text,text,text) from public, anon, authenticated;
-revoke all on function public.organizer_save_event_v2(uuid,bigint,uuid,jsonb) from public, anon;
-revoke all on function public.organizer_save_americano_config_v2(uuid,bigint,uuid,bigint,bigint,uuid,jsonb,jsonb) from public, anon;
-grant execute on function public.organizer_save_event_v2(uuid,bigint,uuid,jsonb) to authenticated;
-grant execute on function public.organizer_save_americano_config_v2(uuid,bigint,uuid,bigint,bigint,uuid,jsonb,jsonb) to authenticated;
+create or replace function public.americano_v2_commit_roster_projection(p_event_id uuid, p_signup_event_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  current_revision bigint;
+  current_status text;
+  next_state jsonb;
+begin
+  select event.revision, event.state->>'status' into current_revision, current_status
+  from public.events as event
+  where event.id=p_event_id and event.deleted_at is null
+  for update;
+  if not found then raise exception using errcode='P0001',message='EVENT_DELETED'; end if;
+
+  if current_status is distinct from 'setup' then
+    raise exception using errcode='P0001',message='Registrations are closed after play starts.';
+  end if;
+
+  -- Any canonical queue change invalidates a preview because Start compares the
+  -- frozen roster revision. Confirmed entries are projected into the event in
+  -- the same transaction; waiting/looking entries remain in the private signup
+  -- record and are visible to the organiser through the owner reader.
+  next_state:=public.americano_v2_project_roster(p_event_id,p_signup_event_id)-'americanoSchedule';
+  next_state:=jsonb_set(next_state,'{revision}',to_jsonb((current_revision+1)::text),true);
+  update public.events as event
+  set state=next_state,revision=current_revision+1,updated_at=clock_timestamp()
+  where event.id=p_event_id;
+end;
+$$;
+
+create or replace function public.organizer_start_americano_v2(
+  p_event_id uuid,p_base_event_revision bigint,p_signup_event_id uuid,p_base_capacity_revision bigint,
+  p_base_roster_revision bigint,p_request_id uuid,p_start_state jsonb
+)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare owner_id uuid:=auth.uid(); event_row public.events%rowtype; signup public.signup_events%rowtype; payload_hash text; existing_reply jsonb;
+  validation_error text; next_revision bigint; next_state jsonb; server_ids text[]; candidate_ids text[];
+begin
+  if owner_id is null then return public.americano_v2_rejected(p_request_id,'NOT_AUTHENTICATED','Sign in to start this event.'); end if;
+  perform set_config('app.americano_v2_rpc','on',true);
+  payload_hash:=public.americano_v2_payload_hash('organizer_start_americano_v2',jsonb_build_object('baseEventRevision',p_base_event_revision,'signupEventId',p_signup_event_id,'baseCapacityRevision',p_base_capacity_revision,'baseRosterRevision',p_base_roster_revision,'startState',p_start_state));
+  select * into event_row from public.events row where row.id=p_event_id and row.user_id=owner_id for update;
+  if not found then return public.americano_v2_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','This event could not be found.'); end if;
+  if event_row.deleted_at is not null then return public.americano_v2_rejected(p_request_id,'EVENT_DELETED','This event was deleted.'); end if;
+  existing_reply:=public.americano_v2_receipt_reply(p_event_id,owner_id,p_request_id,'organizer_start_americano_v2',payload_hash); if existing_reply is not null then return existing_reply; end if;
+  if event_row.state->>'status'<>'setup' then return public.americano_v2_rejected(p_request_id,'MODE_LOCKED','This event has already started.'); end if;
+  if event_row.revision<>p_base_event_revision then return jsonb_build_object('status','conflict','requestId',p_request_id,'code','EVENT_REVISION_CONFLICT','snapshot',public.owner_event_snapshot_v2_internal(p_event_id,owner_id)); end if;
+  validation_error:=public.americano_v2_state_error(p_start_state); if validation_error is not null or p_start_state->>'status'='setup' then return public.americano_v2_rejected(p_request_id,'INVALID_SCHEDULE','The start preview is invalid.'); end if;
+  if p_start_state->>'id'<>p_event_id::text or p_start_state->'courts' is distinct from event_row.state->'courts'
+     or p_start_state->'teams' is distinct from event_row.state->'teams' or p_start_state->'participants' is distinct from event_row.state->'participants'
+     or p_start_state->'formatConfig' is distinct from event_row.state->'formatConfig' then return public.americano_v2_rejected(p_request_id,'PREVIEW_STALE','The roster or settings changed after preview.'); end if;
+  -- Resolve the authoritative linkage, never treating a missing client snapshot
+  -- as an unpublished event. Preserve the event -> signup lock order.
+  select * into signup from public.signup_events as linked
+    where linked.source_event_uuid = p_event_id and linked.owner_user_id = owner_id
+    for update;
+  if signup.id is distinct from p_signup_event_id then
+    return public.americano_v2_rejected(p_request_id,'SIGNUP_REQUIRED','Reload the published signup before continuing.');
+  end if;
+  if p_signup_event_id is not null then
+    select * into signup from public.signup_events row where row.id=p_signup_event_id and row.source_event_uuid=p_event_id and row.owner_user_id=owner_id for update;
+    if not found then return public.americano_v2_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','Signup page not found.'); end if;
+    if signup.capacity_revision<>p_base_capacity_revision then return jsonb_build_object('status','conflict','requestId',p_request_id,'code','SIGNUP_REVISION_CONFLICT','snapshot',public.owner_event_snapshot_v2_internal(p_event_id,owner_id)); end if;
+    if signup.roster_revision<>p_base_roster_revision then return jsonb_build_object('status','conflict','requestId',p_request_id,'code','ROSTER_REVISION_CONFLICT','snapshot',public.owner_event_snapshot_v2_internal(p_event_id,owner_id)); end if;
+    select array_agg(row.canonical_entrant_id::text order by row.organizer_rank nulls last,case when signup.entry_mode='fixed-pairs' then row.pair_completed_at end nulls last,row.created_at,row.id) into server_ids from public.signup_registrations row where row.signup_event_id=signup.id and row.status='confirmed';
+    select array_agg(value #>> '{}' order by ordinal) into candidate_ids from jsonb_array_elements(p_start_state#>'{americanoSchedule,orderedEntrantIds}') with ordinality ids(value,ordinal);
+    if server_ids is distinct from candidate_ids or p_start_state#>>'{americanoSchedule,rosterRevision}'<>signup.roster_revision::text then return public.americano_v2_rejected(p_request_id,'PREVIEW_STALE','The confirmed roster changed after preview.'); end if;
+    update public.signup_events row set is_open=false,roster_locked_at=clock_timestamp(),capacity_revision=row.capacity_revision+1,updated_at=clock_timestamp() where row.id=signup.id;
+  elsif coalesce(p_base_capacity_revision,0)<>0 or coalesce(p_base_roster_revision,0)<>0 then return public.americano_v2_rejected(p_request_id,'INVALID_PAYLOAD','Unpublished start revisions must be zero.'); end if;
+  next_revision:=event_row.revision+1; next_state:=jsonb_set(p_start_state,'{revision}',to_jsonb(next_revision::text),true);
+  if p_signup_event_id is not null then next_state:=jsonb_set(next_state,'{settings,publishedSignupOpen}','false'::jsonb,true); end if;
+  update public.events row set state=next_state,revision=next_revision,updated_at=clock_timestamp() where row.id=p_event_id;
+  insert into public.event_v2_requests values(p_event_id,p_request_id,'organizer_start_americano_v2',payload_hash,next_revision,'{}',clock_timestamp());
+  return jsonb_build_object('status','applied','requestId',p_request_id,'committedEventRevision',next_revision::text,'snapshot',public.owner_event_snapshot_v2_internal(p_event_id,owner_id));
+end; $$;
+
+create or replace function public.register_public_player_v2(p_account_slug text,p_event_slug text,p_player_name text,p_contact text,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare signup public.signup_events%rowtype; existing public.signup_public_requests%rowtype; registration public.signup_registrations%rowtype;
+  normalized_name text:=public.americano_normalize_name(p_player_name); normalized_contact text:=public.americano_normalize_contact(p_contact);
+  payload_hash text; response jsonb; position integer; new_identity uuid:=gen_random_uuid();
+begin
+  if p_request_id is null then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','A request id is required.'); end if;
+  if char_length(trim(coalesce(p_player_name,''))) not between 1 and 100 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter a player name up to 100 characters.','playerOne'); end if;
+  if char_length(trim(coalesce(p_contact,''))) not between 3 and 200 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter a WhatsApp number or email.','contact'); end if;
+  perform set_config('app.americano_v2_rpc','on',true);
+  -- All v2 roster writers lock the event before the signup row. This matches
+  -- organizer Start and prevents a signup/Start deadlock while preserving the
+  -- exact capacity snapshot on which the decision is made.
+  perform 1 from public.events source
+    where source.id=(select candidate.source_event_uuid from public.signup_events candidate
+      where candidate.account_slug=trim(p_account_slug) and candidate.event_slug=trim(p_event_slug))
+    for update;
+  select * into signup from public.signup_events event where event.account_slug=trim(p_account_slug) and event.event_slug=trim(p_event_slug) for update;
+  if not found then return public.americano_public_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','This signup page could not be found.'); end if;
+  if signup.protocol_version<>2 then return public.americano_public_rejected(p_request_id,'UPDATE_REQUIRED','Refresh the app to use this signup page.'); end if;
+  if signup.entry_mode<>'individual' then return public.americano_public_rejected(p_request_id,'MODE_MISMATCH','This event accepts fixed pairs.'); end if;
+  payload_hash:=public.americano_v2_payload_hash('register-player-v2',jsonb_build_object('name',normalized_name,'contact',normalized_contact));
+  select * into existing from public.signup_public_requests request where request.signup_event_id=signup.id and request.operation='register-player-v2' and request.request_id=p_request_id;
+  if found then
+    if existing.payload_fingerprint<>payload_hash then return public.americano_public_rejected(p_request_id,'IDEMPOTENCY_MISMATCH','This request id was used for different details.'); end if;
+    if existing.registration_id is null or not exists(select 1 from public.signup_registrations row where row.id=existing.registration_id and row.status<>'cancelled') then
+      return jsonb_build_object('status','replayed','requestId',p_request_id,'registrationId',existing.registration_id,'entryMode','individual','registrationStatus','cancelled','position',null);
+    end if;
+    response:=existing.response || jsonb_build_object('status','replayed'); return response;
+  end if;
+  if not exists(select 1 from public.events source where source.id=signup.source_event_uuid
+    and source.deleted_at is null and source.state->>'status'='setup') then
+    return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.');
+  end if;
+  if signup.cancelled_at is not null then return public.americano_public_rejected(p_request_id,'EVENT_CANCELLED','This event has been cancelled.'); end if;
+  if not signup.is_open or signup.roster_locked_at is not null or (signup.starts_at is not null and signup.starts_at<=now()) then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.'); end if;
+  if (select count(*) from public.signup_registrations row where row.signup_event_id=signup.id and row.status<>'cancelled')>=256 then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','This signup has reached its safe entry limit.'); end if;
+  if exists(select 1 from public.signup_registrations row where row.signup_event_id=signup.id and row.status<>'cancelled'
+    and public.americano_normalize_name(row.player_one)=normalized_name and public.americano_normalize_contact(row.contact)=normalized_contact) then
+    return public.americano_public_rejected(p_request_id,'ALREADY_REGISTERED','These signup details are already registered.');
+  end if;
+  insert into public.signup_registrations(signup_event_id,entry_mode,team_name,player_one,contact,status,canonical_entrant_id,canonical_player_one_id,created_at)
+  values(signup.id,'individual','',trim(p_player_name),trim(p_contact),'waitlisted',new_identity,new_identity,clock_timestamp()) returning * into registration;
+  perform public.rebalance_signup_event(signup.id); select * into registration from public.signup_registrations where id=registration.id;
+  perform public.americano_v2_commit_roster_projection(signup.source_event_uuid,signup.id);
+  position:=public.americano_public_position(registration.id);
+  response:=jsonb_build_object('status','applied','requestId',p_request_id,'registrationId',registration.id,'entryMode','individual','registrationStatus',registration.status,'position',position);
+  insert into public.signup_public_requests(signup_event_id,operation,request_id,payload_fingerprint,registration_id,response)
+  values(signup.id,'register-player-v2',p_request_id,payload_hash,registration.id,response);
+  return response;
+end; $$;
+
+create or replace function public.register_public_single_v3(p_account_slug text,p_event_slug text,p_player_one text,p_contact text,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare signup public.signup_events%rowtype; existing public.signup_public_requests%rowtype; registration public.signup_registrations%rowtype;
+  normalized_name text:=public.americano_normalize_name(p_player_one); normalized_contact text:=public.americano_normalize_contact(p_contact);
+  payload_hash text; response jsonb; position integer;
+begin
+  if p_request_id is null then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','A request id is required.'); end if;
+  if char_length(trim(coalesce(p_player_one,''))) not between 1 and 100 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter your name.','playerOne'); end if;
+  if char_length(trim(coalesce(p_contact,''))) not between 3 and 200 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter a WhatsApp number or email.','contact'); end if;
+  perform set_config('app.americano_v2_rpc','on',true);
+  perform 1 from public.events source
+    where source.id=(select candidate.source_event_uuid from public.signup_events candidate
+      where candidate.account_slug=trim(p_account_slug) and candidate.event_slug=trim(p_event_slug))
+    for update;
+  select * into signup from public.signup_events event where event.account_slug=trim(p_account_slug) and event.event_slug=trim(p_event_slug) for update;
+  if not found then return public.americano_public_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','This signup page could not be found.'); end if;
+  if signup.protocol_version<>2 then return public.americano_public_rejected(p_request_id,'UPDATE_REQUIRED','Refresh the app to use this signup page.'); end if;
+  if signup.entry_mode<>'fixed-pairs' then return public.americano_public_rejected(p_request_id,'MODE_MISMATCH','This event accepts individual players.'); end if;
+  payload_hash:=public.americano_v2_payload_hash('register-single-v3',jsonb_build_object('one',normalized_name,'contact',normalized_contact));
+  select * into existing from public.signup_public_requests request where request.signup_event_id=signup.id and request.operation='register-single-v3' and request.request_id=p_request_id;
+  if found then
+    if existing.payload_fingerprint<>payload_hash then return public.americano_public_rejected(p_request_id,'IDEMPOTENCY_MISMATCH','This request id was used for different details.'); end if;
+    return existing.response||jsonb_build_object('status','replayed');
+  end if;
+  if not exists(select 1 from public.events source where source.id=signup.source_event_uuid
+    and source.deleted_at is null and source.state->>'status'='setup') then
+    return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.');
+  end if;
+  if signup.cancelled_at is not null then return public.americano_public_rejected(p_request_id,'EVENT_CANCELLED','This event has been cancelled.'); end if;
+  if not signup.is_open or signup.roster_locked_at is not null or (signup.starts_at is not null and signup.starts_at<=now()) then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.'); end if;
+  if (select count(*) from public.signup_registrations row where row.signup_event_id=signup.id and row.status<>'cancelled')>=256 then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','This signup has reached its safe entry limit.'); end if;
+  if exists(select 1 from public.signup_registrations row where row.signup_event_id=signup.id and row.status<>'cancelled'
+    and public.americano_normalize_name(row.player_one)=normalized_name and public.americano_normalize_contact(row.contact)=normalized_contact) then
+    return public.americano_public_rejected(p_request_id,'ALREADY_REGISTERED','These signup details are already registered.');
+  end if;
+  insert into public.signup_registrations(signup_event_id,entry_mode,team_name,player_one,contact,status,canonical_player_one_id,created_at)
+  values(signup.id,'fixed-pairs','',trim(p_player_one),trim(p_contact),'looking',gen_random_uuid(),clock_timestamp()) returning * into registration;
+  perform public.americano_v2_commit_roster_projection(signup.source_event_uuid,signup.id);
+  position:=public.americano_public_position(registration.id);
+  response:=jsonb_build_object('status','applied','requestId',p_request_id,'registrationId',registration.id,'entryMode','fixed-pairs','registrationStatus','looking','position',position);
+  insert into public.signup_public_requests(signup_event_id,operation,request_id,payload_fingerprint,registration_id,response)
+  values(signup.id,'register-single-v3',p_request_id,payload_hash,registration.id,response);
+  return response;
+end; $$;
+
+create or replace function public.register_public_pair_v3(p_account_slug text,p_event_slug text,p_team_name text,p_player_one text,p_player_two text,p_contact text,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare signup public.signup_events%rowtype; existing public.signup_public_requests%rowtype; registration public.signup_registrations%rowtype;
+  payload_hash text; response jsonb; position integer;
+begin
+  if p_request_id is null then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','A request id is required.'); end if;
+  if char_length(trim(coalesce(p_player_one,''))) not between 1 and 100 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter player one.','playerOne'); end if;
+  if char_length(trim(coalesce(p_player_two,''))) not between 1 and 100 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter player two.','playerTwo'); end if;
+  if char_length(trim(coalesce(p_contact,''))) not between 3 and 200 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter a WhatsApp number or email.','contact'); end if;
+  perform set_config('app.americano_v2_rpc','on',true);
+  perform 1 from public.events source
+    where source.id=(select candidate.source_event_uuid from public.signup_events candidate
+      where candidate.account_slug=trim(p_account_slug) and candidate.event_slug=trim(p_event_slug))
+    for update;
+  select * into signup from public.signup_events event where event.account_slug=trim(p_account_slug) and event.event_slug=trim(p_event_slug) for update;
+  if not found then return public.americano_public_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','This signup page could not be found.'); end if;
+  if signup.protocol_version<>2 then return public.americano_public_rejected(p_request_id,'UPDATE_REQUIRED','Refresh the app to use this signup page.'); end if;
+  if signup.entry_mode<>'fixed-pairs' then return public.americano_public_rejected(p_request_id,'MODE_MISMATCH','This event accepts individual players.'); end if;
+  payload_hash:=public.americano_v2_payload_hash('register-pair-v3',jsonb_build_object('team',public.americano_normalize_name(p_team_name),'one',public.americano_normalize_name(p_player_one),'two',public.americano_normalize_name(p_player_two),'contact',public.americano_normalize_contact(p_contact)));
+  select * into existing from public.signup_public_requests request where request.signup_event_id=signup.id and request.operation='register-pair-v3' and request.request_id=p_request_id;
+  if found then if existing.payload_fingerprint<>payload_hash then return public.americano_public_rejected(p_request_id,'IDEMPOTENCY_MISMATCH','This request id was used for different details.'); end if; return existing.response||jsonb_build_object('status','replayed'); end if;
+  if not exists(select 1 from public.events source where source.id=signup.source_event_uuid
+    and source.deleted_at is null and source.state->>'status'='setup') then
+    return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.');
+  end if;
+  if signup.cancelled_at is not null then return public.americano_public_rejected(p_request_id,'EVENT_CANCELLED','This event has been cancelled.'); end if;
+  if not signup.is_open or signup.roster_locked_at is not null or (signup.starts_at is not null and signup.starts_at<=now()) then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.'); end if;
+  if (select count(*) from public.signup_registrations row where row.signup_event_id=signup.id and row.status<>'cancelled')>=256 then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','This signup has reached its safe entry limit.'); end if;
+  insert into public.signup_registrations(signup_event_id,entry_mode,team_name,player_one,player_two,contact,status,pair_completed_at,canonical_entrant_id,canonical_player_one_id,canonical_player_two_id,created_at)
+  values(signup.id,'fixed-pairs',trim(coalesce(p_team_name,'')),trim(p_player_one),trim(p_player_two),trim(p_contact),'waitlisted',clock_timestamp(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),clock_timestamp()) returning * into registration;
+  perform public.rebalance_signup_event(signup.id); select * into registration from public.signup_registrations where id=registration.id; position:=public.americano_public_position(registration.id);
+  perform public.americano_v2_commit_roster_projection(signup.source_event_uuid,signup.id);
+  response:=jsonb_build_object('status','applied','requestId',p_request_id,'registrationId',registration.id,'entryMode','fixed-pairs','registrationStatus',registration.status,'position',position);
+  insert into public.signup_public_requests(signup_event_id,operation,request_id,payload_fingerprint,registration_id,response) values(signup.id,'register-pair-v3',p_request_id,payload_hash,registration.id,response); return response;
+end; $$;
+
+create or replace function public.join_public_single_v3(p_account_slug text,p_event_slug text,p_registration_id uuid,p_player_two text,p_contact text,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare signup public.signup_events%rowtype; registration public.signup_registrations%rowtype; existing public.signup_public_requests%rowtype; payload_hash text; response jsonb; position integer;
+begin
+  if p_request_id is null or char_length(trim(coalesce(p_player_two,''))) not between 1 and 100 or char_length(trim(coalesce(p_contact,''))) not between 3 and 200 then return public.americano_public_rejected(p_request_id,'INVALID_PAYLOAD','Enter player two and contact details.','playerTwo'); end if;
+  perform set_config('app.americano_v2_rpc','on',true);
+  perform 1 from public.events source
+    where source.id=(select candidate.source_event_uuid from public.signup_events candidate
+      where candidate.account_slug=trim(p_account_slug) and candidate.event_slug=trim(p_event_slug))
+    for update;
+  select * into signup from public.signup_events event where event.account_slug=trim(p_account_slug) and event.event_slug=trim(p_event_slug) for update;
+  if not found then return public.americano_public_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','Signup not found.'); end if; if signup.protocol_version<>2 then return public.americano_public_rejected(p_request_id,'UPDATE_REQUIRED','Refresh the app.'); end if; if signup.entry_mode<>'fixed-pairs' then return public.americano_public_rejected(p_request_id,'MODE_MISMATCH','Rotating Americano has no partner-join action.'); end if;
+  payload_hash:=public.americano_v2_payload_hash('join-v3',jsonb_build_object('registrationId',p_registration_id,'two',public.americano_normalize_name(p_player_two),'contact',public.americano_normalize_contact(p_contact)));
+  select * into existing from public.signup_public_requests request where request.signup_event_id=signup.id and request.operation='join-v3' and request.request_id=p_request_id; if found then if existing.payload_fingerprint<>payload_hash then return public.americano_public_rejected(p_request_id,'IDEMPOTENCY_MISMATCH','This request id was used for different details.'); end if; return existing.response||jsonb_build_object('status','replayed'); end if;
+  if not exists(select 1 from public.events source where source.id=signup.source_event_uuid
+    and source.deleted_at is null and source.state->>'status'='setup') then
+    return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.');
+  end if;
+  if signup.cancelled_at is not null then return public.americano_public_rejected(p_request_id,'EVENT_CANCELLED','This event has been cancelled.'); end if; if not signup.is_open or signup.roster_locked_at is not null or (signup.starts_at is not null and signup.starts_at<=now()) then return public.americano_public_rejected(p_request_id,'REGISTRATIONS_CLOSED','Registrations are closed.'); end if;
+  select * into registration from public.signup_registrations row where row.id=p_registration_id and row.signup_event_id=signup.id for update; if not found or registration.status<>'looking' then return public.americano_public_rejected(p_request_id,'NOT_FOUND_OR_NOT_OWNED','This partner request is no longer available.'); end if;
+  update public.signup_registrations row set player_two=trim(p_player_two),player_two_contact=trim(p_contact),pair_completed_at=clock_timestamp(),status='waitlisted',canonical_entrant_id=gen_random_uuid(),canonical_player_two_id=gen_random_uuid(),updated_at=clock_timestamp() where row.id=p_registration_id returning * into registration;
+  perform public.rebalance_signup_event(signup.id); select * into registration from public.signup_registrations where id=registration.id; position:=public.americano_public_position(registration.id);
+  perform public.americano_v2_commit_roster_projection(signup.source_event_uuid,signup.id);
+  response:=jsonb_build_object('status','applied','requestId',p_request_id,'registrationId',registration.id,'entryMode','fixed-pairs','registrationStatus',registration.status,'position',position);
+  insert into public.signup_public_requests(signup_event_id,operation,request_id,payload_fingerprint,registration_id,response) values(signup.id,'join-v3',p_request_id,payload_hash,registration.id,response); return response;
+end; $$;
