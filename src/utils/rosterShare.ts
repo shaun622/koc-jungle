@@ -1,7 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { buildSignupUrl, type SignupEvent, type SignupRegistration } from '@/lib/signups';
 import type { SignupRegistrationV2, SignupSnapshotV3 } from '@/lib/americanoV2';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import { americanoRulesSummaryV3 } from '@/logic/americanoV3/labels';
+import { isAmericanoEvent, isAmericanoEventV2, isAmericanoEventV3, type VersionedEventState } from '@/logic/eventVersions';
 import type { Team } from '@/types/domain';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
 
@@ -78,8 +79,8 @@ export function buildRosterShareText(input: {
   const { event, teams = event.teams, signup, registrations = [] } = input;
   const title = (signup?.title || event.name || 'Padel event').trim();
   const venue = (signup?.venue || event.venue || '').trim();
-  const americanoV2 = isAmericanoEventV2(event);
-  const individual = americanoV2 && event.formatConfig.pairingMode === 'rotating';
+  const americano = isAmericanoEvent(event);
+  const individual = americano && event.formatConfig.pairingMode === 'rotating';
   const capacity = event.courts.length * (individual ? 4 : 2);
   const confirmedTeams = teams.filter((team) => team.active);
   const representedRegistrationIds = new Set(
@@ -115,6 +116,9 @@ export function buildRosterShareText(input: {
 
   if (venue) lines.push(`📍 ${venue}`);
   lines.push(...formatSchedule(signup));
+  if (isAmericanoEventV3(event)) {
+    lines.push('', '📋 FORMAT & RULES', ...americanoRulesSummaryV3(event.formatConfig).map((rule) => `• ${rule}`));
+  }
   const confirmedCount = individual
     ? event.participants.filter((participant) => participant.active).length
     : confirmedTeams.length;
@@ -146,7 +150,7 @@ export function buildRosterShareText(input: {
     lines.push('');
   }
 
-  if (americanoV2 && event.completionReason === 'early') {
+  if (isAmericanoEventV2(event) && event.completionReason === 'early') {
     lines.push('⚠️ Ended early — only completed rounds count.', '');
   }
 

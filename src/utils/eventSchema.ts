@@ -19,6 +19,14 @@ import {
   type IndividualEntrant,
   type VersionedEventState,
 } from '@/logic/americanoV2/types';
+import type {
+  AmericanoEventStateV3,
+  AmericanoMatchV3,
+  AmericanoRoundV3,
+  AmericanoScheduleV3,
+  AmericanoResultDraftV3,
+} from '@/logic/americanoV3/types';
+import { validateAmericanoConfigV3, validateAmericanoResultDraftV3 } from '@/logic/americanoV3/scoring';
 
 export class InvalidEventSchemaError extends Error {
   constructor(message: string, readonly field?: string) {
@@ -306,16 +314,107 @@ function validateV2(value: ObjectValue): AmericanoEventStateV2 {
   return value as unknown as AmericanoEventStateV2;
 }
 
+function validateV3Match(value: unknown, field: string, config: AmericanoEventStateV3['formatConfig']): AmericanoMatchV3 {
+  const match = objectAt(value, field);
+  stringAt(match.id, `${field}.id`);
+  stringAt(match.courtId, `${field}.courtId`);
+  validateSide(match.sideA, `${field}.sideA`);
+  validateSide(match.sideB, `${field}.sideB`);
+  booleanAt(match.resultConfirmed, `${field}.resultConfirmed`);
+  const result = objectAt(match.result, `${field}.result`) as unknown as AmericanoResultDraftV3;
+  const validation = validateAmericanoResultDraftV3(result, config.scoring, Boolean(match.resultConfirmed), config.paceMinutes);
+  if (!validation.valid) throw new InvalidEventSchemaError(validation.error!.message, `${field}.${validation.error!.field}`);
+  return value as AmericanoMatchV3;
+}
+
+function validateV3Round(value: unknown, field: string, config: AmericanoEventStateV3['formatConfig']): AmericanoRoundV3 {
+  const round = objectAt(value, field);
+  stringAt(round.id, `${field}.id`);
+  integerAt(round.index, `${field}.index`);
+  stringAt(round.fixtureRoundId, `${field}.fixtureRoundId`);
+  finiteAt(round.durationMs, `${field}.durationMs`);
+  finiteAt(round.totalPausedMs, `${field}.totalPausedMs`);
+  arrayAt(round.matches, `${field}.matches`).forEach((match, index) => validateV3Match(match, `${field}.matches.${index}`, config));
+  if (round.completedAt !== undefined) finiteAt(round.completedAt, `${field}.completedAt`);
+  if (round.excludedReason !== undefined && round.excludedReason !== 'ended-early') throw new InvalidEventSchemaError(`${field}.excludedReason is unsupported.`, `${field}.excludedReason`);
+  if (round.completedAt !== undefined && round.excludedReason !== undefined) throw new InvalidEventSchemaError('A completed round cannot also be excluded.', field);
+  if (round.completedAt !== undefined) {
+    for (const [index, matchValue] of (round.matches as unknown[]).entries()) {
+      const match = objectAt(matchValue, `${field}.matches.${index}`);
+      if (!match.resultConfirmed) throw new InvalidEventSchemaError('Every match in a completed round must have a confirmed result.', `${field}.matches.${index}.resultConfirmed`);
+    }
+  }
+  return value as AmericanoRoundV3;
+}
+
+function validateV3Schedule(value: unknown): AmericanoScheduleV3 {
+  const schedule = objectAt(value, 'event.americanoSchedule');
+  if (schedule.fingerprintVersion !== 3) throw new InvalidEventSchemaError('Schema 3 requires fingerprint version 3.', 'event.americanoSchedule.fingerprintVersion');
+  return validateSchedule(value) as AmericanoScheduleV3;
+}
+
+function validateV3(value: ObjectValue): AmericanoEventStateV3 {
+  if (value.protocolVersion !== 2) throw new InvalidEventSchemaError('Schema 3 requires protocolVersion 2.', 'event.protocolVersion');
+  stringAt(value.revision, 'event.revision', true);
+  if (value.format !== 'americano') throw new InvalidEventSchemaError('Schema 3 is only supported for Americano.', 'event.format');
+  const formatConfig = objectAt(value.formatConfig, 'event.formatConfig') as unknown as AmericanoEventStateV3['formatConfig'];
+  try {
+    validateAmericanoConfigV3(formatConfig);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'field' in error) {
+      const field = String((error as { field?: unknown }).field ?? 'event.formatConfig');
+      throw new InvalidEventSchemaError(error instanceof Error ? error.message : 'Americano configuration is invalid.', field.startsWith('formatConfig.') ? `event.${field}` : `event.formatConfig.${field}`);
+    }
+    throw error;
+  }
+  const teams = arrayAt(value.teams, 'event.teams').map((team, index) => validateTeam(team, `event.teams.${index}`));
+  const participants = arrayAt(value.participants, 'event.participants').map((entrant, index) => validateEntrant(entrant, `event.participants.${index}`));
+  if (formatConfig.pairingMode === 'rotating' && teams.length !== 0) throw new InvalidEventSchemaError('Rotating Americano cannot contain fixed teams.', 'event.teams');
+  if (formatConfig.pairingMode === 'fixed' && participants.length !== 0) throw new InvalidEventSchemaError('Fixed Americano cannot contain individual participants.', 'event.participants');
+  arrayAt(value.rounds, 'event.rounds').forEach((round, index) => validateV3Round(round, `event.rounds.${index}`, formatConfig));
+  if (value.americanoSchedule !== undefined) validateV3Schedule(value.americanoSchedule);
+  if (value.completionReason !== undefined && value.completionReason !== 'scheduled' && value.completionReason !== 'early') {
+    throw new InvalidEventSchemaError('Completion reason is unsupported.', 'event.completionReason');
+  }
+  if (value.championshipFinal !== undefined) {
+    const final = objectAt(value.championshipFinal, 'event.championshipFinal');
+    stringAt(final.id, 'event.championshipFinal.id');
+    stringAt(final.basisFingerprint, 'event.championshipFinal.basisFingerprint');
+    const contenders = arrayAt(final.contenderIds, 'event.championshipFinal.contenderIds');
+    if (contenders.length !== 2 || contenders[0] === contenders[1]) throw new InvalidEventSchemaError('A championship final needs two distinct contenders.', 'event.championshipFinal.contenderIds');
+    contenders.forEach((id, index) => stringAt(id, `event.championshipFinal.contenderIds.${index}`));
+    stringAt(final.courtId, 'event.championshipFinal.courtId');
+    if (final.supportPlayerIds !== null) {
+      const helpers = arrayAt(final.supportPlayerIds, 'event.championshipFinal.supportPlayerIds');
+      if (helpers.length !== 2 || helpers[0] === helpers[1]) throw new InvalidEventSchemaError('A final needs two distinct support players.', 'event.championshipFinal.supportPlayerIds');
+      helpers.forEach((id, index) => stringAt(id, `event.championshipFinal.supportPlayerIds.${index}`));
+    }
+    if (final.outcome !== null) {
+      const outcome = objectAt(final.outcome, 'event.championshipFinal.outcome');
+      finiteAt(outcome.confirmedAt, 'event.championshipFinal.outcome.confirmedAt');
+      if (outcome.kind === 'golden-point') {
+        if (outcome.winner !== 'A' && outcome.winner !== 'B') throw new InvalidEventSchemaError('Select the golden-point winner.', 'event.championshipFinal.outcome.winner');
+      } else if (outcome.kind === 'tiebreak') {
+        const pointsA = integerAt(outcome.pointsA, 'event.championshipFinal.outcome.pointsA');
+        const pointsB = integerAt(outcome.pointsB, 'event.championshipFinal.outcome.pointsB');
+        if (pointsA < 0 || pointsB < 0) throw new InvalidEventSchemaError('Tiebreak scores cannot be negative.', 'event.championshipFinal.outcome');
+      } else throw new InvalidEventSchemaError('Championship final result type is unsupported.', 'event.championshipFinal.outcome.kind');
+    }
+  }
+  return value as unknown as AmericanoEventStateV3;
+}
+
 export function parseEventState(value: unknown): VersionedEventState {
   const event = objectAt(value, 'event');
   const version = event.schemaVersion;
-  if (version !== undefined && version !== 1 && version !== 2) {
-    if (typeof version === 'number' && Number.isInteger(version) && version > 2) {
+  if (version !== undefined && version !== 1 && version !== 2 && version !== 3) {
+    if (typeof version === 'number' && Number.isInteger(version) && version > 3) {
       throw new UnsupportedEventSchemaError(version);
     }
-    throw new InvalidEventSchemaError('event.schemaVersion must be 1 or 2.', 'event.schemaVersion');
+    throw new InvalidEventSchemaError('event.schemaVersion must be 1, 2 or 3.', 'event.schemaVersion');
   }
-  validateCommon(event, version === 2);
+  validateCommon(event, version === 2 || version === 3);
+  if (version === 3) return validateV3(event);
   return version === 2 ? validateV2(event) : validateLegacy(event);
 }
 

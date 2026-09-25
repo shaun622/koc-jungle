@@ -36,7 +36,8 @@ import { useAnnouncements } from '@/hooks/useAnnouncements';
 import { useIsMobileDisplay } from '@/hooks/useIsMobileDisplay';
 import { eventRoute } from '@/lib/eventRoutes';
 import { AmericanoDisplay } from '@/components/americano/AmericanoDisplay';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import { AmericanoDisplayV3 } from '@/components/americano/AmericanoDisplayV3';
+import { isAmericanoEventV2, isAmericanoEventV3, type VersionedEventState } from '@/logic/eventVersions';
 
 type MovementArrow = 'up' | 'down' | 'stay' | 'king';
 interface Movement {
@@ -1522,6 +1523,7 @@ function MovementChip({ arrow, large }: { arrow: MovementArrow; large?: boolean 
 
 export function DisplayScreen() {
   const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV3(event)) return <AmericanoDisplayV3 event={event} />;
   if (event && isAmericanoEventV2(event)) return <AmericanoDisplay event={event} />;
   return <LegacyDisplayScreen />;
 }

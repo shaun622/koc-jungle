@@ -104,6 +104,34 @@ describe('public sign-up loading', () => {
     expect(signupMocks.getPublicSignup).toHaveBeenCalledTimes(2);
   });
 
+  it('publishes the actual Americano v3 format and tie rules without exposing private registration contacts', async () => {
+    signupMocks.getPublicSignup.mockResolvedValue({
+      ...publicSignup,
+      event: {
+        ...publicSignup.event,
+        competitionRules: {
+          rulesVersion: 3,
+          pairingMode: 'rotating',
+          scoring: { kind: 'rally', pointsPerMatch: 24 },
+          ranking: { tiebreak: 'difference', championship: 'golden-point' },
+        },
+      },
+      registrations: [{
+        id: 'public-player', signupEventId: 'signup-1', teamName: '', playerOne: 'Public player', playerTwo: '',
+        contact: 'private@example.invalid', status: 'confirmed', position: 1, createdAt: '2026-08-31T00:00:00.000Z',
+      }],
+    });
+
+    renderSignup();
+
+    expect(await screen.findByRole('heading', { name: 'Silver King of the Court' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Americano competition rules' })).toHaveTextContent('Rotating pairs');
+    expect(screen.getByRole('region', { name: 'Americano competition rules' })).toHaveTextContent('24 per match');
+    expect(screen.getByRole('region', { name: 'Americano competition rules' })).toHaveTextContent('One-point championship final');
+    expect(screen.getByText('Public player')).toBeInTheDocument();
+    expect(screen.queryByText('private@example.invalid')).not.toBeInTheDocument();
+  });
+
   it('renders pair capacity, partner seekers and waiting pairs as disjoint lists', async () => {
     signupMocks.getPublicSignup.mockResolvedValue({
       ...publicSignup,

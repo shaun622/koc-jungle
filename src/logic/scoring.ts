@@ -1,7 +1,9 @@
 import type { EventState, MainRound } from '@/types/domain';
 import type { AmericanoStandingV2 } from '@/logic/americanoV2/standings';
 import { computeAmericanoStandings } from '@/logic/americanoV2/standings';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import type { AmericanoStandingV3 } from '@/logic/americanoV3/types';
+import { computeAmericanoStandingsV3 } from '@/logic/americanoV3/standings';
+import { isAmericanoEventV2, isAmericanoEventV3, type VersionedEventState } from '@/logic/eventVersions';
 import { decideWinnerLoser } from './rotation';
 
 export interface TeamStanding {
@@ -62,8 +64,10 @@ export function computeStandings(event: EventState): TeamStanding[] {
 
 export function computeVersionedStandings(
   event: VersionedEventState,
-): TeamStanding[] | AmericanoStandingV2[] {
-  return isAmericanoEventV2(event) ? computeAmericanoStandings(event) : computeStandings(event);
+): TeamStanding[] | AmericanoStandingV2[] | AmericanoStandingV3[] {
+  if (isAmericanoEventV2(event)) return computeAmericanoStandings(event);
+  if (isAmericanoEventV3(event)) return computeAmericanoStandingsV3(event);
+  return computeStandings(event);
 }
 
 function accumulateRound(

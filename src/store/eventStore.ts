@@ -30,6 +30,7 @@ import type { SignupRegistration } from '@/lib/signups';
 import { reconcileConfirmedSignupRoster } from '@/utils/rosterReconciliation';
 import type { PairingMode, VersionedEventState } from '@/logic/americanoV2/types';
 import { createAmericanoEventV2 } from '@/logic/americanoV2/runtime';
+import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
 import {
   LEGACY_EVENT_STORAGE_KEY,
   type SaveCatalogEventOptions,
@@ -68,6 +69,7 @@ interface Actions {
 
   createEvent: (name: string, format?: TournamentFormatId) => void;
   createAmericanoEvent: (name: string, pairingMode: PairingMode) => void;
+  createAmericanoEventV3: (name: string, pairingMode: PairingMode) => void;
   resetEvent: () => void;
   loadEvent: (event: VersionedEventState) => void;
   setFormatConfig: (patch: Record<string, unknown>) => void;
@@ -457,6 +459,11 @@ export const useEventStore = create<EventStore>()(
 
       createAmericanoEvent: (name, pairingMode) => {
         const event = createAmericanoEventV2(name, pairingMode);
+        set({ event: event as unknown as EventState, lastError: null });
+      },
+
+      createAmericanoEventV3: (name, pairingMode) => {
+        const event = createAmericanoEventV3(name, pairingMode);
         set({ event: event as unknown as EventState, lastError: null });
       },
 

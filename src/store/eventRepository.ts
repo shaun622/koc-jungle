@@ -1,7 +1,7 @@
 import type { EventStatus, TournamentFormatId } from '@/types/domain';
 import type { VersionedEventState } from '@/logic/americanoV2/types';
 import type { PairingMode } from '@/logic/americanoV2/types';
-import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
+import { isAmericanoEvent } from '@/logic/eventVersions';
 import { parseEventState } from '@/utils/eventSchema';
 
 export const EVENT_CATALOG_DB_NAME = 'koc-event-catalog-v1';
@@ -180,8 +180,8 @@ export function removeLocalEventRecord(id: string): Promise<void> {
 
 export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetadata {
   const state = record.state;
-  const americanoV2 = isAmericanoEventV2(state);
-  const rotating = americanoV2 && state.formatConfig.pairingMode === 'rotating';
+  const americano = isAmericanoEvent(state);
+  const rotating = americano && state.formatConfig.pairingMode === 'rotating';
   const teamCount = rotating
     ? state.participants.filter((participant) => participant.active).length
     : state.teams.filter((team) => team.active).length;
@@ -199,7 +199,7 @@ export function metadataForRecord(record: EventCatalogRecord): EventCatalogMetad
     teamCount,
     teamCapacity,
     rosterUnit: rotating ? 'players' : 'teams',
-    americanoMode: americanoV2 ? state.formatConfig.pairingMode : undefined,
+    americanoMode: americano ? state.formatConfig.pairingMode : undefined,
     signupState: record.state.settings.publishedCancelledAt
       ? 'cancelled'
       : record.state.settings.publishedSignupId

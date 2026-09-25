@@ -1,5 +1,13 @@
 import { Capacitor } from '@capacitor/core';
 import { publicSupabase, supabase } from '@/lib/supabase';
+import type { MatchScoringV3, RankingTiebreakV3, ChampionshipPolicyV3 } from '@/logic/americanoV3/types';
+
+export interface PublicAmericanoRulesV3 {
+  rulesVersion: 3;
+  pairingMode: 'fixed' | 'rotating';
+  scoring: MatchScoringV3;
+  ranking: { tiebreak: RankingTiebreakV3; championship: ChampionshipPolicyV3 };
+}
 
 export interface SignupEvent {
   id: string;
@@ -92,7 +100,7 @@ export interface PublicSignup {
     | 'capacityRevision'
     | 'rosterSeededAt'
     | 'rosterLockedAt'
-  >;
+  > & { competitionRules?: PublicAmericanoRulesV3 };
   registrations: SignupRegistration[];
 }
 

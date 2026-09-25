@@ -5,6 +5,9 @@ import type {
   IndividualEntrant,
   VersionedEventState,
 } from '@/logic/americanoV2/types';
+import type { AmericanoConfigV3, AmericanoEventStateV3 } from '@/logic/americanoV3/types';
+import { isAmericanoEventV3 } from '@/logic/eventVersions';
+import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
 import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
 import { newId } from '@/logic/idGen';
 import { safeGet, safeSet } from '@/utils/storage';
@@ -33,7 +36,14 @@ export interface AmericanoTemplateV2 extends TemplateBase {
   participants: IndividualEntrant[];
 }
 
-export type Template = LegacyTemplate | AmericanoTemplateV2;
+export interface AmericanoTemplateV3 extends TemplateBase {
+  version: 3;
+  format: 'americano';
+  formatConfig: AmericanoConfigV3;
+  participants: IndividualEntrant[];
+}
+
+export type Template = LegacyTemplate | AmericanoTemplateV2 | AmericanoTemplateV3;
 
 function independentSettings(settings: EventSettings): EventSettings {
   const clean = { ...settings };
@@ -69,7 +79,7 @@ function isTemplate(value: unknown): value is Template {
   const template = value as Partial<TemplateBase> & {
     version?: number;
     format?: string;
-    formatConfig?: Partial<AmericanoConfigV2>;
+    formatConfig?: Partial<AmericanoConfigV2> | Partial<AmericanoConfigV3>;
     participants?: unknown;
   };
   if (
@@ -81,10 +91,14 @@ function isTemplate(value: unknown): value is Template {
     || !template.settings
   ) return false;
   if (template.version === undefined || template.version === 1) return true;
-  return template.version === 2
+  return (template.version === 2
     && template.format === 'americano'
     && template.formatConfig?.rulesVersion === 2
-    && Array.isArray(template.participants);
+    && Array.isArray(template.participants))
+    || (template.version === 3
+      && template.format === 'americano'
+      && template.formatConfig?.rulesVersion === 3
+      && Array.isArray(template.participants));
 }
 
 export function listTemplates(): Template[] {
@@ -111,15 +125,23 @@ export function saveTemplate(name: string, event: VersionedEventState): Template
     teams: event.teams.filter((team) => team.active).map(independentTeam),
     settings: independentSettings(event.settings),
   };
-  const template: Template = isAmericanoEventV2(event)
+  const template: Template = isAmericanoEventV3(event)
     ? {
+        ...base,
+        version: 3,
+        format: 'americano',
+        formatConfig: JSON.parse(JSON.stringify(event.formatConfig)) as AmericanoConfigV3,
+        participants: event.participants.filter((participant) => participant.active).map(independentParticipant),
+      }
+    : isAmericanoEventV2(event)
+      ? {
         ...base,
         version: 2,
         format: 'americano',
         formatConfig: { ...event.formatConfig },
         participants: event.participants.filter((participant) => participant.active).map(independentParticipant),
       }
-    : {
+      : {
         ...base,
         version: 1,
         format: event.format,
@@ -154,11 +176,32 @@ function freshTeams(teams: Team[]): Team[] {
 
 export function templateToEventState(template: LegacyTemplate): EventState;
 export function templateToEventState(template: AmericanoTemplateV2): AmericanoEventStateV2;
+export function templateToEventState(template: AmericanoTemplateV3): AmericanoEventStateV3;
 export function templateToEventState(template: Template): VersionedEventState;
 export function templateToEventState(template: Template): VersionedEventState {
   const createdAt = Date.now();
   const courts = template.courts.map((court) => ({ ...court, id: newId() }));
   const settings = independentSettings(template.settings);
+  if (template.version === 3) {
+    const event = createAmericanoEventV3(template.name, template.formatConfig.pairingMode, courts.length);
+    return {
+      ...event,
+      venue: '',
+      courts,
+      teams: freshTeams(template.teams),
+      participants: template.participants.map((participant) => ({
+        ...independentParticipant(participant),
+        id: newId(),
+        createdAt,
+        active: true,
+      })),
+      settings: { ...settings, roundsTotal: 0, defaultRoundDurationMs: template.formatConfig.paceMinutes * 60_000 },
+      formatConfig: JSON.parse(JSON.stringify(template.formatConfig)) as AmericanoConfigV3,
+      rounds: [],
+      americanoSchedule: undefined,
+      championshipFinal: undefined,
+    };
+  }
   if (template.version === 2) {
     return {
       schemaVersion: 2,

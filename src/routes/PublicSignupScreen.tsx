@@ -11,6 +11,7 @@ import {
 } from '@/lib/signups';
 import { buildSignupRosterView } from '@/utils/signupRosterView';
 import { formatEventDateTime } from '@/lib/eventTime';
+import { americanoRulesSummaryV3 } from '@/logic/americanoV3/labels';
 import {
   joinPublicAmericanoPair,
   registerPublicAmericanoPair,
@@ -519,6 +520,11 @@ export function PublicSignupScreen() {
         </div>
         <div className="ed-court-photo" role="img" aria-label="Padel court" />
       </section>
+
+      {data.event.competitionRules && <section className="ed-public-details ed-americano-rules" aria-label="Americano competition rules">
+        <span>HOW THIS AMERICANO WORKS</span>
+        <ul>{americanoRulesSummaryV3(data.event.competitionRules).map((line) => <li key={line}>{line}</li>)}</ul>
+      </section>}
 
       {(data.event.details || data.event.prizes) && <section className="ed-public-details" aria-label="Event details">
         {data.event.details && <p className="signup-public-copy">{data.event.details}</p>}

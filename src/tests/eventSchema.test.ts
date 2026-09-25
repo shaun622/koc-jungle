@@ -34,7 +34,7 @@ describe('versioned event schema reader', () => {
   });
 
   it('rejects unknown schema versions with an update-required error', () => {
-    expect(() => parseEventState({ ...legacyFixture(), schemaVersion: 3 })).toThrow(UnsupportedEventSchemaError);
+    expect(() => parseEventState({ ...legacyFixture(), schemaVersion: 99 })).toThrow(UnsupportedEventSchemaError);
   });
 
   it('rejects schema 2 with missing rulesVersion instead of falling back', () => {

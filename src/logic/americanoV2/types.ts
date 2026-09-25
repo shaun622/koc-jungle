@@ -153,7 +153,7 @@ export interface AmericanoSideView {
   playerIds: [string, string];
 }
 
-export type VersionedEventState = import('@/types/domain').EventState | AmericanoEventStateV2;
+export type VersionedEventState = import('@/logic/eventVersions').VersionedEventState;
 
 export function isAmericanoEventV2(event: VersionedEventState): event is AmericanoEventStateV2 {
   return event.schemaVersion === 2;

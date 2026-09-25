@@ -36,7 +36,7 @@ import { bracket } from './bracket';
 import { koc } from './koc';
 import { mexicano } from './mexicano';
 import { roundRobin } from './roundRobin';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import { isAmericanoEvent, type VersionedEventState } from '@/logic/eventVersions';
 
 export type TournamentFormatId =
   | 'koc'
@@ -108,7 +108,7 @@ export function getFormat(id: TournamentFormatId | undefined): TournamentFormat 
 /** V2 Americano owns its frozen schedule and must never fall through this
  * legacy registry or inherit King-of-the-Court transitions. */
 export function getLegacyFormatForEvent(event: VersionedEventState): TournamentFormat | null {
-  return isAmericanoEventV2(event) ? null : getFormat(event.format);
+  return isAmericanoEvent(event) ? null : getFormat(event.format);
 }
 
 /** Every format with an implementation registered — for setup pickers. */

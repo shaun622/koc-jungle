@@ -11,7 +11,9 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { VersionedEventState } from '@/logic/americanoV2/types';
 import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
+import { isAmericanoEventV3 } from '@/logic/eventVersions';
 import { deleteAmericanoEventV2, saveAmericanoEventV2 } from '@/lib/americanoV2';
+import { saveAmericanoEventV3 } from '@/lib/americanoV3';
 import { useEventCatalogStore } from './eventCatalog';
 import {
   listLocalEventRecords,
@@ -260,7 +262,7 @@ export function markLocalEventDeleted(eventId: string): boolean {
   const ledger = readLocalMutationLedger(userId);
   delete ledger.dirtyById[eventId];
   const current = currentEventWithId(eventId);
-  const versioned = current && isAmericanoEventV2(current) ? current : null;
+  const versioned = current && (isAmericanoEventV2(current) || isAmericanoEventV3(current)) ? current : null;
   ledger.tombstonesById[eventId] = {
     deletedAt: Math.max(Date.now(), ledger.tombstonesById[eventId]?.deletedAt ?? 0),
     pending: true,
@@ -646,6 +648,25 @@ function queuePush(session: Session, event: VersionedEventState): Promise<void> 
   publishStatus(session, 'syncing');
   return enqueueRemote(session, event.id, async () => {
     if (!supabase || session.meta.tombstonesById[event.id]) return;
+    if (isAmericanoEventV3(snapshot)) {
+      const reply = await saveAmericanoEventV3(snapshot, snapshot.revision, undefined, session.userId);
+      if (reply.status === 'rejected') throw new Error(reply.message);
+      if (reply.status === 'conflict') throw new Error('This Americano was changed on another device. Your local draft was kept; reload the server version before saving again.');
+      const current = currentEventWithId(snapshot.id);
+      if (current && eventFingerprint(current) === snapshotFingerprint) {
+        await saveExternalEvent(reply.snapshot.event.state);
+        setExternalActiveEvent(reply.snapshot.event.state);
+      }
+      const latestMarker = session.meta.dirtyById[event.id];
+      if (latestMarker?.fingerprint === snapshotFingerprint) {
+        delete session.meta.dirtyById[event.id];
+        session.dirtySnapshots.delete(event.id);
+        clearLocalDirtyMarker(session.userId, event.id, snapshotFingerprint);
+        writeSyncMeta(session.userId, session.meta);
+      }
+      session.lastError = null;
+      return;
+    }
     if (isAmericanoEventV2(snapshot)) {
       const reply = await saveAmericanoEventV2(snapshot, snapshot.revision);
       if (reply.status === 'rejected') throw new Error(reply.message);

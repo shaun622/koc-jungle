@@ -28,7 +28,7 @@ import type { VersionedEventState } from '@/logic/americanoV2/types';
 import { ArrowRight, CalendarDays, MapPin, Users, Search, MoreHorizontal, Link as LinkIcon } from 'lucide-react';
 import { getOwnedSignup, copySignupLink } from '@/lib/signups';
 import { DesignDialog } from '@/components/DesignDialog';
-import { ENABLE_AMERICANO_V2, ENABLE_TOURNAMENT_V1 } from '@/config/features';
+import { ENABLE_AMERICANO_V2, ENABLE_AMERICANO_V3, ENABLE_TOURNAMENT_V1 } from '@/config/features';
 import type { PairingMode } from '@/logic/americanoV2/types';
 import { LOCAL_TOURNAMENT_OWNER, useTournamentStore } from '@/store/tournamentStore';
 
@@ -75,6 +75,7 @@ function dateLabel(event: EventCatalogMetadata): string {
 export function HomeScreen() {
   const createEvent = useEventStore(s => s.createEvent);
   const createAmericanoEvent = useEventStore(s => s.createAmericanoEvent);
+  const createAmericanoEventV3 = useEventStore(s => s.createAmericanoEventV3);
   const loadEvent = useEventStore(s => s.loadEvent);
   const selectEvent = useEventStore(s => s.selectEventById);
   const archiveEvent = useEventStore(s => s.archiveLocalEvent);
@@ -175,7 +176,8 @@ export function HomeScreen() {
       });
       return;
     }
-    createAmericanoEvent('Americano', pairingMode);
+    if (ENABLE_AMERICANO_V3) createAmericanoEventV3('Americano', pairingMode);
+    else createAmericanoEvent('Americano', pairingMode);
     openSelected(useEventStore.getState().event as VersionedEventState | null);
   }
 
@@ -214,7 +216,8 @@ export function HomeScreen() {
       return;
     }
     if (pending.format === 'americano' && pending.pairingMode) {
-      createAmericanoEvent(pending.name, pending.pairingMode);
+      if (ENABLE_AMERICANO_V3) createAmericanoEventV3(pending.name, pending.pairingMode);
+      else createAmericanoEvent(pending.name, pending.pairingMode);
     } else {
       createEvent(pending.name, pending.format);
     }

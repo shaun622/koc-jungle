@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   select: vi.fn(), archive: vi.fn(), deleteLocal: vi.fn(), deleteCloud: vi.fn(), create: vi.fn(),
   getSignup: vi.fn(), copyLink: vi.fn(), hydrateTournament: vi.fn(), createAmericano: vi.fn(),
-  flags: { ENABLE_AMERICANO_V2: false, ENABLE_TOURNAMENT_V1: false },
+  flags: { ENABLE_AMERICANO_V2: false, ENABLE_AMERICANO_V3: false, ENABLE_TOURNAMENT_V1: false },
   fetchOfferings: vi.fn(), purchase: vi.fn(), restore: vi.fn(),
 }));
 vi.mock('@/hooks/useAuth', () => ({useAuth: () => ({ user: {id:'owner-1',email:'organiser@example.com'},cloudEnabled:true })}));
@@ -44,6 +44,7 @@ function show(){return render(<MemoryRouter><HomeScreen/></MemoryRouter>)}
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.flags.ENABLE_AMERICANO_V2 = false;
+  mocks.flags.ENABLE_AMERICANO_V3 = false;
   useEntitlementsStore.setState({pro:true,trialUsed:false,trialEndsAt:undefined});
   mocks.fetchOfferings.mockResolvedValue({
     monthly: {product:{priceString:'$9.99'}},

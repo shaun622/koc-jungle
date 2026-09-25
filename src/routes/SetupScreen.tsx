@@ -46,7 +46,8 @@ import {
   type SignupRegistration,
 } from '@/lib/signups';
 import { AmericanoSetup } from '@/components/americano/AmericanoSetup';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import { AmericanoSetupV3 } from '@/components/americano/AmericanoSetupV3';
+import { isAmericanoEventV2, isAmericanoEventV3, type VersionedEventState } from '@/logic/eventVersions';
 
 const TIE_RULE_LABELS: Record<TieRule, string> = {
   'operator-decides': 'Operator nominates winner',
@@ -1398,6 +1399,7 @@ function NewTeamForm({
 
 export function SetupScreen() {
   const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV3(event)) return <AmericanoSetupV3 event={event} />;
   if (event && isAmericanoEventV2(event)) return <AmericanoSetup event={event} />;
   return <LegacySetupScreen />;
 }

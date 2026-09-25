@@ -7,6 +7,7 @@ import './index.css';
 import './styles/event-design.css';
 import './styles/app-design.css';
 import './styles/tournament-v1.css';
+import './styles/americano-v3.css';
 import './styles/scoreboard.css';
 
 // Shared links use a real path so installed PWAs and mobile browsers navigate

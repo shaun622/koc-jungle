@@ -1,9 +1,10 @@
 import { newId } from '@/logic/idGen';
 import type { AmericanoEventStateV2, VersionedEventState } from '@/logic/americanoV2/types';
-import { isAmericanoEventV2 } from '@/logic/americanoV2/types';
+import type { AmericanoEventStateV3 } from '@/logic/americanoV3/types';
+import { isAmericanoEventV2, isAmericanoEventV3 } from '@/logic/eventVersions';
 import { isLegacyEventState, parseEventState } from '@/utils/eventSchema';
 
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 export interface ExportPayload {
   version: number;
@@ -13,7 +14,7 @@ export interface ExportPayload {
 
 export function toExportJson(event: VersionedEventState): string {
   const payload: ExportPayload = {
-    version: isAmericanoEventV2(event) ? EXPORT_VERSION : 1,
+    version: isAmericanoEventV3(event) ? 3 : isAmericanoEventV2(event) ? 2 : 1,
     exportedAt: Date.now(),
     event,
   };
@@ -49,12 +50,41 @@ function unlinkImportedV2(event: AmericanoEventStateV2): AmericanoEventStateV2 {
   };
 }
 
+function unlinkImportedV3(event: AmericanoEventStateV3): AmericanoEventStateV3 {
+  const settings = { ...event.settings };
+  delete settings.publishedSignupId;
+  delete settings.publishedStartsAt;
+  delete settings.publishedEndsAt;
+  delete settings.publishedSignupOpen;
+  delete settings.publishedCancelledAt;
+  delete settings.ignoredAutoSignupPairKeys;
+  delete settings.ignoredAutoSignupRegistrationIds;
+  return {
+    ...event,
+    id: newId(),
+    revision: '0',
+    settings,
+    teams: event.teams.map((team) => {
+      const copy = { ...team, players: [{ ...team.players[0] }, { ...team.players[1] }] as typeof team.players };
+      delete copy.signupRegistrationId;
+      delete copy.signupPairKey;
+      delete copy.pointsOverride;
+      return copy;
+    }),
+    participants: event.participants.map((participant) => {
+      const copy = { ...participant };
+      delete copy.signupRegistrationId;
+      return copy;
+    }),
+  };
+}
+
 export function parseImportJson(text: string): VersionedEventState {
   const parsed = JSON.parse(text) as Partial<ExportPayload>;
   if (!parsed || typeof parsed !== 'object' || !parsed.event) {
     throw new Error('Invalid export file: missing event.');
   }
-  if (parsed.version !== 1 && parsed.version !== 2) {
+  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) {
     if (typeof parsed.version !== 'number') {
       throw new Error('Invalid export file: missing version.');
     }
@@ -67,9 +97,13 @@ export function parseImportJson(text: string): VersionedEventState {
   if (parsed.version === 2 && !isAmericanoEventV2(event)) {
     throw new Error('Invalid export file: version 2 requires an Americano v2 event.');
   }
+  if (parsed.version === 3 && !isAmericanoEventV3(event)) {
+    throw new Error('Invalid export file: version 3 requires an Americano v3 event.');
+  }
   if (parsed.version === 1) {
     return event;
   }
+  if (isAmericanoEventV3(event)) return unlinkImportedV3(event);
   if (!isAmericanoEventV2(event)) {
     throw new Error('Invalid export file: missing version.');
   }

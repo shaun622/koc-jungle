@@ -11,7 +11,9 @@ import {
 import { Icons } from '@/components/Icons';
 import { RankMovement } from '@/components/RankMovement';
 import { AmericanoLeaderboard } from '@/components/americano/AmericanoLeaderboard';
-import { isAmericanoEventV2, type VersionedEventState } from '@/logic/americanoV2/types';
+import { AmericanoLeaderboardV3 } from '@/components/americano/AmericanoLeaderboardV3';
+import { computeAmericanoStandingsV3 } from '@/logic/americanoV3/standings';
+import { isAmericanoEventV2, isAmericanoEventV3, type VersionedEventState } from '@/logic/eventVersions';
 
 function LegacyLeaderboardScreen() {
   const event = useEventStore((s) => s.event);
@@ -264,6 +266,7 @@ function TeamHistoryModal({ teamId, onClose }: { teamId: string; onClose: () => 
 
 export function LeaderboardScreen() {
   const event = useEventStore((state) => state.event) as VersionedEventState | null;
+  if (event && isAmericanoEventV3(event)) return <AmericanoLeaderboardV3 event={event} standings={computeAmericanoStandingsV3(event)} />;
   if (event && isAmericanoEventV2(event)) return <AmericanoLeaderboard event={event} />;
   return <LegacyLeaderboardScreen />;
 }

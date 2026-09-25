@@ -1,0 +1,65 @@
+[
+  {
+    "id": "first-to-five-5-3",
+    "rule": "first-to-five",
+    "sets": [{ "gamesA": 5, "gamesB": 3 }],
+    "complete": true,
+    "summary": { "winner": "A", "setsA": 0, "setsB": 0, "gamesA": 5, "gamesB": 3, "terminal": true },
+    "pointsPerGameWon": 2,
+    "matchWinBonus": 3,
+    "standingA": 13,
+    "standingB": 6
+  },
+  {
+    "id": "one-set-6-4",
+    "rule": "standard-set",
+    "sets": [{ "gamesA": 6, "gamesB": 4 }],
+    "complete": true,
+    "summary": { "winner": "A", "setsA": 1, "setsB": 0, "gamesA": 6, "gamesB": 4, "terminal": true },
+    "pointsPerGameWon": 1,
+    "matchWinBonus": 0,
+    "standingA": 6,
+    "standingB": 4
+  },
+  {
+    "id": "one-set-tiebreak-7-6",
+    "rule": "standard-set",
+    "sets": [{ "gamesA": 7, "gamesB": 6, "tiebreakPointsA": 8, "tiebreakPointsB": 6 }],
+    "complete": true,
+    "summary": { "winner": "A", "setsA": 1, "setsB": 0, "gamesA": 7, "gamesB": 6, "terminal": true },
+    "pointsPerGameWon": 1,
+    "matchWinBonus": 0,
+    "standingA": 7,
+    "standingB": 6
+  },
+  {
+    "id": "match-tiebreak-is-not-games",
+    "rule": "best-of-three-match-tiebreak",
+    "sets": [
+      { "gamesA": 6, "gamesB": 4 },
+      { "gamesA": 4, "gamesB": 6 },
+      { "gamesA": 10, "gamesB": 8, "decidingMatchTiebreak": true }
+    ],
+    "complete": true,
+    "summary": { "winner": "A", "setsA": 2, "setsB": 1, "gamesA": 10, "gamesB": 10, "terminal": true },
+    "pointsPerGameWon": 2,
+    "matchWinBonus": 3,
+    "standingA": 23,
+    "standingB": 20
+  },
+  {
+    "id": "loser-can-win-more-games-points",
+    "rule": "best-of-three",
+    "sets": [
+      { "gamesA": 6, "gamesB": 0 },
+      { "gamesA": 5, "gamesB": 7 },
+      { "gamesA": 5, "gamesB": 7 }
+    ],
+    "complete": true,
+    "summary": { "winner": "B", "setsA": 1, "setsB": 2, "gamesA": 16, "gamesB": 14, "terminal": true },
+    "pointsPerGameWon": 1,
+    "matchWinBonus": 0,
+    "standingA": 16,
+    "standingB": 14
+  }
+]
