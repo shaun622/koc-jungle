@@ -343,6 +343,29 @@ export async function flushCloudSync(): Promise<CloudSyncFlushResult> {
 /** Explicit alias used by service-worker/update integrations. */
 export const flushAllCloudEvents = flushCloudSync;
 
+/** Settle this event's autosave before an explicit owner RPC uses its revision. */
+export async function flushCloudEvent(eventId: string): Promise<void> {
+  const session = active;
+  if (!session || !supabase) return;
+  await waitWithTimeout((async () => {
+    await session.bootstrap;
+    await flushEventCatalogPersistence();
+    if (active !== session) throw new Error('The signed-in account changed. Reload this event.');
+    cancelPendingPush(session, eventId);
+    await session.pendingById.get(eventId);
+    cancelPendingPush(session, eventId);
+    if (session.meta.tombstonesById[eventId]) throw new Error('This event was deleted.');
+    if (session.meta.dirtyById[eventId]) {
+      const snapshot = session.dirtySnapshots.get(eventId) ?? currentEventWithId(eventId);
+      if (snapshot) await queuePush(session, snapshot);
+    }
+    if (active !== session) throw new Error('The signed-in account changed. Reload this event.');
+    if (session.meta.dirtyById[eventId]) {
+      throw new Error(session.lastError ?? 'This event is still waiting to sync. Retry when connected.');
+    }
+  })(), FLUSH_TIMEOUT_MS);
+}
+
 /**
  * Record a local body mutation. A -> B marks B dirty but deliberately does not
  * tombstone A: that transition is event selection, not deletion.

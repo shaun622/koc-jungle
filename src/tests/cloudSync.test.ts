@@ -97,6 +97,7 @@ vi.mock('@/lib/americanoV2', () => ({
 import {
   deleteCloudEvent,
   flushCloudSync,
+  flushCloudEvent,
   markLocalEventMutation,
   startCloudSync,
   stopCloudSync,
@@ -185,6 +186,21 @@ describe('event-scoped cloud sync', () => {
       bravo.id,
     ]);
     expect(useEventStore.getState().event).toBeNull();
+  });
+
+  it('settles only the selected event before an explicit owner action', async () => {
+    const alpha = eventFixture('flush-alpha', 'Selected event');
+    const bravo = eventFixture('flush-bravo', 'Unrelated event');
+    await saveLocal(alpha);
+    await saveLocal(bravo);
+    startCloudSync('user-1');
+    await settle();
+    markLocalEventMutation(alpha, null);
+    markLocalEventMutation(bravo, null);
+    await flushCloudEvent(alpha.id);
+    expect(cloud.upserts.map((row) => row.id)).toEqual([alpha.id]);
+    expect(useCloudSyncStatus.getState().pendingEventIds).not.toContain(alpha.id);
+    expect(useCloudSyncStatus.getState().pendingEventIds).toContain(bravo.id);
   });
 
   it('does not delete the prior competition when the active selection changes', async () => {

@@ -1,17 +1,45 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AmericanoSetupV3 } from '@/components/americano/AmericanoSetupV3';
 import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
-import { useEventStore } from '@/store/eventStore';
+import { applyExternalEventToActiveFacade, useEventStore } from '@/store/eventStore';
 
-vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: null, cloudEnabled: false }) }));
+const cloud = vi.hoisted(() => ({ enabled: false, flush: vi.fn(), saveConfig: vi.fn() }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: cloud.enabled ? { id: 'owner-test' } : null, cloudEnabled: cloud.enabled }) }));
+vi.mock('@/store/cloudSync', () => ({ flushCloudEvent: cloud.flush }));
+vi.mock('@/lib/americanoV3', async (original) => ({ ...await original<typeof import('@/lib/americanoV3')>(), saveAmericanoConfigV3: cloud.saveConfig }));
 
 afterEach(() => {
+  cloud.enabled = false;
+  cloud.flush.mockReset();
+  cloud.saveConfig.mockReset();
   useEventStore.setState({ event: null });
 });
 
 describe('Americano v3 setup', () => {
+  it('waits for autosave and uses its acknowledged revision without saving the response again', async () => {
+    cloud.enabled = true;
+    const event = { ...createAmericanoEventV3('Cloud save test'), revision: '1' };
+    applyExternalEventToActiveFacade(event);
+    cloud.flush.mockImplementation(async () => {
+      applyExternalEventToActiveFacade({ ...event, revision: '2' });
+    });
+    cloud.saveConfig.mockImplementation(async (input) => ({
+      status: 'applied', requestId: 'test-save', committedEventRevision: '3',
+      snapshot: { event: { state: { ...event, formatConfig: input.config, revision: '3' } }, signup: null },
+    }));
+    const load = vi.spyOn(useEventStore.getState(), 'loadEvent');
+    render(<MemoryRouter><AmericanoSetupV3 event={event} /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText('Match format'), { target: { value: 'traditional' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save rules' }));
+    await waitFor(() => expect(screen.getByText(/Rules saved/)).toBeInTheDocument());
+    expect(cloud.flush).toHaveBeenCalledWith(event.id);
+    expect(cloud.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ baseEventRevision: '2' }));
+    expect(useEventStore.getState().event).toMatchObject({ revision: '3', formatConfig: { scoring: { kind: 'traditional' } } });
+    expect(load).not.toHaveBeenCalled();
+    load.mockRestore();
+  });
   it('preserves unsaved rules across roster-save cloud acknowledgements and resets them for another event', () => {
     const event = createAmericanoEventV3('Cloud acknowledgement test');
     const { rerender } = render(<MemoryRouter><AmericanoSetupV3 event={event} /></MemoryRouter>);

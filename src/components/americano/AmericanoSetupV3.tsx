@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useEventStore } from '@/store/eventStore';
+import { applyExternalEventToActiveFacade, saveEventToLocalCatalog, useEventStore } from '@/store/eventStore';
+import { flushCloudEvent } from '@/store/cloudSync';
+import { isAmericanoEventV3 } from '@/logic/eventVersions';
 import { eventRoute } from '@/lib/eventRoutes';
 import { getOrganizerSignupV3, type SignupSnapshotV3 } from '@/lib/americanoV2';
 import { saveAmericanoConfigV3, saveAmericanoEventV3, saveAmericanoSignupV3, startAmericanoV3 } from '@/lib/americanoV3';
 import { buildSignupUrl, defaultSignupAccountSlug } from '@/lib/signups';
 import { americanoRulesSummaryV3, matchScoringLabelV3 } from '@/logic/americanoV3/labels';
-import type { PairingMode } from '@/logic/americanoV2/types';
+import type { PairingMode, VersionedEventState } from '@/logic/americanoV2/types';
 import {
   addAmericanoFixedTeamV3,
   addAmericanoParticipantV3,
@@ -87,6 +89,18 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
     setMessage('');
   }
 
+  async function syncedEvent(): Promise<AmericanoEventStateV3> {
+    await flushCloudEvent(event.id);
+    const current = useEventStore.getState().event as VersionedEventState | null;
+    if (!current || !isAmericanoEventV3(current) || current.id !== event.id) throw new Error('The selected event changed. Open it again.');
+    return current;
+  }
+
+  async function acceptSaved(next: AmericanoEventStateV3) {
+    await saveEventToLocalCatalog(next, { makeActive: true });
+    applyExternalEventToActiveFacade(next);
+  }
+
   function updateConfig(patch: Parameters<typeof updateAmericanoConfigV3>[1]) {
     setConfigDraft((current) => {
       const next = { ...current, ...patch, ranking: patch.ranking ? { ...current.ranking, ...patch.ranking } : current.ranking };
@@ -142,10 +156,11 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
 
   async function saveRulesToEvent(): Promise<AmericanoEventStateV3> {
     validateAmericanoConfigV3(configDraft);
-    const configChanged = JSON.stringify(configDraft) !== JSON.stringify(event.formatConfig);
-    let next = configChanged ? updateAmericanoConfigV3(event, configDraft) : event;
+    const base = auth.cloudEnabled && auth.user ? await syncedEvent() : event;
+    const configChanged = JSON.stringify(configDraft) !== JSON.stringify(base.formatConfig);
+    let next = configChanged ? updateAmericanoConfigV3(base, configDraft) : base;
     if (auth.cloudEnabled && auth.user) {
-      if (event.revision === '0') {
+      if (base.revision === '0') {
         const created = await saveAmericanoEventV3(next, '0', undefined, auth.user.id);
         if (created.status === 'rejected') throw new Error(created.message);
         if (created.status === 'conflict') throw new Error('This event changed on another device. Reload before saving settings.');
@@ -153,7 +168,7 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
       } else {
         const signup = next.settings.publishedSignupId ? await getOrganizerSignupV3(next.settings.publishedSignupId) : null;
         const saved = await saveAmericanoConfigV3({
-          eventId: next.id, baseEventRevision: event.revision,
+          eventId: next.id, baseEventRevision: base.revision,
           signupEventId: signup?.id ?? null,
           baseCapacityRevision: signup?.capacityRevision ?? '0',
           baseRosterRevision: signup?.rosterRevision ?? '0',
@@ -165,7 +180,8 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
         next = saved.snapshot.event.state;
       }
     }
-    commit(next);
+    if (auth.cloudEnabled && auth.user) await acceptSaved(next);
+    else commit(next);
     return next;
   }
 
@@ -210,7 +226,7 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
       });
       if (reply.status === 'rejected') throw new Error(reply.message);
       if (reply.status === 'conflict') throw new Error('The event or signup changed on another device. Reload before publishing again.');
-      loadEvent(reply.snapshot.event.state);
+      await acceptSaved(reply.snapshot.event.state);
       setSignup(reply.snapshot.signup);
       setMessage(reply.snapshot.signup ? `Sign-up page ${linkedSignup ? 'updated' : 'published'} · ${buildSignupUrl(reply.snapshot.signup.eventSlug, reply.snapshot.signup.accountSlug)}` : 'The server did not return the published sign-up.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'The sign-up page could not be published.'); }
@@ -247,10 +263,7 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
       }
       let base = event;
       if (auth.cloudEnabled && auth.user) {
-        const saved = await saveAmericanoEventV3(event, event.revision, undefined, auth.user.id);
-        if (saved.status === 'rejected') throw new Error(saved.message);
-        if (saved.status === 'conflict') throw new Error('This event changed on another device. Reload the latest version before starting.');
-        base = saved.snapshot.event.state;
+        base = await syncedEvent();
       }
       const next = startAmericanoEventV3(base);
       if (auth.cloudEnabled && auth.user) {
@@ -266,7 +279,7 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
         });
         if (reply.status === 'rejected') throw new Error(reply.message);
         if (reply.status === 'conflict') throw new Error('This event or sign-up roster changed on another device. Reload before starting.');
-        loadEvent(reply.snapshot.event.state);
+        await acceptSaved(reply.snapshot.event.state);
         navigate(eventRoute(next.id, 'display'));
         return;
       }
