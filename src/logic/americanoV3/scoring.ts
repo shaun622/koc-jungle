@@ -228,7 +228,6 @@ export function validateAmericanoResultDraftV3(
     validateMatchScoringV3(scoring, paceMinutes);
     if (draft.endedEarly !== undefined && typeof draft.endedEarly !== 'boolean') throw new AmericanoScoringV3Error('INVALID_SCORE', 'Finish with score played must be true or false.');
     const endedEarly = draft.endedEarly === true;
-    if (endedEarly && !scoring.allowUnfinished) throw new AmericanoScoringV3Error('INVALID_SCORE', 'Unfinished matches are not enabled for this event.');
     assertDraftShape(draft, scoring);
     if (scoring.kind === 'rally') {
       if (draft.kind !== 'rally') throw new AmericanoScoringV3Error('INVALID_SCORE', 'This result must use rally points.', 'result.kind');

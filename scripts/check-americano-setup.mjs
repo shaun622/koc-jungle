@@ -44,7 +44,6 @@ try {
         }
         if (variant === 'planned') {
           await page.getByLabel('Plan around session time', { exact: false }).check();
-          await page.getByLabel('Allow unfinished matches', { exact: false }).check();
           await page.getByText('More options', { exact: true }).click();
         }
         const result = await page.evaluate(() => {
@@ -103,7 +102,6 @@ try {
     await page.getByLabel('Total minutes',{exact:true}).fill('7');
     await page.getByLabel('Minutes per round',{exact:true}).fill('7');
     await page.locator('label:has(> span:text-is("Match format")) > select').selectOption(format);
-    await page.getByLabel('Allow unfinished matches',{exact:false}).check();
     await page.getByRole('button',{name:'Preview schedule',exact:true}).click();
     await page.getByText(/Preview ready/).waitFor();
     await page.getByRole('button',{name:'Start event',exact:true}).click();
@@ -112,7 +110,7 @@ try {
     await editor.getByRole('spinbutton').nth(0).fill(format==='rally'?'10':'4');
     await editor.getByRole('spinbutton').nth(1).fill(format==='rally'?'8':'3');
     assert(await editor.getByRole('button',{name:'Confirm result'}).isDisabled(),'Short score needs explicit confirmation');
-    await editor.getByLabel('Finish with score played',{exact:false}).check();
+    await editor.getByLabel('Time ran out — use score played',{exact:false}).check();
     await editor.getByRole('button',{name:'Confirm result'}).click();
     await page.getByText('1/1 confirmed',{exact:true}).waitFor();
     await page.getByRole('button',{name:'End final round',exact:true}).click();

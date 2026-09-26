@@ -25,10 +25,10 @@ describe('Americano v3 setup', () => {
     applyExternalEventToActiveFacade(event);
     const { rerender } = render(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
     fireEvent.click(screen.getByLabelText(/Plan around session time/));
-    fireEvent.click(screen.getByLabelText(/Allow unfinished matches/));
     fireEvent.click(screen.getByRole('button',{name:'Save rules'}));
     await waitFor(()=>expect(screen.getByText(/Rules saved/)).toBeInTheDocument());
-    expect(useEventStore.getState().event).toMatchObject({formatConfig:{sessionPlan:{totalMinutes:120},scoring:{allowUnfinished:true}}});
+    expect(useEventStore.getState().event).toMatchObject({formatConfig:{sessionPlan:{totalMinutes:120}}});
+    expect(screen.getByText(/confirm the score actually played on that match/)).toBeInTheDocument();
     event = useEventStore.getState().event as unknown as typeof event;
     for(const name of ['A','B']) event = addAmericanoFixedTeamV3(event,{playerOne:name+'1',playerTwo:name+'2'});
     applyExternalEventToActiveFacade(event);

@@ -46,7 +46,7 @@ export function americanoRulesSummaryV3(config: PublicAmericanoRulesV3): string[
   return [
     `${pairingModeLabelV3(config.pairingMode)} · ${partnerRule}`,
     matchScoringLabelV3(config.scoring),
-    ...(config.scoring.allowUnfinished ? ['Unfinished matches allowed: record the score played; level scores are draws. No automatic stopping.'] : []),
+    'If play runs out of time, the organiser can confirm the score actually played. Level scores are draws; the clock never submits a result.',
     tieRuleLabelV3(config.ranking.tiebreak),
     championshipPolicyLabelV3(config.ranking.championship),
   ];

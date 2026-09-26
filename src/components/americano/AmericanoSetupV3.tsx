@@ -348,7 +348,7 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
               catch (error) { setMessage(error instanceof Error ? error.message : 'Check the custom rule fields.'); }
             }}>Apply custom rule</button></div>}
           </>}
-          <label className="amv3-check"><input type="checkbox" checked={scoring.allowUnfinished === true} onChange={(e) => updateConfig({ scoring: { ...scoring, allowUnfinished: e.target.checked } })}/><span>Allow unfinished matches<small>Record the score played when time runs out. Level scores are draws; points are never scaled up.</small></span></label>
+          <p className="amv3-note">If a match runs out of time, you can confirm the score actually played on that match. The pace clock never stops or submits scores.</p>
           {!configDraft.sessionPlan && <>
             <label><span>Schedule</span><select value={configDraft.scheduleKind} onChange={(e) => updateConfig({ scheduleKind: e.target.value as AmericanoEventStateV3['formatConfig']['scheduleKind'] })}><option value="full">Full rotation</option><option value="balanced">Balanced schedule</option><option value="custom">Custom rounds</option></select></label>
             {configDraft.scheduleKind === 'custom' && <label><span>Rounds (1–64)</span><input type="number" min={1} max={64} value={roundDraft} onChange={(e) => setRoundDraft(e.target.value)} onBlur={() => updateConfig({ customRounds: Math.max(1, Math.min(64, Number(roundDraft) || 1)) })} /></label>}
