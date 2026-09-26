@@ -413,6 +413,18 @@ export function applyStorageBroadcast(
   if (hasTombstone(event.id)) return false;
 
   const session = active;
+  if (isAmericanoEventV3(event)) {
+    // The originating tab owns persistence and its durable mutation marker.
+    // Other tabs only display the draft; re-saving it would race the source
+    // with the same revision. Keep genuine local edits for conflict handling.
+    if (session?.meta.dirtyById[event.id]) return false;
+    const activeId = useEventCatalogStore.getState().activeEventId;
+    const shouldDisplay = pinnedEventId
+      ? pinnedEventId === event.id
+      : activeId === event.id || useEventStore.getState().event?.id === event.id;
+    if (shouldDisplay) setExternalActiveEvent(event);
+    return true;
+  }
   if (session) recordDirty(session, event);
   else markLocalEventMutation(event, null);
 

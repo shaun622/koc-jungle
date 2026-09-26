@@ -15,6 +15,7 @@ import {
 } from '@/store/eventRepository';
 import { flushEventCatalogPersistence, useEventStore } from '@/store/eventStore';
 import { DEFAULT_SETTINGS, type EventState } from '@/types/domain';
+import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
 
 function Harness({ pinnedEventId = null }: { pinnedEventId?: string | null }) {
   useStorageBroadcast(true, pinnedEventId);
@@ -90,6 +91,24 @@ describe('event-scoped cross-tab broadcast', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it('uses display-only messages for v3 so older tabs do not upload the same edit', async () => {
+    render(<Harness />);
+    const event = createAmericanoEventV3('Operator draft');
+    act(() => useEventStore.setState({ event: event as unknown as EventState }));
+    expect(JSON.parse(localStorage.getItem(EVENT_BROADCAST_KEY)!)).toMatchObject({
+      operation: 'display', eventId: event.id, event: { name: 'Operator draft' },
+    });
+  });
+
+  it('accepts display-only v3 snapshots on a pinned TV without re-broadcasting', async () => {
+    const event = createAmericanoEventV3('TV draft');
+    render(<Harness pinnedEventId={event.id} />);
+    act(() => send({ schema: 3, operation: 'display', eventId: event.id, event,
+      version: { at: 100, source: 'operator-tab' } }));
+    expect(useEventStore.getState().event?.name).toBe('TV draft');
+    expect(localStorage.getItem(EVENT_BROADCAST_KEY)).toBeNull();
   });
 
   it('orders snapshots per event so activity on B cannot suppress A', async () => {

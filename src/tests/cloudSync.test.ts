@@ -97,6 +97,7 @@ vi.mock('@/lib/americanoV2', () => ({
 vi.mock('@/lib/americanoV3', () => ({ saveAmericanoEventV3: americanoCloud.saveV3 }));
 
 import {
+  applyStorageBroadcast,
   deleteCloudEvent,
   flushCloudSync,
   flushCloudEvent,
@@ -174,6 +175,26 @@ describe('event-scoped cloud sync', () => {
   afterEach(() => {
     stopCloudSync();
     vi.useRealTimers();
+  });
+
+  it('displays a v3 operator broadcast without creating a competing cloud save', async () => {
+    const event = createAmericanoEventV3('TV mirror');
+    startCloudSync('user-1');
+    await settle();
+    expect(applyStorageBroadcast(event, event.id)).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(useEventStore.getState().event?.name).toBe('TV mirror');
+    expect(americanoCloud.saveV3).not.toHaveBeenCalled();
+    expect(useCloudSyncStatus.getState().pendingEventIds).not.toContain(event.id);
+  });
+
+  it('does not replace a genuine pending v3 edit with a broadcast from another tab', async () => {
+    const event = createAmericanoEventV3('Local unsaved');
+    startCloudSync('user-1');
+    await settle();
+    useEventStore.setState({ event: event as unknown as EventState });
+    expect(applyStorageBroadcast({ ...event, name: 'Other tab' }, event.id)).toBe(false);
+    expect(useEventStore.getState().event?.name).toBe('Local unsaved');
   });
 
   it('pulls and stores the complete remote catalog without selecting one row', async () => {

@@ -11,6 +11,7 @@ import {
 } from '@/store/cloudSync';
 import type { VersionedEventState } from '@/logic/americanoV2/types';
 import { isLegacyEventState, parseEventState } from '@/utils/eventSchema';
+import { isAmericanoEventV3 } from '@/logic/eventVersions';
 
 export const EVENT_BROADCAST_KEY = 'koc-event-broadcast-v3';
 const LEGACY_BROADCAST_KEY = 'koc-event-broadcast-v2';
@@ -23,7 +24,7 @@ interface Version {
 type EventBroadcast =
   | {
       schema: 3;
-      operation: 'upsert';
+      operation: 'upsert' | 'display';
       eventId: string;
       event: VersionedEventState;
       version: Version;
@@ -36,7 +37,7 @@ type EventBroadcast =
     };
 
 type PublishMessage =
-  | { operation: 'upsert'; eventId: string; event: VersionedEventState }
+  | { operation: 'upsert' | 'display'; eventId: string; event: VersionedEventState }
   | { operation: 'delete' | 'select'; eventId: string };
 
 interface LegacyBroadcast {
@@ -74,16 +75,17 @@ function readMessage(raw: string | null): EventBroadcast | LegacyBroadcast | nul
     if (value.schema === 3) {
       if (
         (value.operation !== 'upsert'
+          && value.operation !== 'display'
           && value.operation !== 'delete'
           && value.operation !== 'select')
         || typeof value.eventId !== 'string'
       ) return null;
-      if (value.operation === 'upsert') {
+      if (value.operation === 'upsert' || value.operation === 'display') {
         if (!value.event || typeof value.event !== 'object') return null;
         const event = parseEventState(value.event);
         return {
           schema: 3,
-          operation: 'upsert',
+          operation: value.operation,
           eventId: value.eventId,
           event,
           version,
@@ -187,7 +189,7 @@ export function useStorageBroadcast(
         applyStorageBroadcast(message.event, pinnedId);
         return;
       }
-      if (message.operation === 'upsert') {
+      if (message.operation === 'upsert' || message.operation === 'display') {
         applyStorageBroadcast(message.event, pinnedId);
         return;
       }
@@ -217,7 +219,9 @@ export function useStorageBroadcast(
         if (!markLocalEventMutation(versionedEvent, previousEvent)) return;
         lastPublishedFingerprints.set(state.event.id, eventFingerprint);
         publish({
-          operation: 'upsert',
+          // Older tabs interpret upserts as another cloud write. A v3 display
+          // snapshot must never enlist the TV tab as a competing CAS writer.
+          operation: isAmericanoEventV3(versionedEvent) ? 'display' : 'upsert',
           eventId: state.event.id,
           event: versionedEvent,
         });
