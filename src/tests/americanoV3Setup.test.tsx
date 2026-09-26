@@ -12,6 +12,23 @@ afterEach(() => {
 });
 
 describe('Americano v3 setup', () => {
+  it('preserves unsaved rules across roster-save cloud acknowledgements and resets them for another event', () => {
+    const event = createAmericanoEventV3('Cloud acknowledgement test');
+    const { rerender } = render(<MemoryRouter><AmericanoSetupV3 event={event} /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText('Match format'), { target: { value: 'traditional' } });
+    fireEvent.change(screen.getByLabelText('Points per game won'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Schedule'), { target: { value: 'custom' } });
+    fireEvent.change(screen.getByLabelText('Rounds (1–64)'), { target: { value: '12' } });
+    const acknowledged = { ...structuredClone(event), revision: '1' };
+    rerender(<MemoryRouter><AmericanoSetupV3 event={acknowledged} /></MemoryRouter>);
+    expect(screen.getByLabelText('Match format')).toHaveValue('traditional');
+    expect(screen.getByLabelText('Points per game won')).toHaveValue(2);
+    expect(screen.getByLabelText('Rounds (1–64)')).toHaveValue(12);
+    const other = createAmericanoEventV3('Other event');
+    rerender(<MemoryRouter><AmericanoSetupV3 event={other} /></MemoryRouter>);
+    expect(screen.getByLabelText('Match format')).toHaveValue('rally');
+    expect(screen.getByLabelText('Schedule')).toHaveValue('full');
+  });
   it('offers traditional scoring, configurable standings awards and public rule summary', () => {
     const event = createAmericanoEventV3('Local v3 setup');
     render(<MemoryRouter><AmericanoSetupV3 event={event} /></MemoryRouter>);

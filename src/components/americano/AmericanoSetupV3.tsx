@@ -106,10 +106,17 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Pairing mode could not be changed.'); }
   }
 
+  // Cloud acknowledgements clone the event, including unchanged rules. Compare
+  // their values so a roster save cannot erase the organizer's unsaved choices.
+  const savedConfigJson = JSON.stringify(event.formatConfig);
   useEffect(() => {
-    setConfigDraft(structuredClone(event.formatConfig));
-    setPointsDraft(String(event.formatConfig.scoring.kind === 'rally' ? event.formatConfig.scoring.pointsPerMatch : 24));
-  }, [event.id, event.formatConfig]);
+    const savedConfig = JSON.parse(savedConfigJson) as AmericanoEventStateV3['formatConfig'];
+    setConfigDraft(savedConfig);
+    setPointsDraft(String(savedConfig.scoring.kind === 'rally' ? savedConfig.scoring.pointsPerMatch : 24));
+    setRoundDraft(String(savedConfig.customRounds ?? 1));
+    setCustomRuleDraft(savedConfig.scoring.kind === 'traditional'
+      ? savedConfig.scoring.rule : AMERICANO_V3_TRADITIONAL_PRESETS['first-to-five'].rule);
+  }, [event.id, savedConfigJson]);
 
   useEffect(() => {
     let cancelled = false;
