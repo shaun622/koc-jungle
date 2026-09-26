@@ -22,7 +22,11 @@ export function AmericanoResultEditorV3({ event, match, readOnly, correcting, on
 }) {
   const [draft, setDraft] = useState<AmericanoResultDraftV3>(match.result);
   const [error, setError] = useState('');
-  useEffect(() => { setDraft(match.result); setError(''); }, [match.id, match.result]);
+  const savedResultJson = JSON.stringify(match.result);
+  useEffect(() => {
+    setDraft(JSON.parse(savedResultJson) as AmericanoResultDraftV3);
+    setError('');
+  }, [match.id, savedResultJson]);
   const sideA = labelForSide(event, match.sideA);
   const sideB = labelForSide(event, match.sideB);
   const locked = readOnly && !correcting;
