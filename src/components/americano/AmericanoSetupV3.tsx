@@ -25,7 +25,8 @@ import {
 import { AMERICANO_V3_TRADITIONAL_PRESETS, validateAmericanoConfigV3 } from '@/logic/americanoV3/scoring';
 import type { AmericanoEventStateV3, TraditionalPresetKey, TraditionalRule } from '@/logic/americanoV3/types';
 
-const PACE_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+import { AmericanoSessionPlanner } from './AmericanoSessionPlanner';
+import { applySessionPlan } from '@/logic/americanoV3/sessionPlan';
 
 function localDateTime(value: string | null | undefined): string {
   if (!value) return '';
@@ -155,10 +156,14 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
   }, [auth.cloudEnabled, auth.user, event.id, event.settings.publishedSignupId]);
 
   async function saveRulesToEvent(): Promise<AmericanoEventStateV3> {
-    validateAmericanoConfigV3(configDraft);
     const base = auth.cloudEnabled && auth.user ? await syncedEvent() : event;
-    const configChanged = JSON.stringify(configDraft) !== JSON.stringify(base.formatConfig);
-    let next = configChanged ? updateAmericanoConfigV3(base, configDraft) : base;
+    const count = configDraft.pairingMode === 'fixed' ? base.teams.filter((team) => team.active).length : base.participants.filter((player) => player.active).length;
+    // Signups can be published before entrants arrive. Save the preference now;
+    // calculate its schedule from the confirmed roster when previewing later.
+    const plannedConfig = count < (configDraft.pairingMode === 'fixed' ? 2 : 4) ? configDraft : applySessionPlan(configDraft, count, base.courts.length);
+    validateAmericanoConfigV3(plannedConfig);
+    const configChanged = JSON.stringify(plannedConfig) !== JSON.stringify(base.formatConfig);
+    let next = configChanged ? updateAmericanoConfigV3(base, { ...plannedConfig, sessionPlan: plannedConfig.sessionPlan }) : base;
     if (auth.cloudEnabled && auth.user) {
       if (base.revision === '0') {
         const created = await saveAmericanoEventV3(next, '0', undefined, auth.user.id);
@@ -250,6 +255,8 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
         ? await getOrganizerSignupV3(configured.settings.publishedSignupId) : null;
       const next = await previewAmericanoScheduleV3(configured, {
         rosterRevision: publishedRoster?.rosterRevision ?? '0',
+        acknowledgeUnevenAppearances: !!configured.formatConfig.sessionPlan,
+        acknowledgeRepeatedCycle: !!configured.formatConfig.sessionPlan,
       });
       commit(next);
       setMessage(`Preview ready · ${next.americanoSchedule?.rounds.length ?? 0} rounds · ${next.americanoSchedule?.metrics.maximumAppearanceSpread ? 'appearance counts vary' : 'equal appearances'}.`);
@@ -301,10 +308,16 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
     </section>
     <div className="amv3-grid">
       <section className="amv3-panel"><header><h2>Rules & schedule</h2><p>Match format, standings rewards and tie policy.</p></header>
+        <AmericanoSessionPlanner config={configDraft} entrants={entrants.length} courts={event.courts.length} startsAt={signupDraft.startsAt} onChange={(sessionPlan) => setConfigDraft((current) => {
+          const next = { ...current };
+          if (sessionPlan) { next.sessionPlan = sessionPlan; next.paceClockEnabled = true; }
+          else delete next.sessionPlan;
+          return next;
+        })}/>
         <div className="amv3-fields">
           <label><span>Match format</span><select value={scoring.kind} onChange={(e) => {
-            if (e.target.value === 'rally') updateConfig({ scoring: { kind: 'rally', pointsPerMatch: Number(pointsDraft) || 24 } });
-            else updateConfig({ scoring: { kind: 'traditional', preset: 'first-to-five', rule: AMERICANO_V3_TRADITIONAL_PRESETS['first-to-five'].rule, standings: { pointsPerGameWon: 1, matchWinBonus: 0 } } });
+            if (e.target.value === 'rally') updateConfig({ scoring: { kind: 'rally', pointsPerMatch: Number(pointsDraft) || 24, ...(scoring.allowUnfinished !== undefined ? { allowUnfinished: scoring.allowUnfinished } : {}) } });
+            else updateConfig({ scoring: { kind: 'traditional', preset: 'first-to-five', rule: AMERICANO_V3_TRADITIONAL_PRESETS['first-to-five'].rule, standings: { pointsPerGameWon: 1, matchWinBonus: 0 }, ...(scoring.allowUnfinished !== undefined ? { allowUnfinished: scoring.allowUnfinished } : {}) } });
           }}><option value="rally">Rally points</option><option value="traditional">Games / sets</option></select></label>
           {scoring.kind === 'rally' ? <label><span>Points per match</span><input type="number" min={1} max={2_147_483_647} value={pointsDraft} onChange={(e) => setPointsDraft(e.target.value)} onBlur={() => { const value = Number(pointsDraft); if (Number.isInteger(value) && value > 0) updateConfig({ scoring: { ...scoring, pointsPerMatch: value } }); }} /></label> : <>
             <label><span>Traditional format</span><select value={scoring.preset} onChange={(e) => {
@@ -335,9 +348,12 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
               catch (error) { setMessage(error instanceof Error ? error.message : 'Check the custom rule fields.'); }
             }}>Apply custom rule</button></div>}
           </>}
-          <label><span>Schedule</span><select value={configDraft.scheduleKind} onChange={(e) => updateConfig({ scheduleKind: e.target.value as AmericanoEventStateV3['formatConfig']['scheduleKind'] })}><option value="full">Full rotation</option><option value="balanced">Balanced schedule</option><option value="custom">Custom rounds</option></select></label>
-          {configDraft.scheduleKind === 'custom' && <label><span>Rounds (1–64)</span><input type="number" min={1} max={64} value={roundDraft} onChange={(e) => setRoundDraft(e.target.value)} onBlur={() => updateConfig({ customRounds: Math.max(1, Math.min(64, Number(roundDraft) || 1)) })} /></label>}
-          <label><span>Estimated pace</span><select value={configDraft.paceMinutes} onChange={(e) => updateConfig({ paceMinutes: Number(e.target.value) as typeof PACE_OPTIONS[number] })}>{PACE_OPTIONS.map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label>
+          <label className="amv3-check"><input type="checkbox" checked={scoring.allowUnfinished === true} onChange={(e) => updateConfig({ scoring: { ...scoring, allowUnfinished: e.target.checked } })}/><span>Allow unfinished matches<small>Record the score played when time runs out. Level scores are draws; points are never scaled up.</small></span></label>
+          {!configDraft.sessionPlan && <>
+            <label><span>Schedule</span><select value={configDraft.scheduleKind} onChange={(e) => updateConfig({ scheduleKind: e.target.value as AmericanoEventStateV3['formatConfig']['scheduleKind'] })}><option value="full">Full rotation</option><option value="balanced">Balanced schedule</option><option value="custom">Custom rounds</option></select></label>
+            {configDraft.scheduleKind === 'custom' && <label><span>Rounds (1–64)</span><input type="number" min={1} max={64} value={roundDraft} onChange={(e) => setRoundDraft(e.target.value)} onBlur={() => updateConfig({ customRounds: Math.max(1, Math.min(64, Number(roundDraft) || 1)) })} /></label>}
+            <label><span>Estimated pace (minutes)</span><input type="number" min={1} max={240} value={configDraft.paceMinutes || ''} onChange={(e) => setConfigDraft((current) => ({ ...current, paceMinutes: Number(e.target.value) }))}/></label>
+          </>}
           <label><span>Standings tie rule</span><select value={configDraft.ranking.tiebreak} onChange={(e) => updateConfig({ ranking: { ...configDraft.ranking, tiebreak: e.target.value as AmericanoEventStateV3['formatConfig']['ranking']['tiebreak'] } })}><option value="shared">Share tied places</option><option value="difference">Score difference</option>{fixed && <><option value="head-to-head">Head-to-head</option><option value="head-to-head-then-difference">Head-to-head, then difference</option></>}</select></label>
           <label><span>If two still tie for first</span><select value={configDraft.ranking.championship} onChange={(e) => updateConfig({ ranking: { ...configDraft.ranking, championship: e.target.value as AmericanoEventStateV3['formatConfig']['ranking']['championship'] } })}><option value="none">Share first place</option><option value="golden-point">One golden point</option><option value="tiebreak-7">Tiebreak to 7 (win by 2)</option><option value="tiebreak-10">Tiebreak to 10 (win by 2)</option></select></label>
           <label className="amv3-check"><input type="checkbox" checked={configDraft.paceClockEnabled} onChange={(e) => updateConfig({ paceClockEnabled: e.target.checked })} /><span>Show advisory pace clock <small>It never ends a match or forces a result.</small></span></label>

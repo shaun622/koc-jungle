@@ -7,6 +7,7 @@ import {
   type TournamentSetScore,
 } from '@/logic/tournament';
 import { isValidAmericanoPoints, MAX_AMERICANO_POINTS } from '@/logic/americanoV2/types';
+import { validateSessionPlan } from './sessionPlan';
 import type {
   AmericanoConfigV3,
   AmericanoResultDraftV3,
@@ -90,6 +91,7 @@ function rulesEqual(left: TraditionalRule, right: TraditionalRule): boolean {
 }
 
 export function validateMatchScoringV3(scoring: MatchScoringV3, paceMinutes = 10): void {
+  if (scoring.allowUnfinished !== undefined && typeof scoring.allowUnfinished !== 'boolean') throw new AmericanoScoringV3Error('INVALID_MATCH_RULE', 'Allow unfinished matches must be true or false.');
   if (scoring.kind === 'rally') {
     if (!isValidAmericanoPoints(scoring.pointsPerMatch)) {
       throw new AmericanoScoringV3Error('INVALID_POINTS', 'Enter a positive whole number for rally points per match.', 'formatConfig.scoring.pointsPerMatch');
@@ -134,7 +136,8 @@ export function validateAmericanoConfigV3(config: AmericanoConfigV3): void {
   if (config.scheduleKind === 'custom') {
     if (!Number.isInteger(config.customRounds) || config.customRounds! < 1 || config.customRounds! > 64) throw new AmericanoScoringV3Error('INVALID_SCHEDULE', 'Custom rounds must be a whole number from 1 to 64.', 'formatConfig.customRounds');
   } else if (config.customRounds !== undefined) throw new AmericanoScoringV3Error('INVALID_SCHEDULE', 'Custom rounds only applies to a custom schedule.', 'formatConfig.customRounds');
-  if (![5, 10, 15, 20, 25, 30].includes(config.paceMinutes)) throw new AmericanoScoringV3Error('INVALID_MATCH_RULE', 'Choose a pace in five-minute steps from 5 to 30 minutes.', 'formatConfig.paceMinutes');
+  if (!Number.isInteger(config.paceMinutes) || config.paceMinutes < 1 || config.paceMinutes > 240) throw new AmericanoScoringV3Error('INVALID_MATCH_RULE', 'Round length must be 1–240 whole minutes.', 'formatConfig.paceMinutes');
+  if (config.sessionPlan !== undefined) validateSessionPlan(config.sessionPlan);
   if (typeof config.paceClockEnabled !== 'boolean') throw new AmericanoScoringV3Error('INVALID_MATCH_RULE', 'Pace clock enabled must be true or false.', 'formatConfig.paceClockEnabled');
   if (!config.ranking || !['shared', 'difference', 'head-to-head', 'head-to-head-then-difference'].includes(config.ranking.tiebreak)) throw new AmericanoScoringV3Error('INVALID_TIE_POLICY', 'Choose a supported standings tie rule.', 'formatConfig.ranking.tiebreak');
   if (config.pairingMode === 'rotating' && config.ranking.tiebreak.startsWith('head-to-head')) throw new AmericanoScoringV3Error('INVALID_TIE_POLICY', 'Head-to-head is only available for fixed pairs.', 'formatConfig.ranking.tiebreak');
@@ -223,6 +226,9 @@ export function validateAmericanoResultDraftV3(
 ): DraftValidationV3 {
   try {
     validateMatchScoringV3(scoring, paceMinutes);
+    if (draft.endedEarly !== undefined && typeof draft.endedEarly !== 'boolean') throw new AmericanoScoringV3Error('INVALID_SCORE', 'Finish with score played must be true or false.');
+    const endedEarly = draft.endedEarly === true;
+    if (endedEarly && !scoring.allowUnfinished) throw new AmericanoScoringV3Error('INVALID_SCORE', 'Unfinished matches are not enabled for this event.');
     assertDraftShape(draft, scoring);
     if (scoring.kind === 'rally') {
       if (draft.kind !== 'rally') throw new AmericanoScoringV3Error('INVALID_SCORE', 'This result must use rally points.', 'result.kind');
@@ -230,7 +236,8 @@ export function validateAmericanoResultDraftV3(
         if (complete) throw new AmericanoScoringV3Error('INVALID_SCORE', 'Enter both rally scores before confirming.', 'result');
         return { valid: true, complete: false, summary: null };
       }
-      if (draft.scoreA + draft.scoreB !== scoring.pointsPerMatch) throw new AmericanoScoringV3Error('INVALID_SCORE', `Scores must add up to ${scoring.pointsPerMatch}.`, 'result.scoreB');
+      const total = draft.scoreA + draft.scoreB;
+      if (endedEarly ? total > scoring.pointsPerMatch : total !== scoring.pointsPerMatch) throw new AmericanoScoringV3Error('INVALID_SCORE', endedEarly ? `Enter actual scores totalling at most ${scoring.pointsPerMatch}.` : `Scores must add up to ${scoring.pointsPerMatch}.`, 'result.scoreB');
       return { valid: true, complete: true, summary: { winner: draft.scoreA === draft.scoreB ? null : draft.scoreA > draft.scoreB ? 'A' : 'B', setsA: 0, setsB: 0, gamesA: draft.scoreA, gamesB: draft.scoreB, terminal: true } };
     }
     if (draft.kind !== 'traditional') throw new AmericanoScoringV3Error('INVALID_SCORE', 'This result must use game or set scores.', 'result.kind');
@@ -251,7 +258,28 @@ export function validateAmericanoResultDraftV3(
       if (complete) throw new AmericanoScoringV3Error('INVALID_SCORE', 'Enter a complete match score before confirming.', 'result.sets');
       return { valid: true, complete: false, summary: null };
     }
-    const summary = scoreSummary({ sets: rows } satisfies TournamentScore, ruleProfileV3(scoring.rule, paceMinutes), complete);
+    // A stopped set tiebreak has not awarded its final game yet. Validate its
+    // point progress separately, then count only games actually completed.
+    const last = rows[rows.length - 1];
+    let partialTiebreakLead: 'A' | 'B' | null = null;
+    if (endedEarly && last.tiebreakPointsA !== undefined && last.gamesA !== last.gamesB) {
+      scoreSummary({ sets: [last] }, { ...ruleProfileV3(scoring.rule, paceMinutes), bestOfSets: 1, decidingMatchTiebreak: null }, true);
+    }
+    if (endedEarly && last.gamesA === scoring.rule.tiebreakTrigger && last.gamesB === scoring.rule.tiebreakTrigger && last.tiebreakPointsA !== undefined) {
+      const a = last.tiebreakPointsA; const b = last.tiebreakPointsB!;
+      if (Math.max(a, b) >= scoring.rule.tiebreakTarget! && Math.abs(a - b) >= 2) throw new AmericanoScoringV3Error('INVALID_SCORE', 'This tiebreak is finished. Record its winning game as well.');
+      partialTiebreakLead = a === b ? null : a > b ? 'A' : 'B';
+      delete last.tiebreakPointsA; delete last.tiebreakPointsB;
+    }
+    const summary = scoreSummary({ sets: rows } satisfies TournamentScore, ruleProfileV3(scoring.rule, paceMinutes), complete && !endedEarly);
+    if (endedEarly) {
+      if (sawIncomplete) throw new AmericanoScoringV3Error('INVALID_SCORE', 'Enter both scores or remove the blank last row.');
+      if (!summary.terminal) summary.winner = summary.setsA === summary.setsB
+        ? summary.setsA + summary.setsB === rows.length ? null
+          : partialTiebreakLead ?? (last.gamesA === last.gamesB ? null : last.gamesA > last.gamesB ? 'A' : 'B')
+        : summary.setsA > summary.setsB ? 'A' : 'B';
+      return { valid: true, complete: true, summary: mapSummary(summary) };
+    }
     const lastIsComplete = !sawIncomplete;
     return { valid: true, complete: lastIsComplete && summary.terminal && summary.winner !== null, summary: mapSummary(summary) };
   } catch (error) {

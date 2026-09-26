@@ -20,6 +20,32 @@ afterEach(() => {
 });
 
 describe('Americano v3 setup', () => {
+  it('saves planning preferences before signups, derives the populated preview, and can disable the option again', async () => {
+    let event = createAmericanoEventV3('Planner','fixed',1);
+    applyExternalEventToActiveFacade(event);
+    const { rerender } = render(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
+    fireEvent.click(screen.getByLabelText(/Plan around session time/));
+    fireEvent.click(screen.getByLabelText(/Allow unfinished matches/));
+    fireEvent.click(screen.getByRole('button',{name:'Save rules'}));
+    await waitFor(()=>expect(screen.getByText(/Rules saved/)).toBeInTheDocument());
+    expect(useEventStore.getState().event).toMatchObject({formatConfig:{sessionPlan:{totalMinutes:120},scoring:{allowUnfinished:true}}});
+    event = useEventStore.getState().event as unknown as typeof event;
+    for(const name of ['A','B']) event = addAmericanoFixedTeamV3(event,{playerOne:name+'1',playerTwo:name+'2'});
+    applyExternalEventToActiveFacade(event);
+    rerender(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
+    expect(screen.getByText(/Suggested: 10 rounds/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Preview schedule'}));
+    await waitFor(()=>expect(screen.getByText(/Preview ready/)).toBeInTheDocument());
+    event = useEventStore.getState().event as unknown as typeof event;
+    expect(event.americanoSchedule?.rounds).toHaveLength(10);
+    expect(event.formatConfig).toMatchObject({scheduleKind:'custom',customRounds:10});
+    rerender(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
+    fireEvent.click(screen.getByLabelText(/Plan around session time/));
+    fireEvent.click(screen.getByRole('button',{name:'Save rules'}));
+    await waitFor(()=>expect(screen.getByText(/Rules saved/)).toBeInTheDocument());
+    expect((useEventStore.getState().event as unknown as typeof event).formatConfig.sessionPlan).toBeUndefined();
+    expect((useEventStore.getState().event as unknown as typeof event).americanoSchedule).toBeUndefined();
+  });
   it('binds a published schedule preview to the current signup roster revision', async () => {
     cloud.enabled = true;
     let event = createAmericanoEventV3('Published preview', 'fixed', 1);

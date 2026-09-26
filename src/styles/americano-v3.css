@@ -48,6 +48,8 @@
 @media(max-width:600px){.amv3-setup{padding:16px 12px 110px;gap:16px}.amv3-setup .amv3-panel{padding:18px}.amv3-fields{grid-template-columns:minmax(0,1fr)}.amv3-mode button{padding:10px 8px}.amv3-add-row>input,.amv3-roster-row>input{flex-basis:100%;width:100%}.amv3-action-buttons{width:100%}.amv3-action-buttons>.btn{flex:1 1 140px}}
 @media(max-width:768px),(orientation:landscape) and (max-height:500px){body:has(.amv3-setup){overflow:visible}.amv3-setup{overflow:visible;scrollbar-gutter:auto}}
 
+.amv3-session-planner{margin-bottom:22px;display:grid;gap:16px}.amv3-session-planner details{padding:12px;border:1px solid var(--line-soft);border-radius:12px}.amv3-session-planner summary{cursor:pointer;min-height:32px}.amv3-session-planner details label{display:grid;gap:8px;margin-top:12px}.amv3-session-planner .amv3-rules-summary{margin-top:0}
+.amv3-finish-played{display:flex;align-items:flex-start;gap:12px;padding:14px 0;margin-top:12px;min-height:44px}.amv3-finish-played input{width:22px;height:22px;margin-top:2px;accent-color:var(--lime)}.amv3-finish-played small{display:block;margin-top:4px;color:var(--text-2);font-size:16px}
 .amv3-night{display:block;min-height:100dvh;padding:clamp(12px,2vw,24px);}
 .amv3-header{margin-bottom:18px;}
 .amv3-header p{margin:8px 0 0;color:rgba(255,255,255,.78);font-size:16px;}

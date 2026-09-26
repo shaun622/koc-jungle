@@ -27,14 +27,21 @@ export type TraditionalRule = Pick<RuleProfile,
   'family' | 'bestOfSets' | 'gamesToWin' | 'gameMargin' |
   'tiebreakTrigger' | 'tiebreakTarget' | 'decidingMatchTiebreak' | 'gameEnding'>;
 
-export type MatchScoringV3 =
+export type MatchScoringV3 = { allowUnfinished?: boolean } & (
   | { kind: 'rally'; pointsPerMatch: number }
   | {
     kind: 'traditional';
     preset: TraditionalPresetKey;
     rule: TraditionalRule;
     standings: { pointsPerGameWon: number; matchWinBonus: number };
-  };
+  });
+
+export interface SessionPlanV3 {
+  totalMinutes: number;
+  preference: 'full' | 'round-length';
+  roundMinutes: number;
+  changeoverMinutes: number;
+}
 
 export type RankingTiebreakV3 = 'shared' | 'difference' | 'head-to-head' | 'head-to-head-then-difference';
 export type ChampionshipPolicyV3 = 'none' | 'golden-point' | 'tiebreak-7' | 'tiebreak-10';
@@ -49,8 +56,9 @@ export interface AmericanoConfigV3 {
   };
   scheduleKind: 'full' | 'balanced' | 'custom';
   customRounds?: number;
-  paceMinutes: 5 | 10 | 15 | 20 | 25 | 30;
+  paceMinutes: number;
   paceClockEnabled: boolean;
+  sessionPlan?: SessionPlanV3;
 }
 
 export interface AmericanoScheduleV3 extends Omit<AmericanoScheduleV2, 'algorithmVersion'> {
@@ -74,9 +82,9 @@ export interface MatchTiebreakDraftV3 {
 
 export type TraditionalRowDraftV3 = SetDraftV3 | MatchTiebreakDraftV3;
 
-export type AmericanoResultDraftV3 =
+export type AmericanoResultDraftV3 = { endedEarly?: boolean } & (
   | { kind: 'rally'; scoreA: number | null; scoreB: number | null }
-  | { kind: 'traditional'; sets: TraditionalRowDraftV3[] };
+  | { kind: 'traditional'; sets: TraditionalRowDraftV3[] });
 
 export interface AmericanoMatchV3 {
   id: string;

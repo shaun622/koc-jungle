@@ -2,6 +2,7 @@
 import ReactDOM from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { AmericanoSetupV3 } from '@/components/americano/AmericanoSetupV3';
+import { AmericanoDisplayV3 } from '@/components/americano/AmericanoDisplayV3';
 import { TopNav } from '@/components/TopNav';
 import { MobileTabBar } from '@/components/MobileTabBar';
 import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
@@ -27,7 +28,7 @@ function Fixture() {
   const current = useEventStore((state) => state.event) as VersionedEventState | null;
   if (!current || !isAmericanoEventV3(current)) return null;
   return <MemoryRouter initialEntries={[`/events/${current.id}/setup`]}>
-    <div className="op"><TopNav event={current as unknown as EventState}/><AmericanoSetupV3 event={current}/><MobileTabBar event={current as unknown as EventState}/></div>
+    {current.status === 'setup' ? <div className="op"><TopNav event={current as unknown as EventState}/><AmericanoSetupV3 event={current}/><MobileTabBar event={current as unknown as EventState}/></div> : <AmericanoDisplayV3 event={current}/>}
   </MemoryRouter>;
 }
 ReactDOM.createRoot(document.getElementById('root')!).render(<Fixture/>);

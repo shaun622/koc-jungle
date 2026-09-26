@@ -51,6 +51,7 @@ const sqlFiles = [
   ...migrations.slice(firstAmericanoMigration).map((name) => join(migrationDirectory, name)),
   join(here, 'contract.sql'),
   join(here, '../americano-v3/scoring.sql'),
+  join(here, '../americano-v3/session-time.sql'),
   join(here, '../americano-v3/public-signup.sql'),
   join(here, 'concurrency-setup.sql'),
   join(here, '../americano-v3/workflows.sql'),
