@@ -6,6 +6,7 @@ import { AmericanoChampionshipFinal } from '@/components/americano/AmericanoCham
 import { AmericanoLeaderboardV3 } from '@/components/americano/AmericanoLeaderboardV3';
 import { AmericanoResultEditorV3 } from '@/components/americano/AmericanoResultEditorV3';
 import { eventRoute } from '@/lib/eventRoutes';
+import { useKeepAwake } from '@/hooks/useKeepAwake';
 import { useEventStore } from '@/store/eventStore';
 import {
   confirmAmericanoResultV3,
@@ -49,10 +50,8 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
   const [finishOpen, setFinishOpen] = useState(false);
   const [editingHistory, setEditingHistory] = useState<string | null>(null);
   const [finalStatus, setFinalStatus] = useState<Awaited<ReturnType<typeof championshipStatusV3>>>({ kind: 'no-results' });
-  const readOnly = typeof window !== 'undefined' && (
-    new URLSearchParams(window.location.search).get('tv') === '1'
-    || new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tv') === '1'
-  );
+  // The iPad itself drives the mirrored TV display, as it does for KoC.
+  useKeepAwake(event.status === 'round-in-progress' || event.status === 'between-rounds');
   const round = currentRound(event);
   const completedRounds = event.rounds.filter((candidate) => candidate.completedAt && !candidate.excludedReason).length;
   const baseStandings = useMemo(() => computeAmericanoStandingsV3(event), [event]);
@@ -102,15 +101,15 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
         : finalStatus.final.contenderIds[finalStatus.final.outcome.pointsA > finalStatus.final.outcome.pointsB ? 0 : 1]
       : undefined;
     return <main className="americano-night amv3-night amv3-complete">
-      <Header event={event} readOnly={readOnly} modeLabel={modeLabel} rulesLabel={rulesLabel} onTv={() => openTvView()} />
+      <Header event={event} modeLabel={modeLabel} rulesLabel={rulesLabel} />
       {event.completionReason === 'early' && <div className="amv3-callout warning">Event ended early. Only fully completed rounds count. Appearance counts may be uneven.</div>}
       {completedRounds === 0 && <div className="amv3-callout">No completed rounds, so there are no results or champion yet.</div>}
       <div className="amv3-complete-grid">
         <AmericanoLeaderboardV3 event={event} standings={standings} championId={finalWinner} />
-        <AmericanoChampionshipFinal event={event} readOnly={readOnly} onChange={commit} />
+        <AmericanoChampionshipFinal event={event} readOnly={false} onChange={commit} />
       </div>
-      <History event={event} readOnly={readOnly} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />
-      {!readOnly && <footer className="amv3-footer"><button className="btn" onClick={() => { navigate(eventRoute(event.id, 'setup')); }}>Event setup</button></footer>}
+      <History event={event} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />
+      <footer className="amv3-footer"><button className="btn" onClick={() => { navigate(eventRoute(event.id, 'setup')); }}>Event setup</button></footer>
       {message && <p className="amv3-message" role="status">{message}</p>}
     </main>;
   }
@@ -118,12 +117,12 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
   if (event.status === 'between-rounds') {
     const next = event.americanoSchedule?.rounds[event.rounds.length];
     return <main className="americano-night amv3-night">
-      <Header event={event} readOnly={readOnly} modeLabel={modeLabel} rulesLabel={rulesLabel} onTv={() => openTvView()} />
+      <Header event={event} modeLabel={modeLabel} rulesLabel={rulesLabel} />
       <div className="amv3-break-grid"><AmericanoLeaderboardV3 event={event} standings={baseStandings} />
         <section className="amv3-panel"><p className="amv3-eyebrow">ROUND {completedRounds} COMPLETE</p><h2>Next up · Round {completedRounds + 1}</h2>
           {next?.matches.map((match) => <article className="amv3-next-match" key={match.id}><strong>{event.courts.find((court) => court.id === match.courtId)?.name}</strong><span>{sideName(event, match, 'A')}</span><b>vs</b><span>{sideName(event, match, 'B')}</span></article>)}
           {next?.restingEntrantIds.length ? <p className="amv3-help">Resting: {next.restingEntrantIds.map((id) => event.formatConfig.pairingMode === 'fixed' ? event.teams.find((team) => team.id === id)?.name ?? id : event.participants.find((player) => player.id === id)?.name ?? id).join(', ')}</p> : null}
-          {!readOnly && <button className="btn primary" disabled={!next} onClick={() => action(() => startNextAmericanoRoundV3(event))}>Start round {completedRounds + 1}</button>}
+          <button className="btn primary" disabled={!next} onClick={() => action(() => startNextAmericanoRoundV3(event))}>Start round {completedRounds + 1}</button>
         </section>
       </div>
       {message && <p className="amv3-message" role="status">{message}</p>}
@@ -132,45 +131,39 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
 
   if (!round) return <main className="americano-night amv3-night"><p className="amv3-empty">Preview and start this Americano from setup.</p></main>;
   return <main className="americano-night amv3-night">
-    <Header event={event} readOnly={readOnly} modeLabel={modeLabel} rulesLabel={rulesLabel} onTv={() => openTvView()} />
+    <Header event={event} modeLabel={modeLabel} rulesLabel={rulesLabel} />
     <div className="amv3-live-grid">
       <AmericanoLeaderboardV3 event={event} standings={baseStandings} />
       <section className="amv3-courts" aria-label="Current round matches">
         <header className="amv3-section-title"><div><p className="amv3-eyebrow">LIVE RESULTS</p><h2>Round {round.index} of {event.americanoSchedule?.rounds.length ?? event.settings.roundsTotal}</h2></div><strong>{currentMatches.filter((match) => match.resultConfirmed).length}/{currentMatches.length} confirmed</strong></header>
-        {currentMatches.map((match) => <AmericanoResultEditorV3 key={match.id} event={event} match={match} readOnly={readOnly} correcting={false} onSave={(result, confirm) => saveResult(match.id, result, confirm)} />)}
+        {currentMatches.map((match) => <AmericanoResultEditorV3 key={match.id} event={event} match={match} readOnly={false} correcting={false} onSave={(result, confirm) => saveResult(match.id, result, confirm)} />)}
         {(event.americanoSchedule?.rounds[round.index - 1]?.unusedCourtIds.length ?? 0) > 0 && <p className="amv3-help">Unused courts this round: {event.americanoSchedule!.rounds[round.index - 1].unusedCourtIds.map((id) => event.courts.find((court) => court.id === id)?.name ?? id).join(', ')}</p>}
       </section>
       <aside className="amv3-panel amv3-round-control"><p className="amv3-eyebrow">ROUND CONTROL</p><div><strong className="amv3-progress">{currentMatches.filter((match) => match.resultConfirmed).length}<small> / {currentMatches.length}</small></strong><span>results confirmed</span></div>
-        {event.formatConfig.paceClockEnabled && <div className="amv3-clock"><span>ADVISORY PACE CLOCK · {event.formatConfig.paceMinutes} MIN</span><strong>{clockLabel(clock)}</strong>{clock === 0 && <small>Time is up. Enter and confirm scores as usual; the clock never ends a match.</small>}{!readOnly && <div className="amv3-action-row"><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'start'))}>{round.startedAt && round.pausedAt === undefined ? 'Running' : round.pausedAt ? 'Resume' : 'Start'}</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'pause'))}>Pause</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'reset'))}>Reset</button></div>}</div>}
-        {!readOnly && <><button className="btn primary" disabled={!allConfirmed} title={!allConfirmed ? 'Confirm every court score before ending the round.' : undefined} onClick={() => action(() => endAmericanoRoundV3(event))}>{round.index === event.americanoSchedule?.rounds.length ? 'End final round' : 'End round'}</button><button className="btn danger" onClick={() => setFinishOpen(true)}>Finish event early</button></>}
+        {event.formatConfig.paceClockEnabled && <div className="amv3-clock"><span>ADVISORY PACE CLOCK · {event.formatConfig.paceMinutes} MIN</span><strong>{clockLabel(clock)}</strong>{clock === 0 && <small>Time is up. Enter and confirm scores as usual; the clock never ends a match.</small>}<div className="amv3-action-row"><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'start'))}>{round.startedAt && round.pausedAt === undefined ? 'Running' : round.pausedAt ? 'Resume' : 'Start'}</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'pause'))}>Pause</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'reset'))}>Reset</button></div></div>}
+        <button className="btn primary" disabled={!allConfirmed} title={!allConfirmed ? 'Confirm every court score before ending the round.' : undefined} onClick={() => action(() => endAmericanoRoundV3(event))}>{round.index === event.americanoSchedule?.rounds.length ? 'End final round' : 'End round'}</button><button className="btn danger" onClick={() => setFinishOpen(true)}>Finish event early</button>
         <p className="amv3-help">Scores are independent for each side. {event.formatConfig.scoring.kind === 'rally' ? 'Rally scores must total the match target.' : 'Enter games and any tiebreak separately; a match confirms only when its selected rule is complete.'}</p>
       </aside>
     </div>
-    <History event={event} readOnly={readOnly} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />
+    <History event={event} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />
     {message && <p className="amv3-message" role="status">{message}</p>}
     <ConfirmDialog open={finishOpen} title="Finish this Americano early?" message="Completed rounds stay official. The entire unfinished round will remain in history as excluded and will not count in standings." confirmLabel="Finish early" destructive onCancel={() => setFinishOpen(false)} onConfirm={() => { action(() => finishAmericanoEarlyV3(event)); setFinishOpen(false); }} />
   </main>;
 }
 
-function openTvView() {
-  const url = new URL(window.location.href);
-  url.searchParams.set('tv', '1');
-  window.open(url.toString(), '_blank', 'noopener,noreferrer');
+function Header({ event, modeLabel, rulesLabel }: { event: AmericanoEventStateV3; modeLabel: string; rulesLabel: string }) {
+  return <header className="americano-night-header amv3-header"><div><span>AMERICANO · {modeLabel}</span><h1>{event.name}</h1><p>{rulesLabel}</p></div><div className="americano-night-tools"><ThemeSwitch /></div></header>;
 }
 
-function Header({ event, readOnly, modeLabel, rulesLabel, onTv }: { event: AmericanoEventStateV3; readOnly: boolean; modeLabel: string; rulesLabel: string; onTv: () => void }) {
-  return <header className="americano-night-header amv3-header"><div><span>AMERICANO · {modeLabel}{readOnly ? ' · SPECTATOR' : ''}</span><h1>{event.name}</h1><p>{rulesLabel}</p></div><div className="americano-night-tools"><ThemeSwitch />{!readOnly && <button className="btn" onClick={onTv}>Open read-only TV view</button>}</div></header>;
-}
-
-function History({ event, readOnly, editingId, setEditingId, onCorrect }: {
-  event: AmericanoEventStateV3; readOnly: boolean; editingId: string | null; setEditingId: (id: string | null) => void;
+function History({ event, editingId, setEditingId, onCorrect }: {
+  event: AmericanoEventStateV3; editingId: string | null; setEditingId: (id: string | null) => void;
   onCorrect: (roundId: string, matchId: string, result: AmericanoResultDraftV3) => void;
 }) {
   const rounds = event.rounds.filter((round) => round.completedAt || round.excludedReason);
   if (!rounds.length) return null;
   return <details className="amv3-history"><summary>Match history · {rounds.reduce((sum, round) => sum + round.matches.length, 0)} fixtures</summary>{rounds.map((round) => <section key={round.id}><h3>Round {round.index}{round.excludedReason ? ' · excluded' : ''}</h3>{round.matches.map((match) => {
     const key = `${round.id}:${match.id}`;
-    return <div className="amv3-history-match" key={match.id}><div className="amv3-history-summary"><span>{event.courts.find((court) => court.id === match.courtId)?.name}</span><strong>{sideName(event, match, 'A')} {formatResult(match.result)} {sideName(event, match, 'B')}</strong>{!readOnly && !round.excludedReason && <button className="btn" onClick={() => setEditingId(editingId === key ? null : key)}>{editingId === key ? 'Cancel edit' : 'Correct score'}</button>}</div>{editingId === key && <AmericanoResultEditorV3 event={event} match={match} readOnly={false} correcting onSave={(result) => onCorrect(round.id, match.id, result)} />}</div>;
+    return <div className="amv3-history-match" key={match.id}><div className="amv3-history-summary"><span>{event.courts.find((court) => court.id === match.courtId)?.name}</span><strong>{sideName(event, match, 'A')} {formatResult(match.result)} {sideName(event, match, 'B')}</strong>{!round.excludedReason && <button className="btn" onClick={() => setEditingId(editingId === key ? null : key)}>{editingId === key ? 'Cancel edit' : 'Correct score'}</button>}</div>{editingId === key && <AmericanoResultEditorV3 event={event} match={match} readOnly={false} correcting onSave={(result) => onCorrect(round.id, match.id, result)} />}</div>;
   })}</section>)}</details>;
 }
 

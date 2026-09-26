@@ -65,14 +65,32 @@ describe('Americano v3 event-night UI', () => {
     expect(screen.getByText(/SEPARATE DECIDER · NO STANDINGS POINTS/)).toBeInTheDocument();
   });
 
-  it('keeps the v3 TV spectator view read-only', async () => {
+  it('lets the mirrored iPad screen enter and confirm scores, including older tv links', async () => {
     window.history.replaceState({}, '', '/?tv=1');
     const event = await liveV3();
     act(() => useEventStore.setState({ event: event as never }));
     renderDisplay();
 
-    expect(await screen.findByText(/SPECTATOR/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Confirm result' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'End round' })).not.toBeInTheDocument();
+    const match = event.rounds[0].matches[0];
+    const sideA = match.sideA.playerIds.map((id) => event.participants.find((row) => row.id === id)!.name).join(' & ');
+    const sideB = match.sideB.playerIds.map((id) => event.participants.find((row) => row.id === id)!.name).join(' & ');
+    expect(screen.queryByText(/SPECTATOR/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open read-only TV view' })).not.toBeInTheDocument();
+    const a = screen.getByLabelText(`${sideA} rally score`);
+    const b = screen.getByLabelText(`${sideB} rally score`);
+    expect(a).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: `Increase ${sideA} score` }));
+    expect(a).toHaveValue(1);
+    expect(b).toHaveValue(0);
+    fireEvent.click(screen.getByRole('button', { name: `Increase ${sideB} score` }));
+    expect(b).toHaveValue(1);
+    fireEvent.click(screen.getByRole('button', { name: `Decrease ${sideA} score` }));
+    expect(a).toHaveValue(0);
+    fireEvent.change(a, { target: { value: '23' } });
+    expect(screen.getByRole('button', { name: 'Confirm result' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm result' }));
+    expect(screen.getByText('1/1 confirmed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'End final round' }));
+    expect((useEventStore.getState().event as unknown as AmericanoEventStateV3).status).toBe('complete');
   });
 });

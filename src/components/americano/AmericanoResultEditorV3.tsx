@@ -32,6 +32,17 @@ export function AmericanoResultEditorV3({ event, match, readOnly, correcting, on
   const locked = readOnly && !correcting;
   const validation = validateAmericanoResultDraftV3(draft, event.formatConfig.scoring, true, event.formatConfig.paceMinutes);
 
+  function adjustRallyScore(side: 'A' | 'B', change: -1 | 1) {
+    if (draft.kind !== 'rally' || locked) return;
+    const scoreA = draft.scoreA ?? 0;
+    const scoreB = draft.scoreB ?? 0;
+    const current = side === 'A' ? scoreA : scoreB;
+    const target = event.formatConfig.scoring.kind === 'rally' ? event.formatConfig.scoring.pointsPerMatch : 0;
+    if (current + change < 0 || (change > 0 && scoreA + scoreB >= target)) return;
+    setDraft({ ...draft, scoreA: side === 'A' ? current + change : scoreA, scoreB: side === 'B' ? current + change : scoreB });
+    setError('');
+  }
+
   function updateRow(index: number, patch: Partial<TraditionalRowDraftV3>) {
     if (draft.kind !== 'traditional') return;
     setDraft({ ...draft, sets: draft.sets.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } as TraditionalRowDraftV3 : row) });
@@ -47,8 +58,8 @@ export function AmericanoResultEditorV3({ event, match, readOnly, correcting, on
     <header><span>{event.courts.find((court) => court.id === match.courtId)?.name ?? match.courtId}</span><span>{correcting ? 'CORRECTION' : match.resultConfirmed ? 'CONFIRMED' : 'RESULT NEEDED'}</span></header>
     <div className="amv3-match-side"><strong>A</strong><span>{sideA}</span></div><div className="amv3-match-side"><strong>B</strong><span>{sideB}</span></div>
     {event.formatConfig.scoring.kind === 'rally' && draft.kind === 'rally' ? <div className="amv3-score-fields">
-      <label><span>Side A</span><input aria-label={`${sideA} rally score`} type="number" min={0} value={draft.scoreA ?? ''} disabled={locked} onChange={(e) => setDraft({ ...draft, scoreA: nullableNumber(e.target.value) })} /></label><b>–</b>
-      <label><span>Side B</span><input aria-label={`${sideB} rally score`} type="number" min={0} value={draft.scoreB ?? ''} disabled={locked} onChange={(e) => setDraft({ ...draft, scoreB: nullableNumber(e.target.value) })} /></label>
+      <label><span>Side A</span><span className="amv3-rally-stepper"><button type="button" aria-label={`Decrease ${sideA} score`} disabled={locked || (draft.scoreA ?? 0) === 0} onClick={() => adjustRallyScore('A', -1)}>−</button><input aria-label={`${sideA} rally score`} type="number" inputMode="numeric" min={0} value={draft.scoreA ?? ''} disabled={locked} onChange={(e) => setDraft({ ...draft, scoreA: nullableNumber(e.target.value) })} /><button type="button" aria-label={`Increase ${sideA} score`} disabled={locked || (draft.scoreA ?? 0) + (draft.scoreB ?? 0) >= event.formatConfig.scoring.pointsPerMatch} onClick={() => adjustRallyScore('A', 1)}>+</button></span></label><b>–</b>
+      <label><span>Side B</span><span className="amv3-rally-stepper"><button type="button" aria-label={`Decrease ${sideB} score`} disabled={locked || (draft.scoreB ?? 0) === 0} onClick={() => adjustRallyScore('B', -1)}>−</button><input aria-label={`${sideB} rally score`} type="number" inputMode="numeric" min={0} value={draft.scoreB ?? ''} disabled={locked} onChange={(e) => setDraft({ ...draft, scoreB: nullableNumber(e.target.value) })} /><button type="button" aria-label={`Increase ${sideB} score`} disabled={locked || (draft.scoreA ?? 0) + (draft.scoreB ?? 0) >= event.formatConfig.scoring.pointsPerMatch} onClick={() => adjustRallyScore('B', 1)}>+</button></span></label>
     </div> : draft.kind === 'traditional' ? <div className="amv3-sets">
       {draft.sets.map((row, index) => row.kind === 'set' ? <div className="amv3-set-row" key={`set-${index}`}>
         <span>Set {index + 1}</span><input aria-label={`Set ${index + 1} games A`} type="number" min={0} value={row.gamesA ?? ''} disabled={locked} onChange={(e) => updateRow(index, { gamesA: nullableNumber(e.target.value) })} /><b>–</b>
