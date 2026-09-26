@@ -246,7 +246,11 @@ export function AmericanoSetupV3({ event }: { event: AmericanoEventStateV3 }) {
     setMessage('');
     try {
       const configured = await saveRulesToEvent();
-      const next = await previewAmericanoScheduleV3(configured);
+      const publishedRoster = configured.settings.publishedSignupId && auth.cloudEnabled && auth.user
+        ? await getOrganizerSignupV3(configured.settings.publishedSignupId) : null;
+      const next = await previewAmericanoScheduleV3(configured, {
+        rosterRevision: publishedRoster?.rosterRevision ?? '0',
+      });
       commit(next);
       setMessage(`Preview ready · ${next.americanoSchedule?.rounds.length ?? 0} rounds · ${next.americanoSchedule?.metrics.maximumAppearanceSpread ? 'appearance counts vary' : 'equal appearances'}.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Schedule preview failed.'); }

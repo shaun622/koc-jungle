@@ -2,22 +2,41 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AmericanoSetupV3 } from '@/components/americano/AmericanoSetupV3';
-import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
+import { addAmericanoFixedTeamV3, createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
 import { applyExternalEventToActiveFacade, useEventStore } from '@/store/eventStore';
 
-const cloud = vi.hoisted(() => ({ enabled: false, flush: vi.fn(), saveConfig: vi.fn() }));
-vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: cloud.enabled ? { id: 'owner-test' } : null, cloudEnabled: cloud.enabled }) }));
+const cloud = vi.hoisted(() => ({ enabled: false, user: { id: 'owner-test' }, flush: vi.fn(), saveConfig: vi.fn(), getSignup: vi.fn() }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: cloud.enabled ? cloud.user : null, cloudEnabled: cloud.enabled }) }));
 vi.mock('@/store/cloudSync', () => ({ flushCloudEvent: cloud.flush }));
 vi.mock('@/lib/americanoV3', async (original) => ({ ...await original<typeof import('@/lib/americanoV3')>(), saveAmericanoConfigV3: cloud.saveConfig }));
+vi.mock('@/lib/americanoV2', async (original) => ({ ...await original<typeof import('@/lib/americanoV2')>(), getOrganizerSignupV3: cloud.getSignup }));
 
 afterEach(() => {
   cloud.enabled = false;
   cloud.flush.mockReset();
   cloud.saveConfig.mockReset();
+  cloud.getSignup.mockReset();
   useEventStore.setState({ event: null });
 });
 
 describe('Americano v3 setup', () => {
+  it('binds a published schedule preview to the current signup roster revision', async () => {
+    cloud.enabled = true;
+    let event = createAmericanoEventV3('Published preview', 'fixed', 1);
+    event = addAmericanoFixedTeamV3(event, { playerOne: 'Alex', playerTwo: 'Sam' });
+    event = addAmericanoFixedTeamV3(event, { playerOne: 'Ben', playerTwo: 'Lee' });
+    event = { ...event, revision: '4', settings: { ...event.settings, publishedSignupId: 'signup-test' } };
+    applyExternalEventToActiveFacade(event);
+    cloud.getSignup.mockResolvedValue({ id: 'signup-test', rosterRevision: '7', capacityRevision: '2',
+      title: event.name, accountSlug: 'demo', eventSlug: 'preview', startsAt: null, endsAt: null,
+      venue: '', details: '', prizes: '', timeZone: 'UTC', organizerName: '', publicContactMethod: '', publicContactValue: '' });
+    cloud.saveConfig.mockResolvedValue({ status: 'applied', snapshot: { event: { state: { ...event, revision: '5' } } } });
+    render(<MemoryRouter><AmericanoSetupV3 event={event} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview schedule' }));
+    await waitFor(() => expect(screen.getByText(/Preview ready/)).toBeInTheDocument());
+    expect(useEventStore.getState().event).toMatchObject({ americanoSchedule: { rosterRevision: '7' } });
+  });
+
   it('waits for autosave and uses its acknowledged revision without saving the response again', async () => {
     cloud.enabled = true;
     const event = { ...createAmericanoEventV3('Cloud save test'), revision: '1' };
