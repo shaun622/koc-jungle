@@ -44,3 +44,12 @@ Immediately before/after the initial four migrations, original event and signup 
 This is a verified website smoke release, not exhaustive certification. The remaining broad recovery, account-switch, all-RPC authorization combinations, populated-upgrade, accessibility and physical iPad/TV acceptance work documented in `americano-v3-validation.md` is not implied complete. Traditional set/tiebreak variations have automated coverage; the live traditional rehearsal used first-to-five games. Browser screenshot capture timed out, so live proof here is DOM and persisted database state rather than new visual screenshots.
 
 Users with a cached PWA should apply its **New version available → Refresh** prompt before creating/testing new events. Existing event data is retained. Website deployment does not submit a new App Store release.
+
+## Setup layout hotfix
+
+The v3 setup component introduced `amv3-*` class names without the matching setup styles. The older `americano-*` layout rules did not apply. Earlier DOM/data flow checks missed this visual regression.
+
+- Added setup-scoped cards, responsive columns, labelled form fields, roster rows, pairing switch, action spacing, and an independently scrollable setup area. Both theme palettes are retained; controls use at least 16px text and 44px heights.
+- No event schema, database, signup, scoring, or live scoreboard changes.
+- Added `node scripts/check-americano-setup.mjs`: isolated Edge profile and localhost-only network, using the real setup component and operator/mobile shell. Checks both pairing modes, rally and expanded custom rules, both themes, seven desktop/tablet/phone viewports, populated roster rows, overflow, control sizing and reachable/uncovered bottom actions. Screenshots are saved under ignored `screenshots/americano-setup/`.
+- Production build and full 76-file / 556-test suite pass. Local iPad-landscape and phone screenshots visually inspected. These are emulated viewports, not physical-device certification.

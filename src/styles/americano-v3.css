@@ -1,3 +1,53 @@
+/* Setup has its own scroll area inside the operator shell. Do not apply the
+   event-night viewport constraints to this long, editable form. */
+.op:has(>.amv3-setup){grid-template-rows:auto minmax(0,1fr)}
+.amv3-setup{width:100%;max-width:1500px;min-width:0;min-height:0;box-sizing:border-box;margin:0 auto;padding:28px clamp(16px,3vw,48px) 120px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:20px;overflow-y:auto;scrollbar-gutter:stable;-webkit-overflow-scrolling:touch;font-size:16px;line-height:1.5}
+.amv3-setup .amv3-panel{padding:24px;border-radius:20px}
+.amv3-setup .amv3-panel>header{display:block;margin-bottom:20px}
+.amv3-setup .amv3-panel>header p{margin:6px 0 0}
+.amv3-setup .amv3-hero{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(125deg,color-mix(in srgb,var(--accent) 10%,var(--bg-1)),var(--bg-1))}
+.amv3-hero>div:first-child{flex:1 1 320px;min-width:0}
+.amv3-hero h1{margin:8px 0 12px;font-size:clamp(36px,5vw,60px);line-height:1.1;overflow-wrap:anywhere}
+.amv3-hero p{margin:0;max-width:60ch}
+.amv3-setup .amv3-eyebrow{color:var(--lime);font-size:16px}
+.amv3-mode{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:0 1 420px;width:100%;padding:4px;gap:4px;border:1px solid var(--line);border-radius:14px}
+.amv3-mode button{border:0;border-radius:10px;padding:10px 16px;background:transparent;color:var(--text-2);font-weight:700}
+.amv3-mode button.active{background:var(--primary-bg);color:var(--primary-text)}
+.amv3-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;align-items:start}
+.amv3-roster-panel{grid-column:1/-1}
+.amv3-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 16px;align-items:start}
+.amv3-fields>label{display:grid;gap:7px;min-width:0;color:var(--text-2);font-weight:600}
+.amv3-setup :is(button,input,select,textarea){min-height:44px;font-size:16px}
+.amv3-setup :is(input,select,textarea){width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-2);color:var(--text-0)}
+.amv3-setup textarea{min-height:110px;resize:vertical}
+.amv3-setup :is(button,input,select,textarea,a):focus-visible{outline:3px solid var(--lime);outline-offset:3px}
+.amv3-setup .amv3-check{grid-column:1/-1;display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:12px}
+.amv3-setup .amv3-check input{width:22px;height:22px;min-height:22px;flex:0 0 22px;margin:2px 0 0;accent-color:var(--lime)}
+.amv3-check small{display:block;margin-top:4px;font-weight:400}
+.amv3-custom-rule,.amv3-note{grid-column:1/-1}
+.amv3-custom-rule{min-width:0;padding:16px;border:1px solid var(--line);border-radius:12px}
+.amv3-custom-rule h3{margin:0 0 14px;font-size:18px}
+.amv3-custom-rule>.btn{margin-top:16px}
+.amv3-help,.amv3-note{margin:16px 0 0;overflow-wrap:anywhere;color:var(--text-2)}
+.amv3-fields>.amv3-note{margin:0}
+.amv3-rules-summary{display:grid;gap:6px;margin-top:18px;padding:16px;border:1px solid var(--line-soft);border-radius:12px;background:var(--bg-2);overflow-wrap:anywhere}
+.amv3-rules-summary>span{color:var(--text-2)}
+.amv3-setup .amv3-section-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.amv3-roster{display:grid;gap:10px}
+.amv3-court-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:10px}
+.amv3-court-row>span{color:var(--text-2)}
+.amv3-add-row,.amv3-roster-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-width:0}
+.amv3-add-row{margin-bottom:16px}
+.amv3-add-row>input,.amv3-roster-row>input{flex:1 1 180px;width:0}
+.amv3-roster-row{padding:12px;border:1px solid var(--line-soft);border-radius:12px}
+.amv3-signup-panel>.btn{margin-top:20px}
+.amv3-actions{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px}
+.amv3-actions p{margin:6px 0 0}
+.amv3-action-buttons{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:1000px){.amv3-grid{grid-template-columns:minmax(0,1fr)}.amv3-roster-panel{grid-column:auto}}
+@media(max-width:600px){.amv3-setup{padding:16px 12px 110px;gap:16px}.amv3-setup .amv3-panel{padding:18px}.amv3-fields{grid-template-columns:minmax(0,1fr)}.amv3-mode button{padding:10px 8px}.amv3-add-row>input,.amv3-roster-row>input{flex-basis:100%;width:100%}.amv3-action-buttons{width:100%}.amv3-action-buttons>.btn{flex:1 1 140px}}
+@media(max-width:768px),(orientation:landscape) and (max-height:500px){body:has(.amv3-setup){overflow:visible}.amv3-setup{overflow:visible;scrollbar-gutter:auto}}
+
 .amv3-night{display:block;min-height:100dvh;padding:clamp(12px,2vw,24px);}
 .amv3-header{margin-bottom:18px;}
 .amv3-header p{margin:8px 0 0;color:rgba(255,255,255,.78);font-size:16px;}
