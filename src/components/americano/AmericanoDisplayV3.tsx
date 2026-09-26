@@ -50,6 +50,9 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
   const [finishOpen, setFinishOpen] = useState(false);
   const [editingHistory, setEditingHistory] = useState<string | null>(null);
   const [finalStatus, setFinalStatus] = useState<Awaited<ReturnType<typeof championshipStatusV3>>>({ kind: 'no-results' });
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const [courtPage, setCourtPage] = useState(0);
+  const [standingsPage, setStandingsPage] = useState(0);
   // The iPad itself drives the mirrored TV display, as it does for KoC.
   useKeepAwake(event.status === 'round-in-progress' || event.status === 'between-rounds');
   const round = currentRound(event);
@@ -61,6 +64,11 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
   }, []);
   useEffect(() => {
     let active = true;
@@ -87,7 +95,22 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
     try { commit(correctAmericanoResultV3(event, roundId, matchId, result), 'History correction saved. The championship final will be reviewed against the updated results.'); setEditingHistory(null); }
     catch (error) { setMessage(error instanceof Error ? error.message : 'The correction could not be saved.'); }
   }
-  const currentMatches = round?.matches ?? [];
+  const courtOrder = new Map(event.courts.map((court, index) => [court.id, index]));
+  const currentMatches = [...(round?.matches ?? [])].sort((left, right) => (courtOrder.get(left.courtId) ?? Infinity) - (courtOrder.get(right.courtId) ?? Infinity));
+  const landscapeFit = viewport.width >= 768 && viewport.width <= 1500 && viewport.width > viewport.height && viewport.height >= 650 && viewport.height <= 1100;
+  const courtPageSize = landscapeFit ? (event.formatConfig.scoring.kind === 'traditional' || viewport.height < 740 ? 2 : 4) : Math.max(1, currentMatches.length);
+  const courtPages = Math.max(1, Math.ceil(currentMatches.length / courtPageSize));
+  const visibleCourtPage = Math.min(courtPage, courtPages - 1);
+  const standingsPageSize = landscapeFit
+    ? Math.max(6, Math.floor((viewport.height - (event.formatConfig.pairingMode === 'fixed' ? 300 : 260)) / (event.formatConfig.pairingMode === 'fixed' ? 40 : 30)))
+    : undefined;
+  const standingsPages = Math.max(1, Math.ceil(standings.length / (standingsPageSize ?? Math.max(1, standings.length))));
+  useEffect(() => { setCourtPage(0); setStandingsPage(0); }, [round?.id]);
+  useEffect(() => {
+    if (!landscapeFit || standingsPages <= 1) return;
+    const timer = window.setInterval(() => setStandingsPage((page) => (page + 1) % standingsPages), 8000);
+    return () => window.clearInterval(timer);
+  }, [landscapeFit, standingsPages]);
   const allConfirmed = currentMatches.length > 0 && currentMatches.every((match) => match.resultConfirmed);
   const modeLabel = event.formatConfig.pairingMode === 'fixed' ? 'FIXED PAIRS' : 'ROTATING PAIRS';
   const rulesLabel = event.formatConfig.scoring.kind === 'rally'
@@ -130,22 +153,23 @@ export function AmericanoDisplayV3({ event }: { event: AmericanoEventStateV3 }) 
   }
 
   if (!round) return <main className="americano-night amv3-night"><p className="amv3-empty">Preview and start this Americano from setup.</p></main>;
-  return <main className="americano-night amv3-night">
+  return <main className={`americano-night amv3-night amv3-live-night${landscapeFit ? ' amv3-landscape-fit' : ''}`}>
     <Header event={event} modeLabel={modeLabel} rulesLabel={rulesLabel} />
     <div className="amv3-live-grid">
-      <AmericanoLeaderboardV3 event={event} standings={baseStandings} />
-      <section className="amv3-courts" aria-label="Current round matches">
-        <header className="amv3-section-title"><div><p className="amv3-eyebrow">LIVE RESULTS</p><h2>Round {round.index} of {event.americanoSchedule?.rounds.length ?? event.settings.roundsTotal}</h2></div><strong>{currentMatches.filter((match) => match.resultConfirmed).length}/{currentMatches.length} confirmed</strong></header>
-        {currentMatches.map((match) => <AmericanoResultEditorV3 key={match.id} event={event} match={match} readOnly={false} correcting={false} onSave={(result, confirm) => saveResult(match.id, result, confirm)} />)}
+      <AmericanoLeaderboardV3 event={event} standings={baseStandings} page={standingsPage} pageSize={standingsPageSize} onPageChange={setStandingsPage} />
+      <section className="amv3-courts" aria-label="Current round matches" data-visible-courts={Math.min(courtPageSize, currentMatches.length)}>
+        <header className="amv3-section-title"><div><p className="amv3-eyebrow">LIVE RESULTS</p><h2>Round {round.index} of {event.americanoSchedule?.rounds.length ?? event.settings.roundsTotal}</h2></div><strong>{currentMatches.filter((match) => match.resultConfirmed).length}/{currentMatches.length} confirmed</strong>{courtPages > 1 && <nav className="amv3-page-controls" aria-label="Court pages"><button className="btn" aria-label="Previous courts" disabled={visibleCourtPage === 0} onClick={() => setCourtPage(visibleCourtPage - 1)}>←</button><span>Courts {visibleCourtPage * courtPageSize + 1}–{Math.min((visibleCourtPage + 1) * courtPageSize, currentMatches.length)} of {currentMatches.length}</span><button className="btn" aria-label="Next courts" disabled={visibleCourtPage === courtPages - 1} onClick={() => setCourtPage(visibleCourtPage + 1)}>→</button></nav>}</header>
+        {currentMatches.map((match, index) => <div className="amv3-match-slot" hidden={landscapeFit && Math.floor(index / courtPageSize) !== visibleCourtPage} key={match.id}><AmericanoResultEditorV3 event={event} match={match} readOnly={false} correcting={false} onSave={(result, confirm) => saveResult(match.id, result, confirm)} /></div>)}
         {(event.americanoSchedule?.rounds[round.index - 1]?.unusedCourtIds.length ?? 0) > 0 && <p className="amv3-help">Unused courts this round: {event.americanoSchedule!.rounds[round.index - 1].unusedCourtIds.map((id) => event.courts.find((court) => court.id === id)?.name ?? id).join(', ')}</p>}
       </section>
       <aside className="amv3-panel amv3-round-control"><p className="amv3-eyebrow">ROUND CONTROL</p><div><strong className="amv3-progress">{currentMatches.filter((match) => match.resultConfirmed).length}<small> / {currentMatches.length}</small></strong><span>results confirmed</span></div>
         {event.formatConfig.paceClockEnabled && <div className="amv3-clock"><span>ADVISORY PACE CLOCK · {event.formatConfig.paceMinutes} MIN</span><strong>{clockLabel(clock)}</strong>{clock === 0 && <small>Time is up. Enter and confirm scores as usual; the clock never ends a match.</small>}<div className="amv3-action-row"><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'start'))}>{round.startedAt && round.pausedAt === undefined ? 'Running' : round.pausedAt ? 'Resume' : 'Start'}</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'pause'))}>Pause</button><button className="btn" onClick={() => action(() => updateAmericanoClockV3(event, 'reset'))}>Reset</button></div></div>}
         <button className="btn primary" disabled={!allConfirmed} title={!allConfirmed ? 'Confirm every court score before ending the round.' : undefined} onClick={() => action(() => endAmericanoRoundV3(event))}>{round.index === event.americanoSchedule?.rounds.length ? 'End final round' : 'End round'}</button><button className="btn danger" onClick={() => setFinishOpen(true)}>Finish event early</button>
         <p className="amv3-help">Scores are independent for each side. {event.formatConfig.scoring.kind === 'rally' ? 'Rally scores normally total the match target. If time runs out, use the score actually played.' : 'Enter games and any tiebreak separately. If time runs out, use the score actually played.'}</p>
+        {landscapeFit && <History event={event} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />}
       </aside>
     </div>
-    <History event={event} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />
+    {!landscapeFit && <History event={event} editingId={editingHistory} setEditingId={setEditingHistory} onCorrect={correctResult} />}
     {message && <p className="amv3-message" role="status">{message}</p>}
     <ConfirmDialog open={finishOpen} title="Finish this Americano early?" message="Completed rounds stay official. The entire unfinished round will remain in history as excluded and will not count in standings." confirmLabel="Finish early" destructive onCancel={() => setFinishOpen(false)} onConfirm={() => { action(() => finishAmericanoEarlyV3(event)); setFinishOpen(false); }} />
   </main>;
