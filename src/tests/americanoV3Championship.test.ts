@@ -65,6 +65,8 @@ describe('Americano v3 championship final', () => {
     expect(status.kind).toBe('current');
     expect(overlay.find((row) => row.entrantId === event.teams[1].id)?.rank).toBe(1);
     expect(overlay.find((row) => row.entrantId === event.teams[0].id)?.rank).toBe(2);
+    expect(overlay[0].entrantId).toBe(event.teams[1].id);
+    expect(overlay.map((row) => row.rank)).toEqual([1, 2]);
     expect(overlay.map((row) => row.total)).toEqual(standingsBefore.map((row) => row.total));
     expect(overlay.map((row) => [row.wins, row.losses])).toEqual(standingsBefore.map((row) => [row.wins, row.losses]));
   });

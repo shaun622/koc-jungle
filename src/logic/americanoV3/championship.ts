@@ -218,5 +218,5 @@ export function applyChampionshipFinalToStandingsV3(
   const loser = copied.find((row) => row.entrantId === loserId);
   if (winner) winner.rank = 1;
   if (loser) loser.rank = 2;
-  return copied;
+  return copied.sort((a, b) => a.rank - b.rank);
 }
