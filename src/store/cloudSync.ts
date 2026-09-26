@@ -666,19 +666,39 @@ function schedulePush(session: Session, event: VersionedEventState): void {
 }
 
 function queuePush(session: Session, event: VersionedEventState): Promise<void> {
-  const snapshot = cloneEvent(event);
-  const snapshotFingerprint = eventFingerprint(snapshot);
+  let snapshot = cloneEvent(event);
+  let snapshotFingerprint = eventFingerprint(snapshot);
   publishStatus(session, 'syncing');
   return enqueueRemote(session, event.id, async () => {
     if (!supabase || session.meta.tombstonesById[event.id]) return;
     if (isAmericanoEventV3(snapshot)) {
+      // A queued save may have been superseded while an earlier one was in
+      // flight. Use the current pending draft and its acknowledged revision.
+      if (!session.meta.dirtyById[event.id]) return;
+      const pendingDraft = session.dirtySnapshots.get(event.id);
+      if (pendingDraft && isAmericanoEventV3(pendingDraft)) snapshot = cloneEvent(pendingDraft) as typeof pendingDraft;
+      if (!isAmericanoEventV3(snapshot)) return;
+      snapshotFingerprint = eventFingerprint(snapshot);
       const reply = await saveAmericanoEventV3(snapshot, snapshot.revision, undefined, session.userId);
       if (reply.status === 'rejected') throw new Error(reply.message);
       if (reply.status === 'conflict') throw new Error('This Americano was changed on another device. Your local draft was kept; reload the server version before saving again.');
+      if (active !== session || session.meta.tombstonesById[event.id]) return;
       const current = currentEventWithId(snapshot.id);
       if (current && eventFingerprint(current) === snapshotFingerprint) {
         await saveExternalEvent(reply.snapshot.event.state);
         setExternalActiveEvent(reply.snapshot.event.state);
+      }
+      const newerDraft = session.dirtySnapshots.get(event.id);
+      if (newerDraft && isAmericanoEventV3(newerDraft)
+        && newerDraft.revision === snapshot.revision
+        && eventFingerprint(newerDraft) !== snapshotFingerprint) {
+        // Only advance edits descended from our own successful save. A server
+        // conflict never enters this path and is never overwritten or retried.
+        const rebased = { ...newerDraft, revision: reply.snapshot.event.state.revision };
+        recordDirty(session, rebased);
+        await saveExternalEvent(rebased);
+        const latest = currentEventWithId(event.id);
+        if (latest && eventFingerprint(latest) === eventFingerprint(newerDraft)) setExternalActiveEvent(rebased);
       }
       const latestMarker = session.meta.dirtyById[event.id];
       if (latestMarker?.fingerprint === snapshotFingerprint) {

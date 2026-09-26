@@ -85,6 +85,7 @@ const cloud = vi.hoisted(() => {
 
 const americanoCloud = vi.hoisted(() => ({
   save: vi.fn(),
+  saveV3: vi.fn(),
   remove: vi.fn(),
 }));
 
@@ -93,6 +94,7 @@ vi.mock('@/lib/americanoV2', () => ({
   saveAmericanoEventV2: americanoCloud.save,
   deleteAmericanoEventV2: americanoCloud.remove,
 }));
+vi.mock('@/lib/americanoV3', () => ({ saveAmericanoEventV3: americanoCloud.saveV3 }));
 
 import {
   deleteCloudEvent,
@@ -112,6 +114,7 @@ import {
 import { useEventStore } from '@/store/eventStore';
 import { DEFAULT_SETTINGS, type EventState } from '@/types/domain';
 import { americanoV2Fixture } from '@/tests/americanoV2Fixtures';
+import { createAmericanoEventV3 } from '@/logic/americanoV3/runtime';
 
 function eventFixture(id: string, name: string): EventState {
   return {
@@ -153,6 +156,7 @@ describe('event-scoped cloud sync', () => {
     stopCloudSync();
     cloud.reset();
     americanoCloud.save.mockReset();
+    americanoCloud.saveV3.mockReset();
     americanoCloud.remove.mockReset();
     localStorage.clear();
     for (const record of await listLocalEventRecords()) {
@@ -201,6 +205,34 @@ describe('event-scoped cloud sync', () => {
     expect(cloud.upserts.map((row) => row.id)).toEqual([alpha.id]);
     expect(useCloudSyncStatus.getState().pendingEventIds).not.toContain(alpha.id);
     expect(useCloudSyncStatus.getState().pendingEventIds).toContain(bravo.id);
+  });
+
+  it('retains rapid v3 edits made during an in-flight save and uses the acknowledged revision next', async () => {
+    const event = { ...createAmericanoEventV3('V3 rapid edits'), revision: '1' };
+    await saveLocal(event as never);
+    cloud.setEvents([remoteRow(event as never)]);
+    await useEventStore.getState().selectEventById(event.id);
+    startCloudSync('user-1');
+    await settle();
+    let release!: () => void;
+    const delayed = new Promise<void>((resolve) => { release = resolve; });
+    americanoCloud.saveV3.mockImplementation(async (state, revision) => {
+      if (revision === '1') await delayed;
+      const next = { ...state, revision: String(Number(revision) + 1) };
+      return { status: 'applied', snapshot: { event: { state: next } } };
+    });
+    useEventStore.getState().loadEvent({ ...event, name: 'First edit' });
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(americanoCloud.saveV3).toHaveBeenCalledTimes(1);
+    useEventStore.getState().loadEvent({ ...event, name: 'Second edit during save' });
+    release();
+    await settle();
+    await flushCloudEvent(event.id);
+    expect(americanoCloud.saveV3).toHaveBeenCalledTimes(2);
+    expect(americanoCloud.saveV3.mock.calls[1][1]).toBe('2');
+    expect(americanoCloud.saveV3.mock.calls[1][0].name).toBe('Second edit during save');
+    expect(useEventStore.getState().event).toMatchObject({ name: 'Second edit during save', revision: '3' });
+    expect(useCloudSyncStatus.getState().pendingEventIds).not.toContain(event.id);
   });
 
   it('does not delete the prior competition when the active selection changes', async () => {

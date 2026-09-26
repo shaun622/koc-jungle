@@ -54,6 +54,7 @@ const sqlFiles = [
   join(here, '../americano-v3/public-signup.sql'),
   join(here, 'concurrency-setup.sql'),
   join(here, '../americano-v3/workflows.sql'),
+  join(here, '../americano-v3/deletion.sql'),
 ];
 
 for (const sqlFile of sqlFiles) {
