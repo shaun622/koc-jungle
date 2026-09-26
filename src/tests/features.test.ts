@@ -4,6 +4,34 @@ vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => platfor
 
 afterEach(() => { platform.native = false; vi.unstubAllEnvs(); vi.resetModules(); });
 describe('format rollout gates', () => {
+  it('enables v3 web creation only with an explicit opt-in', async () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V2', 'true');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V3', 'true');
+    expect((await import('@/config/features')).ENABLE_AMERICANO_V3).toBe(true);
+    vi.resetModules();
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V3', 'false');
+    expect((await import('@/config/features')).ENABLE_AMERICANO_V3).toBe(false);
+    vi.resetModules();
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V3', undefined);
+    expect((await import('@/config/features')).ENABLE_AMERICANO_V3).toBe(false);
+  });
+  it('keeps v3 native creation disabled even with the production opt-in', async () => {
+    platform.native = true;
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V2', 'true');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V3', 'true');
+    expect((await import('@/config/features')).ENABLE_AMERICANO_V3).toBe(false);
+  });
+  it('respects the parent Americano kill switch for v3 creation', async () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V2', 'false');
+    vi.stubEnv('VITE_ENABLE_AMERICANO_V3', 'true');
+    expect((await import('@/config/features')).ENABLE_AMERICANO_V3).toBe(false);
+  });
   it('enables web Americano but keeps Tournament disabled despite old preview flags', async () => {
     vi.stubEnv('DEV', false);
     vi.stubEnv('MODE', 'production');
