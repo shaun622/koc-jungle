@@ -9,7 +9,7 @@ import {
   type PublicSignup,
   type SignupRegistration,
 } from '@/lib/signups';
-import { buildSignupRosterView } from '@/utils/signupRosterView';
+import { buildSignupRosterView, isCompletePair } from '@/utils/signupRosterView';
 import { formatEventDateTime } from '@/lib/eventTime';
 import { americanoRulesSummaryV3 } from '@/logic/americanoV3/labels';
 import {
@@ -20,7 +20,7 @@ import {
 } from '@/lib/americanoV2';
 
 function registrationLabel(registration: SignupRegistration): string {
-  if (!registration.playerTwo.trim()) return registration.playerOne;
+  if (!isCompletePair(registration)) return registration.playerOne;
   return registration.teamName || `${registration.playerOne} & ${registration.playerTwo}`;
 }
 
@@ -425,7 +425,7 @@ export function PublicSignupScreen() {
     displayPosition: number,
     kind: 'confirmed' | 'waiting' | 'solo',
   ) {
-    const isPair = Boolean(registration.playerTwo.trim());
+    const isPair = isCompletePair(registration);
     const waiting = kind === 'waiting';
     return (
       <div className="signup-public-team" key={registration.id}>

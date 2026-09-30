@@ -8,8 +8,8 @@ export interface SignupRosterView {
   pairSpacesLeft: number;
 }
 
-function isCompletePair(registration: SignupRegistration): boolean {
-  return Boolean(registration.playerTwo.trim());
+export function isCompletePair(registration: { playerTwo?: string | null }): boolean {
+  return Boolean(registration.playerTwo?.trim());
 }
 
 /**

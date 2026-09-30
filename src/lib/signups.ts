@@ -104,6 +104,11 @@ export interface PublicSignup {
   registrations: SignupRegistration[];
 }
 
+// Public RPCs legitimately return null (or omit the field) for solo players.
+type RawPublicSignup = Omit<PublicSignup, 'registrations'> & {
+  registrations: (Omit<SignupRegistration, 'playerTwo'> & { playerTwo?: string | null })[];
+};
+
 export interface SaveSignupInput {
   ownerUserId: string;
   sourceEventId: string;
@@ -774,13 +779,19 @@ export async function getPublicSignup(publicSlug: string, accountSlug?: string):
   }
   if (error) throw new Error(error.message);
   if (!data) throw new Error('This sign-up link was not found.');
-  const value = data as PublicSignup;
+  const value = data as RawPublicSignup;
+  if (!Array.isArray(value.registrations) || value.registrations.some(row =>
+    !row || typeof row !== 'object' || Array.isArray(row)
+    || (row.playerTwo != null && typeof row.playerTwo !== 'string'))) {
+    throw new Error('The sign-up server returned an invalid response. Refresh and try again.');
+  }
   const normalized = value.event.capacity ?? {
     unit: 'teams' as const,
     value: value.event.capacityTeams ?? 0,
   };
   return {
     ...value,
+    registrations: value.registrations.map(row => ({ ...row, playerTwo: row.playerTwo ?? '' })),
     event: {
       ...value.event,
       protocolVersion: value.event.protocolVersion ?? 1,

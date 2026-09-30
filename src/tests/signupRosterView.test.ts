@@ -21,6 +21,14 @@ function registration(
 }
 
 describe('signup roster public view', () => {
+  it.each([null, undefined, '', '   '])('handles an unnormalized missing partner %j', (playerTwo) => {
+    const solo = { ...registration('solo', 'confirmed', '', 1), playerTwo } as unknown as SignupRegistration;
+    const view = buildSignupRosterView([solo], 4);
+    expect(view.lookingForPartner).toEqual([solo]);
+    expect(view.confirmedPairs).toEqual([]);
+    expect(view.waitlistedPairs).toEqual([]);
+    expect(view.pairSpacesLeft).toBe(4);
+  });
   it('counts only complete confirmed pairs toward a full event', () => {
     const registrations = Array.from({ length: 16 }, (_, index) =>
       registration(`pair-${index + 1}`, 'confirmed', `Partner ${index + 1}`, index + 1));

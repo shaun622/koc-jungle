@@ -152,7 +152,7 @@ describe('public sign-up loading', () => {
           signupEventId: 'signup-1',
           teamName: '',
           playerOne: 'Legacy Confirmed Solo',
-          playerTwo: '',
+          playerTwo: null,
           status: 'confirmed',
           position: 2,
           createdAt: '2026-08-31T00:01:00.000Z',

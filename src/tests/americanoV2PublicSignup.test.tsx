@@ -42,8 +42,11 @@ describe('Americano v2 public signup', () => {
     signupMocks.getPublicSignup.mockResolvedValue({
       event: baseEvent,
       registrations: [{
-        id: 'player-1', signupEventId: 'signup-v2', teamName: '', playerOne: 'Alex', playerTwo: '',
+        id: 'player-1', signupEventId: 'signup-v2', teamName: '', playerOne: 'Alex', playerTwo: null,
         status: 'confirmed', position: 1, createdAt: '2099-09-01T00:00:00.000Z',
+      }, {
+        id: 'player-2', signupEventId: 'signup-v2', teamName: '', playerOne: 'Waiting player', playerTwo: null,
+        status: 'waitlisted', position: 1, createdAt: '2099-09-01T00:00:00.000Z',
       }],
     });
     renderPage();
@@ -55,6 +58,11 @@ describe('Americano v2 public signup', () => {
     expect(screen.queryByRole('button', { name: 'Sign up solo' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Alex')).toHaveLength(1);
     expect(screen.getByText('PLAYER · CONFIRMED')).toBeInTheDocument();
+    expect(screen.getByText('PLAYER · WAITING')).toBeInTheDocument();
+    expect(screen.getByText('Waiting player')).toBeInTheDocument();
+    expect(screen.queryByText('LOOKING FOR A PARTNER')).not.toBeInTheDocument();
+    expect(screen.getByText('1/8')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
   });
 
   it('uses the individual v2 RPC and maps its field error back to the contact control', async () => {
@@ -86,7 +94,7 @@ describe('Americano v2 public signup', () => {
     signupMocks.getPublicSignup.mockResolvedValue({
       event: fixed,
       registrations: [{
-        id: 'solo-1', signupEventId: 'signup-v2', teamName: '', playerOne: 'Pat', playerTwo: '',
+        id: 'solo-1', signupEventId: 'signup-v2', teamName: '', playerOne: 'Pat', playerTwo: null,
         status: 'looking', position: 1, createdAt: '2099-09-01T00:00:00.000Z',
       }],
     });
