@@ -41,6 +41,9 @@ export interface SessionPlanV3 {
   preference: 'full' | 'round-length';
   roundMinutes: number;
   changeoverMinutes: number;
+  /** Absent on older plans. The legacy round-length preference retains its meaning. */
+  calculateFrom?: 'session' | 'round';
+  roundCount?: number;
 }
 
 export type RankingTiebreakV3 = 'shared' | 'difference' | 'head-to-head' | 'head-to-head-then-difference';

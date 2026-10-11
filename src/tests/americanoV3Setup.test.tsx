@@ -33,12 +33,12 @@ describe('Americano v3 setup', () => {
     for(const name of ['A','B']) event = addAmericanoFixedTeamV3(event,{playerOne:name+'1',playerTwo:name+'2'});
     applyExternalEventToActiveFacade(event);
     rerender(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
-    expect(screen.getByText(/Suggested: 10 rounds/)).toBeInTheDocument();
+    expect(screen.getByText(/Suggested: 1 round ·/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Preview schedule'}));
     await waitFor(()=>expect(screen.getByText(/Preview ready/)).toBeInTheDocument());
     event = useEventStore.getState().event as unknown as typeof event;
-    expect(event.americanoSchedule?.rounds).toHaveLength(10);
-    expect(event.formatConfig).toMatchObject({scheduleKind:'custom',customRounds:10});
+    expect(event.americanoSchedule?.rounds).toHaveLength(1);
+    expect(event.formatConfig).toMatchObject({scheduleKind:'full',paceMinutes:120});
     rerender(<MemoryRouter><AmericanoSetupV3 event={event}/></MemoryRouter>);
     fireEvent.click(screen.getByLabelText(/Plan around session time/));
     fireEvent.click(screen.getByRole('button',{name:'Save rules'}));

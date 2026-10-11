@@ -17,3 +17,14 @@ Local read-only browser check: exact clean route redirected and rendered, expand
 Release route confirmed: GitHub main -> Cloudflare Pages. Remote main matches baseline. Existing Xcode Cloud archive check is action_required on the baseline; web release does not submit an App Store version. No native changes are included.
 
 Release isolation: committed only the ten hotfix files. Verified a `git archive` snapshot under ignored `.release-signup-null-20260930/app`, using existing ancestor dependencies without copying unrelated working-tree source. Snapshot frontend asset: `index-CgXtsi2B.js`. A second baseline archive proves the unrelated failure. Source/plan fixed decisions preserved; malformed polling tests correctly assert the existing generic refresh warning. AC-001–005 and local AC-006 checks verified; remote AC-006 remains pending deployment.
+
+## Completed release evidence
+
+- T-004 verified; AC-006 remote smoke complete. Pushed `ea40f14d9d030937eb4d8bbcb94205dfba3d9ab5` to main.
+- Cloudflare Pages deployment `348504de-b966-40ce-af28-50ac0d5506e3` reported success for that commit.
+- Uncached HTTP request to the exact clean public URL returned 200. Live entry asset `index-BPy3o-K9.js` contains the nullish partner normalization. Cloud build asset hash differs from local build; verified the actual deployed artifact instead of assuming hash equality across environments.
+- Existing Edge tab initially served its cached prior bundle and showed the normal update prompt. Clicking Refresh loaded the new asset successfully. New-tab clean-route navigation and hash-route reload also render correctly; no cache purge or event-state reset used.
+- Live checks continued beyond two polling intervals: roster/title visible, no refresh failure, no new error logs in the new tab. Original tab retains historical old-bundle crash logs from before the fix; these are not new errors.
+- Live event now has 12 complete confirmed teams, no partner seekers and organizer-closed registrations. This reflects current data; this task made no signup/database changes. Nullable solo regression is proved by synthetic integration tests, not by modifying the real event.
+- Proof screenshot: `C:/Users/USER/Documents/Codex/signup-hotfix-live-20260930.png`.
+- Plan followed using implement-plan; no material design deviation. The pre-existing Americano test failure is recorded above and not silently changed. Existing unrelated local edits remain intact. This post-deployment evidence is a local ledger update; no extra production rebuild is needed for documentation only.

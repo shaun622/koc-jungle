@@ -11,6 +11,26 @@ const set = (a: number, b: number) => ({ kind: 'set' as const, gamesA: a, gamesB
 const stopped = (...sets: ReturnType<typeof set>[]): AmericanoResultDraftV3 => ({ kind: 'traditional', endedEarly: true, sets });
 
 describe('session planner', () => {
+  it('calculates either time from the full rotation, rather than requiring both', () => {
+    const automatic: SessionPlanV3 = { ...plan, preference: 'full', calculateFrom: 'session' };
+    expect(suggestSessionPlan(automatic, 'rotating', 8, 2)).toMatchObject({ rounds: 7, minutes: 15, usedMinutes: 117, spareMinutes: 3 });
+    const reverse = { ...automatic, calculateFrom: 'round' as const };
+    expect(suggestSessionPlan(reverse, 'rotating', 8, 2)).toMatchObject({ rounds: 7, minutes: 10, usedMinutes: 82, spareMinutes: 0 });
+    expect(suggestSessionPlan(reverse, 'fixed', 4, 2)).toMatchObject({ rounds: 3, minutes: 10, usedMinutes: 34 });
+    expect(suggestSessionPlan(reverse, 'fixed', 5, 3)).toMatchObject({ rounds: 5, usedMinutes: 58 });
+    const saved = applySessionPlan({ ...defaultAmericanoConfigV3('rotating'), sessionPlan: reverse }, 8, 2);
+    expect(saved).toMatchObject({ scheduleKind: 'full', paceMinutes: 10, sessionPlan: { calculateFrom: 'round', totalMinutes: 82 } });
+    // Roster changes recalculate the estimate from the round length, not the old total.
+    expect(applySessionPlan(saved, 12, 3)).toMatchObject({ paceMinutes: 10, sessionPlan: { totalMinutes: 130 } });
+  });
+  it('allows an explicit round adjustment without promising full coverage', () => {
+    const adjusted: SessionPlanV3 = { ...plan, preference: 'full', calculateFrom: 'session', roundCount: 6 };
+    expect(suggestSessionPlan(adjusted, 'rotating', 6, 2)).toMatchObject({ rounds: 6, minutes: 18, usedMinutes: 118 });
+    expect(suggestSessionPlan(adjusted, 'rotating', 6, 2).coverage).toMatch(/Balanced/);
+    expect(applySessionPlan({ ...defaultAmericanoConfigV3('rotating'), sessionPlan: adjusted }, 6, 2)).toMatchObject({ scheduleKind: 'custom', customRounds: 6, paceMinutes: 18 });
+    for (const roundCount of [0, 65, 1.5]) expect(() => suggestSessionPlan({ ...adjusted, roundCount }, 'rotating', 6, 2)).toThrow(/Rounds/);
+    expect(() => suggestSessionPlan({ ...adjusted, roundCount: 64, calculateFrom: 'round', roundMinutes: 240 }, 'rotating', 8, 2)).toThrow(/24 hours/);
+  });
   it('fits rounds including changes between rounds, not after the last', () => {
     expect(suggestSessionPlan(plan, 'rotating', 20, 5)).toMatchObject({ rounds: 10, minutes: 10, usedMinutes: 118, spareMinutes: 2 });
     expect(suggestSessionPlan({ ...plan, totalMinutes: 180 }, 'rotating', 32, 8)).toMatchObject({ rounds: 15, usedMinutes: 178 });
@@ -37,10 +57,11 @@ describe('session planner', () => {
 });
 
 describe('explicit unfinished scores', () => {
-  it('requires both the event option and per-result confirmation; never manufactures rally points', () => {
+  it('requires per-result confirmation on old and new events; never manufactures rally points', () => {
     const result = { kind: 'rally' as const, scoreA: 10, scoreB: 8, endedEarly: true };
     const rules: MatchScoringV3 = { kind: 'rally', pointsPerMatch: 24, allowUnfinished: true };
-    expect(validateAmericanoResultDraftV3(result, { ...rules, allowUnfinished: false }, true).valid).toBe(false);
+    expect(validateAmericanoResultDraftV3(result, { ...rules, allowUnfinished: false }, true).valid).toBe(true);
+    expect(validateAmericanoResultDraftV3(result, { kind: 'rally', pointsPerMatch: 24 }, true).valid).toBe(true);
     expect(validateAmericanoResultDraftV3({ ...result, endedEarly: false }, rules, true).valid).toBe(false);
     const checked = validateAmericanoResultDraftV3(result, rules, true);
     expect(checked).toMatchObject({ valid: true, complete: true, summary: { gamesA: 10, gamesB: 8, winner: 'A' } });

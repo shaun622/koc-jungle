@@ -30,6 +30,12 @@ for (const preset of Object.keys(AMERICANO_V3_TRADITIONAL_PRESETS) as Exclude<Tr
 }
 const rally={...defaultAmericanoConfigV3('rotating'),scoring:{kind:'rally' as const,pointsPerMatch:24,allowUnfinished:true}};
 for(let a=0;a<=25;a++) for(let b=0;b<=25;b++) add(rally,{kind:'rally',scoreA:a,scoreB:b,endedEarly:true});
+for (const scoring of [{ kind: 'rally' as const, pointsPerMatch: 24 }, { kind: 'rally' as const, pointsPerMatch: 24, allowUnfinished: false }]) {
+  const config = { ...defaultAmericanoConfigV3('rotating'), scoring };
+  add(config, { kind: 'rally', scoreA: 10, scoreB: 8, endedEarly: true });
+  add(config, { kind: 'rally', scoreA: 10, scoreB: 8 });
+  add(config, { kind: 'rally', scoreA: 20, scoreB: 8, endedEarly: true });
+}
 const quote=(data:unknown)=>`'${JSON.stringify(data).replaceAll("'","''")}'::jsonb`;
 let sql=`select jsonb_agg(public.americano_v3_score_summary(v->'result',v->'config',true)-'complete') from jsonb_array_elements(${quote(vectors.map(({config,result})=>({config,result})))}) v;`;
 const states=[];
@@ -37,12 +43,23 @@ for (const mode of ['fixed','rotating'] as const) {
   let event=createAmericanoEventV3('DB session check',mode,1);
   if(mode==='fixed')for(const name of ['A','B'])event=addAmericanoFixedTeamV3(event,{playerOne:name+'1',playerTwo:name+'2'});
   else for(const name of ['A','B','C','D'])event=addAmericanoParticipantV3(event,name);
-  event.formatConfig=applySessionPlan({...event.formatConfig,scoring:{kind:'rally',pointsPerMatch:24,allowUnfinished:true},sessionPlan:{totalMinutes:7,preference:'round-length',roundMinutes:7,changeoverMinutes:2}},mode==='fixed'?2:4,1);
+  event.formatConfig=applySessionPlan({...event.formatConfig,scoring:{kind:'rally',pointsPerMatch:24},sessionPlan:{totalMinutes:7,preference:'round-length',roundMinutes:7,changeoverMinutes:2}},mode==='fixed'?2:4,1);
   event=await previewAmericanoScheduleV3(event); states.push(event);
   event=startAmericanoEventV3(event);states.push(event);
   event=setAmericanoResultDraftV3(event,event.rounds[0].matches[0].id,{kind:'rally',scoreA:10,scoreB:8,endedEarly:true});
   event=confirmAmericanoResultV3(event,event.rounds[0].matches[0].id);states.push(event);
   event=endAmericanoRoundV3(event);states.push(event);
+  for (const calculateFrom of ['session', 'round'] as const) {
+    for (const roundCount of [undefined, 2]) {
+      let planned = { ...event, status: 'setup' as const, rounds: [], americanoSchedule: undefined };
+      planned.formatConfig = applySessionPlan({ ...event.formatConfig, sessionPlan: {
+        totalMinutes: 120, preference: 'full', calculateFrom, roundMinutes: 10, changeoverMinutes: 2, roundCount,
+      } }, mode === 'fixed' ? 2 : 4, 1);
+      planned = await previewAmericanoScheduleV3(planned, { acknowledgeRepeatedCycle: true });
+      states.push(planned);
+      states.push(startAmericanoEventV3(planned));
+    }
+  }
 }
 sql+=`\nselect jsonb_agg(public.americano_v3_state_error(v)) from jsonb_array_elements(${quote(states)}) v;`;
 const processResult=spawnSync(resolve('.local-postgres/runtime/pgsql/bin/psql.exe'),[url,'-X','-At','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8',maxBuffer:8*1024*1024});

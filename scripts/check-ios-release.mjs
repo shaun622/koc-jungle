@@ -53,8 +53,8 @@ function latestMtime(relativePath) {
 }
 
 const packageJson = JSON.parse(read('package.json'));
-if (packageJson.version === '1.1.1') pass('Release version is 1.1.1.');
-else error(`package.json version must be 1.1.1 (found ${packageJson.version}).`);
+if (/^\d+\.\d+\.\d+$/.test(packageJson.version) && packageJson.version !== '1.1.1') pass(`Release version is ${packageJson.version}.`);
+else error(`package.json must use a new release version (found ${packageJson.version}).`);
 
 const capacitorConfig = read('capacitor.config.ts');
 if (capacitorConfig.includes("appId: 'com.koc.padel'")) pass('Bundle ID matches App Store Connect.');
@@ -63,11 +63,12 @@ else error('Capacitor bundle ID must be com.koc.padel.');
 if (exists('ios/App/App.xcodeproj/project.pbxproj')) {
   pass('Capacitor iOS project exists.');
   const project = read('ios/App/App.xcodeproj/project.pbxproj');
-  if (project.includes('MARKETING_VERSION = 1.1.1;')) pass('Xcode marketing version is 1.1.1.');
-  else error('Xcode MARKETING_VERSION must be 1.1.1.');
+  const marketingVersions = [...project.matchAll(/MARKETING_VERSION = ([\d.]+);/g)].map(match => match[1]);
+  if (marketingVersions.length && marketingVersions.every(version => version === packageJson.version)) pass(`Xcode marketing version matches ${packageJson.version}.`);
+  else error('Xcode MARKETING_VERSION must match package.json.');
   const buildNumbers = [...project.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(match => Number(match[1]));
-  if (buildNumbers.length && buildNumbers.every(build => build > 54)) pass('Xcode build number is newer than the released build 54.');
-  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the released build 54.');
+  if (buildNumbers.length && buildNumbers.every(build => build > 55)) pass('Xcode build number is newer than the released build 55.');
+  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the released build 55.');
 } else {
   error('Missing ios/App/App.xcodeproj. Run `npx cap add ios --packagemanager CocoaPods`.');
 }

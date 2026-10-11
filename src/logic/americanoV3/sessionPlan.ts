@@ -6,6 +6,8 @@ export function validateSessionPlan(plan: SessionPlanV3): void {
     if (!Number.isInteger(plan[key]) || plan[key] < min || plan[key] > max) throw new Error(`${key === 'totalMinutes' ? 'Session duration' : key === 'roundMinutes' ? 'Round length' : 'Changeover'} must be ${min}–${max} whole minutes.`);
   }
   if (!['full', 'round-length'].includes(plan.preference)) throw new Error('Choose a session planning preference.');
+  if (plan.calculateFrom !== undefined && !['session', 'round'].includes(plan.calculateFrom)) throw new Error('Choose the time you know.');
+  if (plan.roundCount !== undefined && (!Number.isInteger(plan.roundCount) || plan.roundCount < 1 || plan.roundCount > 64)) throw new Error('Rounds must be 1–64.');
 }
 
 export function suggestSessionPlan(plan: SessionPlanV3, mode: 'fixed' | 'rotating', count: number, courts: number) {
@@ -20,10 +22,12 @@ export function suggestSessionPlan(plan: SessionPlanV3, mode: 'fixed' | 'rotatin
   let minutes: number;
   const warnings: string[] = [];
   if (plan.preference === 'full') {
-    if (!fullAvailable) throw new Error('A once-with-every-partner rotation is not available for this player count. Choose round length for a balanced schedule.');
-    rounds = cycle;
-    minutes = Math.min(240, Math.floor((plan.totalMinutes - (rounds - 1) * plan.changeoverMinutes) / rounds));
-    if (minutes < 1) throw new Error('Not enough time for a full rotation. Reduce changeover time, extend the session or choose round length.');
+    if (!fullAvailable && plan.roundCount === undefined) throw new Error('A once-with-every-partner rotation is not available for this player count. Open Adjust and choose the number of rounds for a balanced schedule.');
+    rounds = plan.roundCount ?? cycle;
+    minutes = plan.calculateFrom === 'round' ? plan.roundMinutes : Math.min(240, Math.floor((plan.totalMinutes - (rounds - 1) * plan.changeoverMinutes) / rounds));
+    if (minutes < 1) throw new Error('Not enough time for these rounds. Open Adjust to reduce rounds or changeovers, or extend the session.');
+    if (!fullAvailable || rounds < cycle) warnings.push('Balanced playing time; not a complete everyone-with-everyone rotation.');
+    if (fullAvailable && rounds > cycle) warnings.push('This includes repeated matchups after the first full rotation.');
   } else {
     minutes = plan.roundMinutes;
     rounds = Math.min(64, Math.floor((plan.totalMinutes + plan.changeoverMinutes) / (minutes + plan.changeoverMinutes)));
@@ -40,14 +44,18 @@ export function suggestSessionPlan(plan: SessionPlanV3, mode: 'fixed' | 'rotatin
   }
   if (minutes < 5) warnings.push('Rounds are under 5 minutes. Consider fewer rounds or a longer session.');
   const usedMinutes = rounds * minutes + (rounds - 1) * plan.changeoverMinutes;
-  return { rounds, minutes, usedMinutes, spareMinutes: plan.totalMinutes - usedMinutes, warnings,
-    coverage: mode === 'fixed' ? 'Play each team once' : 'Partner with each player once' };
+  const reverse = plan.preference === 'full' && plan.calculateFrom === 'round';
+  if (reverse && usedMinutes > 1440) throw new Error('This plan exceeds 24 hours. Shorten rounds or choose fewer rounds under Adjust.');
+  return { rounds, minutes, usedMinutes, spareMinutes: reverse ? 0 : plan.totalMinutes - usedMinutes, warnings,
+    coverage: fullAvailable && rounds === cycle ? mode === 'fixed' ? 'Play each team once' : 'Partner with each player once' : 'Balanced schedule; check pairings and rests in the preview' };
 }
 
 export function applySessionPlan(config: AmericanoConfigV3, count: number, courts: number): AmericanoConfigV3 {
   if (!config.sessionPlan) return config;
   const suggestion = suggestSessionPlan(config.sessionPlan, config.pairingMode, count, courts);
-  const next = { ...config, scheduleKind: config.sessionPlan.preference === 'full' ? 'full' as const : 'custom' as const, paceMinutes: suggestion.minutes };
+  const next = { ...config, sessionPlan: config.sessionPlan.calculateFrom === 'round' && config.sessionPlan.preference === 'full'
+    ? { ...config.sessionPlan, totalMinutes: suggestion.usedMinutes } : config.sessionPlan,
+    scheduleKind: config.sessionPlan.preference === 'full' && config.sessionPlan.roundCount === undefined ? 'full' as const : 'custom' as const, paceMinutes: suggestion.minutes };
   if (next.scheduleKind === 'custom') next.customRounds = suggestion.rounds;
   else delete next.customRounds;
   return next;
