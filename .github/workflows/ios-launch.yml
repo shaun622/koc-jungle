@@ -1,48 +1,31 @@
-name: iOS 27 native launch regression
+name: iOS 27 native launch diagnostics
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: padel-ios-launch-${{ github.ref }}
-  cancel-in-progress: false
+  actions: read
 
 jobs:
-  launch:
+  inspect:
     runs-on: xcode-27
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        family: [iphone, ipad]
-    env:
-      COCOAPODS_DISABLE_STATS: true
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: node scripts/check-ios-build-env.mjs
-      - run: node scripts/check-ios-scene.mjs
-      - run: npm run build
-      - run: npm exec -- cap sync ios
-      - name: Launch the actual release-mode app on iOS 27
-        run: node scripts/run-ios-launch-tests.mjs ${{ matrix.family }}
+          name: ios27-launch-iphone-9e1fb881ce71e09000a3bc609b82dbf4d168a6f1
+          run-id: 43690824075
+          github-token: ${{ github.token }}
+          path: results
+      - name: Export native failure evidence
+        run: |
+          xcrun xcresulttool get test-results summary --path results/iphone/Launch.xcresult --format json
+          xcrun xcresulttool export attachments --path results/iphone/Launch.xcresult --output-path exported
+          xcrun xcresulttool export diagnostics --path results/iphone/Launch.xcresult --output-path exported/diagnostics
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios27-launch-${{ matrix.family }}-${{ github.sha }}
-          retention-days: 30
-          if-no-files-found: warn
-          path: ios-launch-results/
-
-# No signing credentials, reviewer accounts, purchases or production event writes.
-# XCTest drives the real bundled WKWebView. This job is a gate for submission,
-# not evidence of Apple review or physical-device/AirPlay testing.
+          name: ios27-readable-diagnostics
+          path: exported/
+          retention-days: 7
