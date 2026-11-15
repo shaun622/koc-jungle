@@ -25,11 +25,18 @@ if (family === 'iphone' && !device) {
   device = { name: 'iPhone 17 Pro Max', udid, state: 'Shutdown', deviceTypeIdentifier: deviceType.identifier };
 }
 if (!device) throw new Error(`No ${family} device for ${runtime.identifier}.`);
+if (family === 'ipad') {
+  // Isolate the app from any state baked into the hosted runner's simulator.
+  const udid = run('xcrun', ['simctl', 'create', 'Padel clean iPad', device.deviceTypeIdentifier, runtime.identifier]).trim();
+  device = { name: 'Padel clean iPad', udid, state: 'Shutdown', deviceTypeIdentifier: device.deviceTypeIdentifier };
+}
 const evidence = { commit: run('git', ['rev-parse', 'HEAD']).trim(), xcode: run('xcodebuild', ['-version']).trim(), sdk, runtime, device };
 fs.writeFileSync(path.join(output, 'environment.json'), JSON.stringify(evidence, null, 2));
 console.log(JSON.stringify(evidence, null, 2));
 if (device.state !== 'Booted') run('xcrun', ['simctl', 'boot', device.udid]);
-console.log(run('xcrun', ['simctl', 'bootstatus', device.udid, '-b']));
+const boot = spawnSync('xcrun', ['simctl', 'bootstatus', device.udid, '-b'], { stdio: 'inherit', timeout: 600000 });
+if (boot.error) throw new Error(`Simulator boot failed before app testing: ${boot.error.message}`);
+if (boot.status !== 0) throw new Error(`Simulator boot failed before app testing (${boot.status}).`);
 const result = spawnSync('xcodebuild', [
   '-workspace', 'ios/App/App.xcworkspace', '-scheme', 'App', '-configuration', 'Release',
   '-destination', `platform=iOS Simulator,id=${device.udid}`, '-destination-timeout', '180',
