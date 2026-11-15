@@ -28,6 +28,7 @@ const config: CapacitorConfig = {
   appId: 'com.koc.padel',
   appName: 'Padel Tournament Maker',
   webDir: 'dist',
+  loggingBehavior: 'production',
   bundledWebRuntime: false,
 
   ios: {

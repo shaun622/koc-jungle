@@ -5,27 +5,33 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  inspect:
+  diagnose:
     runs-on: xcode-27
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: ios27-launch-iphone-9e1fb881ce71e09000a3bc609b82dbf4d168a6f1
-          run-id: 43690824075
-          github-token: ${{ github.token }}
-          path: results
-      - name: Export native failure evidence
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm exec -- cap sync ios
+      - run: node scripts/run-ios-launch-tests.mjs iphone
+      - name: Export native evidence
+        if: always()
         run: |
-          xcrun xcresulttool get test-results summary --path results/iphone/Launch.xcresult --format json
-          xcrun xcresulttool export attachments --path results/iphone/Launch.xcresult --output-path exported
-          xcrun xcresulttool export diagnostics --path results/iphone/Launch.xcresult --output-path exported/diagnostics
+          xcrun xcresulttool get test-results summary --path ios-launch-results/iphone/Launch.xcresult --format json
+          xcrun xcresulttool export attachments --path ios-launch-results/iphone/Launch.xcresult --output-path exported
+          xcrun xcresulttool export diagnostics --path ios-launch-results/iphone/Launch.xcresult --output-path exported/diagnostics
+          find exported -name 'StandardOutputAndStandardError-com.koc.padel.txt' -exec grep -E 'PAD_LAUNCH|⚡️|JavaScript|Error:|Unable to load' {} \;
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios27-readable-diagnostics
-          path: exported/
+          name: ios27-launch-diagnosis
+          path: |
+            exported/
+            ios-launch-results/iphone/environment.json
           retention-days: 7
