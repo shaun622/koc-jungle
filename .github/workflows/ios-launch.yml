@@ -1,8 +1,6 @@
-name: iOS 27 native launch regression
+name: iOS 27 clean release verification
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

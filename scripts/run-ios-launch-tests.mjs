@@ -14,22 +14,19 @@ const { runtimes } = JSON.parse(run('xcrun', ['simctl', 'list', 'runtimes', '--j
 const runtime = runtimes.filter(r => r.isAvailable && r.identifier.includes('.iOS-') && r.version.startsWith('27.'))
   .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }))[0];
 if (!runtime) throw new Error('No installed iOS 27 simulator runtime. Do not substitute a browser or older iOS.');
-const { devices } = JSON.parse(run('xcrun', ['simctl', 'list', 'devices', 'available', '--json']));
-const candidates = (devices[runtime.identifier] ?? []).filter(d => d.isAvailable && d.name.startsWith(family === 'iphone' ? 'iPhone' : 'iPad'));
-let device = family === 'iphone' ? candidates.find(d => d.name === 'iPhone 17 Pro Max')
-  : candidates.find(d => d.name.includes('13-inch')) ?? candidates[0];
-if (family === 'iphone' && !device) {
-  const deviceType = runtime.supportedDeviceTypes.find(d => d.name === 'iPhone 17 Pro Max');
-  if (!deviceType) throw new Error('iOS 27 runtime does not support the required iPhone 17 Pro Max.');
-  const udid = run('xcrun', ['simctl', 'create', 'iPhone 17 Pro Max', deviceType.identifier, runtime.identifier]).trim();
-  device = { name: 'iPhone 17 Pro Max', udid, state: 'Shutdown', deviceTypeIdentifier: deviceType.identifier };
-}
-if (!device) throw new Error(`No ${family} device for ${runtime.identifier}.`);
+const deviceName = family === 'iphone' ? 'iPhone 17 Pro Max' : 'iPad Pro 13-inch (M5)';
+const deviceType = runtime.supportedDeviceTypes.find(d => d.name === deviceName);
+if (!deviceType) throw new Error(`iOS 27 runtime does not support the required ${deviceName}.`);
+// Each hosted run owns a new device, never a simulator with image-baked state.
+const udid = run('xcrun', ['simctl', 'create', `Padel CI ${deviceName}`, deviceType.identifier, runtime.identifier]).trim();
+const device = { name: deviceName, udid, state: 'Shutdown', deviceTypeIdentifier: deviceType.identifier };
 const evidence = { commit: run('git', ['rev-parse', 'HEAD']).trim(), xcode: run('xcodebuild', ['-version']).trim(), sdk, runtime, device };
 fs.writeFileSync(path.join(output, 'environment.json'), JSON.stringify(evidence, null, 2));
-console.log(JSON.stringify(evidence, null, 2));
+console.log(JSON.stringify({ ...evidence, runtime: { name: runtime.name, version: runtime.version, buildversion: runtime.buildversion } }, null, 2));
 if (device.state !== 'Booted') run('xcrun', ['simctl', 'boot', device.udid]);
-console.log(run('xcrun', ['simctl', 'bootstatus', device.udid, '-b']));
+const boot = spawnSync('xcrun', ['simctl', 'bootstatus', device.udid, '-b'], { stdio: 'inherit', timeout: 600000 });
+if (boot.error) throw new Error(`Simulator boot failed before app testing: ${boot.error.message}`);
+if (boot.status !== 0) throw new Error(`Simulator boot failed before app testing (${boot.status}).`);
 const result = spawnSync('xcodebuild', [
   '-workspace', 'ios/App/App.xcworkspace', '-scheme', 'App', '-configuration', 'Release',
   '-destination', `platform=iOS Simulator,id=${device.udid}`, '-destination-timeout', '180',
