@@ -19,13 +19,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm exec -- cap sync ios
-      - run: node scripts/run-ios-launch-tests.mjs iphone
+      - run: node scripts/run-ios-launch-tests.mjs ipad
       - name: Export native evidence
         if: always()
         run: |
-          xcrun xcresulttool get test-results summary --path ios-launch-results/iphone/Launch.xcresult --format json
-          xcrun xcresulttool export attachments --path ios-launch-results/iphone/Launch.xcresult --output-path exported
-          xcrun xcresulttool export diagnostics --path ios-launch-results/iphone/Launch.xcresult --output-path exported/diagnostics
+          xcrun xcresulttool get test-results summary --path ios-launch-results/ipad/Launch.xcresult --format json
+          xcrun xcresulttool export attachments --path ios-launch-results/ipad/Launch.xcresult --output-path exported
+          xcrun xcresulttool export diagnostics --path ios-launch-results/ipad/Launch.xcresult --output-path exported/diagnostics
           find exported -name 'StandardOutputAndStandardError-com.koc.padel.txt' -exec grep -E 'PAD_LAUNCH|⚡️|JavaScript|Error:|Unable to load' {} \;
       - uses: actions/upload-artifact@v4
         if: always()
@@ -33,5 +33,5 @@ jobs:
           name: ios27-launch-diagnosis
           path: |
             exported/
-            ios-launch-results/iphone/environment.json
+            ios-launch-results/ipad/environment.json
           retention-days: 7
