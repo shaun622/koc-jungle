@@ -1,10 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkIOSScene } from './check-ios-scene.mjs';
 
 const root = process.cwd();
 const errors = [];
 const warnings = [];
 const passes = [];
+
+try {
+  checkIOSScene();
+  passes.push('iOS 27 scene configuration and link forwarding are present (native launch tests required separately).');
+} catch (failure) {
+  errors.push(`iOS scene configuration: ${failure.message}`);
+}
 
 function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));

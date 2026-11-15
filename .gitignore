@@ -40,6 +40,7 @@ Padel KoC.zip
 ios/Pods/
 ios/build/
 ios/DerivedData/
+ios-launch-results/
 android/.gradle/
 android/build/
 android/app/build/

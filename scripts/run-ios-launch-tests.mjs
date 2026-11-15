@@ -1,0 +1,35 @@
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+if (process.platform !== 'darwin') throw new Error('Native iOS launch tests require a Mac with Xcode; browser emulation is not equivalent.');
+const family = process.argv[2];
+if (!['iphone', 'ipad'].includes(family)) throw new Error('Specify iphone or ipad.');
+const output = path.resolve('ios-launch-results', family);
+fs.mkdirSync(output, { recursive: true });
+const run = (tool, args) => execFileSync(tool, args, { encoding: 'utf8' });
+const sdk = run('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version']).trim();
+if (!sdk.startsWith('27.')) throw new Error(`Expected iOS 27 SDK, got ${sdk}.`);
+const { runtimes } = JSON.parse(run('xcrun', ['simctl', 'list', 'runtimes', '--json']));
+const runtime = runtimes.filter(r => r.isAvailable && r.identifier.includes('.iOS-') && r.version.startsWith('27.'))
+  .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }))[0];
+if (!runtime) throw new Error('No installed iOS 27 simulator runtime. Do not substitute a browser or older iOS.');
+const { devices } = JSON.parse(run('xcrun', ['simctl', 'list', 'devices', 'available', '--json']));
+const candidates = (devices[runtime.identifier] ?? []).filter(d => d.isAvailable && d.name.startsWith(family === 'iphone' ? 'iPhone' : 'iPad'));
+const device = candidates.find(d => d.name === 'iPhone 17 Pro Max')
+  ?? candidates.find(d => d.name.includes('13-inch')) ?? candidates[0];
+if (!device) throw new Error(`No ${family} device for ${runtime.identifier}.`);
+const evidence = { commit: run('git', ['rev-parse', 'HEAD']).trim(), xcode: run('xcodebuild', ['-version']).trim(), sdk, runtime, device };
+fs.writeFileSync(path.join(output, 'environment.json'), JSON.stringify(evidence, null, 2));
+console.log(JSON.stringify(evidence, null, 2));
+const result = spawnSync('xcodebuild', [
+  '-workspace', 'ios/App/App.xcworkspace', '-scheme', 'App', '-configuration', 'Release',
+  '-destination', `platform=iOS Simulator,id=${device.udid}`, '-destination-timeout', '180',
+  '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1',
+  '-resultBundlePath', path.join(output, 'Launch.xcresult'),
+  '-derivedDataPath', path.resolve('ios/DerivedData/LaunchTests'),
+  'CODE_SIGNING_ALLOWED=NO', 'test',
+], { stdio: 'inherit' });
+if (result.error) throw result.error;
+if (result.status !== 0) process.exit(result.status ?? 1);
+console.log(`Native ${device.name} launch, interaction, rotation and resume tests passed on iOS ${runtime.version}.`);

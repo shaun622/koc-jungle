@@ -21,6 +21,7 @@ fi
 
 npm ci
 node scripts/check-ios-build-env.mjs
+node scripts/check-ios-scene.mjs
 npm run build
 npm exec -- cap sync ios
 test -f ios/App/Pods/Target\ Support\ Files/Pods-App/Pods-App.release.xcconfig
