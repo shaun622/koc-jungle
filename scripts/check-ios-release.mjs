@@ -53,7 +53,7 @@ function latestMtime(relativePath) {
 }
 
 const packageJson = JSON.parse(read('package.json'));
-if (/^\d+\.\d+\.\d+$/.test(packageJson.version) && packageJson.version !== '1.1.1') pass(`Release version is ${packageJson.version}.`);
+if (/^\d+\.\d+\.\d+$/.test(packageJson.version) && !['1.1.1', '1.1.2'].includes(packageJson.version)) pass(`Release version is ${packageJson.version}.`);
 else error(`package.json must use a new release version (found ${packageJson.version}).`);
 
 const capacitorConfig = read('capacitor.config.ts');
@@ -67,8 +67,8 @@ if (exists('ios/App/App.xcodeproj/project.pbxproj')) {
   if (marketingVersions.length && marketingVersions.every(version => version === packageJson.version)) pass(`Xcode marketing version matches ${packageJson.version}.`);
   else error('Xcode MARKETING_VERSION must match package.json.');
   const buildNumbers = [...project.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(match => Number(match[1]));
-  if (buildNumbers.length && buildNumbers.every(build => build > 55)) pass('Xcode build number is newer than the released build 55.');
-  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the released build 55.');
+  if (buildNumbers.length && buildNumbers.every(build => build > 77)) pass('Xcode build number is newer than the released build 77.');
+  else error('Xcode CURRENT_PROJECT_VERSION must be newer than the released build 77.');
 } else {
   error('Missing ios/App/App.xcodeproj. Run `npx cap add ios --packagemanager CocoaPods`.');
 }

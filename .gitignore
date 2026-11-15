@@ -55,6 +55,11 @@ review-paywall-placeholder.png
 
 # Apple keys — never commit private keys
 *.p8
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+*-service-account*.json
 
 # Local crash logs / review artifacts
 Error Logs/

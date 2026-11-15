@@ -19,7 +19,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { useEntitlementsStore } from '@/store/entitlements';
-import type { IntroductoryPrice } from '@/lib/subscriptionTrial';
+import type { StoreTrialProduct } from '@/lib/subscriptionTrial';
 
 /** Whether the runtime can perform real in-app purchases. */
 export function isIAPAvailable(): boolean {
@@ -39,11 +39,10 @@ interface RevenueCatOffering {
 interface RevenueCatPackage {
   identifier: string;
   packageType: string;
-  product: {
+  product: StoreTrialProduct & {
     identifier: string;
     priceString: string;
     title: string;
-    introPrice?: IntroductoryPrice | null;
   };
 }
 

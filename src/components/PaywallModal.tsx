@@ -20,13 +20,15 @@ import { openUrl } from '@/lib/browser';
 import { useEffect, useState } from 'react';
 import { Portal } from './Portal';
 import { freeTrialLabel } from '@/lib/subscriptionTrial';
+import { Capacitor } from '@capacitor/core';
 
 const TERMS_URL = 'https://koc-jungle.pages.dev/terms/';
 const PRIVACY_URL = 'https://koc-jungle.pages.dev/privacy/';
 
 const FEATURES = [
   'King of the Court: winners climb, losers drop',
-  'Courtside score entry designed for iPad',
+  'Americano: rotating or fixed pairs, flexible match formats',
+  'Courtside score entry designed for phones and tablets',
   'TV-ready scoreboard, timer and standings',
   'Cloud sync: events across all your devices',
 ];
@@ -41,6 +43,8 @@ export function PaywallModal({
 }) {
   const { pro, trialUsed, startTrial } = useEntitlementsStore();
   const nativeBilling = isIAPAvailable();
+  const androidBilling = Capacitor.getPlatform() === 'android';
+  const storeName = androidBilling ? 'Google Play' : 'App Store';
   const trialDays = trialDaysRemaining();
   const [busy, setBusy] = useState<'monthly' | 'annual' | 'restore' | 'redeem' | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -131,8 +135,8 @@ export function PaywallModal({
           )}
           <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
             {nativeBilling
-              ? 'King of the Court and cloud sync are unlocked.'
-              : 'Pro is currently included free in the PWA. King of the Court and cloud sync are unlocked.'}
+              ? 'King of the Court, Americano and cloud sync are unlocked.'
+              : 'Pro is currently included free in the PWA. King of the Court, Americano and cloud sync are unlocked.'}
           </p>
           <div className="modal-actions">
             <button className="btn primary" onClick={onClose}>
@@ -153,7 +157,7 @@ export function PaywallModal({
         {nativeBilling && <p style={{ color: 'var(--text-2)', fontSize: 16, lineHeight: 1.55 }}>
           Choose a plan below to see its price and any free trial for eligible new subscribers.
           Your subscription becomes paid after any trial unless you cancel.
-          The App Store confirms your eligibility, price and first payment date before you approve.
+          {androidBilling ? storeName : `The ${storeName}`} confirms your eligibility, price and first payment date before you approve.
         </p>}
         {reason && (
           <p style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1.5, fontWeight: 600 }}>{reason}</p>
@@ -250,11 +254,10 @@ export function PaywallModal({
         >
           Free-trial eligibility and duration are determined by the store. Pro Monthly and
           Pro Annual are auto-renewable subscriptions. If eligible, payment starts
-          after your free trial; otherwise, payment is charged to your Apple ID
-          at confirmation of purchase. Each renews
-          automatically unless cancelled at least 24 hours before the end of the
-          current period; your account is charged within 24 hours before renewal.
-          Manage or cancel anytime in your App Store account settings.
+          after your free trial; otherwise, payment is charged to your {androidBilling ? 'Google Play account' : 'Apple Account'}
+          {' '}at confirmation of purchase. {androidBilling
+            ? 'Each subscription renews automatically unless cancelled before renewal. Manage or cancel anytime in Google Play under Payments & subscriptions.'
+            : 'Each renews automatically unless cancelled at least 24 hours before the end of the current period; your account is charged within 24 hours before renewal. Manage or cancel anytime in your App Store account settings.'}
         </p>
 
         <div

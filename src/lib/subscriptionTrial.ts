@@ -6,8 +6,27 @@ export interface IntroductoryPrice {
   cycles: number;
 }
 
-export function freeTrialLabel(product?: { introPrice?: IntroductoryPrice | null }): string | undefined {
-  const intro = product?.introPrice;
+export interface StoreTrialProduct {
+  introPrice?: IntroductoryPrice | null;
+  defaultOption?: {
+    freePhase?: {
+      price: { amountMicros: number };
+      billingPeriod: { unit: string; value: number };
+      billingCycleCount: number | null;
+    } | null;
+  } | null;
+}
+
+export function freeTrialLabel(product?: StoreTrialProduct): string | undefined {
+  // Only advertise the offer the store selected for this customer. Do not use
+  // another subscriptionOption, which may not be eligible for purchase.
+  const phase = product?.defaultOption?.freePhase;
+  const intro = product?.introPrice ?? (phase ? {
+    price: phase.price.amountMicros,
+    periodUnit: phase.billingPeriod.unit,
+    periodNumberOfUnits: phase.billingPeriod.value,
+    cycles: phase.billingCycleCount ?? 1,
+  } : undefined);
   if (!intro || intro.price !== 0) return undefined;
   const count = intro.periodNumberOfUnits * intro.cycles;
   const unit = intro.periodUnit.toLowerCase();

@@ -1,0 +1,74 @@
+name: Shared source and Android build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: padel-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/check-android-build-env.mjs
+      - run: npm run build
+      - run: npm exec -- cap sync android
+      - name: Compile and lint the Android app
+        working-directory: android
+        run: |
+          export ANDROID_VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleRelease
+      - name: Record source revision
+        run: |
+          git rev-parse HEAD > android/app/build/outputs/source-commit.txt
+          node -p "require('./package.json').version" > android/app/build/outputs/app-version.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch bundled app in Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: padel-android-${{ github.sha }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/source-commit.txt
+            android/app/build/outputs/app-version.txt
+            android/app/build/reports/lint-results-debug.html
+            android/app/build/reports/androidTests/
+
+# The release AAB is deliberately unsigned. Sign it with the separately held
+# upload key and verify it before Play upload. No signing secrets are in git.
+# A successful job is build evidence, not a store submission or approval.
