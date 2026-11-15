@@ -14,6 +14,9 @@ export function checkIOSScene(root = process.cwd()) {
   assert.match(plist, /<key>UISceneDelegateClassName<\/key>\s*<string>\$\(PRODUCT_MODULE_NAME\)\.SceneDelegate<\/string>/);
   assert.doesNotMatch(plist, /<key>(?:UIMainStoryboardFile|UISceneStoryboardFile)<\/key>/, 'Programmatic scene must not create a second storyboard bridge');
   assert.match(app, /configurationForConnecting[\s\S]*delegateClass = SceneDelegate\.self/);
+  assert.match(app, /if connectingSceneSession\.role == \.windowApplication\s*\{\s*configuration\.delegateClass = SceneDelegate\.self/,
+    'AirPlay must not create a second app instance');
+  assert.match(scene, /guard session\.role == \.windowApplication/, 'Only the device application scene may create a bridge');
   assert.match(scene, /window\?\.rootViewController = CAPBridgeViewController\(\)/);
   for (const callback of ['willConnectTo: session, options: connectionOptions', 'openURLContexts: URLContexts', 'continue: userActivity']) {
     assert.ok(scene.includes(`SceneDelegateProxy.shared.scene(scene, ${callback})`), `Missing Capacitor callback: ${callback}`);

@@ -35,6 +35,17 @@ jobs:
       - run: npm exec -- cap sync ios
       - name: Launch the actual release-mode app on iOS 27
         run: node scripts/run-ios-launch-tests.mjs ${{ matrix.family }}
+      - name: Export readable test evidence
+        if: always()
+        env:
+          TEST_FAMILY: ${{ matrix.family }}
+        run: |
+          RESULT="ios-launch-results/$TEST_FAMILY/Launch.xcresult"
+          if [ -d "$RESULT" ]; then
+            xcrun xcresulttool get test-results summary --path "$RESULT" --format json
+            xcrun xcresulttool export attachments --path "$RESULT" --output-path "ios-launch-results/$TEST_FAMILY/attachments"
+            xcrun xcresulttool export diagnostics --path "$RESULT" --output-path "ios-launch-results/$TEST_FAMILY/diagnostics"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

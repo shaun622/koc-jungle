@@ -5,7 +5,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = scene as? UIWindowScene else { return }
+        guard session.role == .windowApplication,
+              let windowScene = scene as? UIWindowScene else { return }
 
         // One bridge/window, created here rather than also loading Main.storyboard.
         // Keep the existing single-window app and normal iPad screen mirroring.
